@@ -58,6 +58,20 @@ export default function LoginPage() {
           return;
         }
 
+        // Check admin authorization against admin_user_allowlist
+        const { data: allowlistEntry, error: allowlistError } = await supabase
+          .from('admin_user_allowlist')
+          .select('user_id, role')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (allowlistError || !allowlistEntry) {
+          await supabase.auth.signOut();
+          setErrorMessage('Access restricted: Your account ID is not in the administrator allowlist.');
+          setIsLoading(false);
+          return;
+        }
+
         router.push('/');
         return;
       } catch (err: unknown) {

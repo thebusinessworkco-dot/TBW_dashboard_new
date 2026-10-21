@@ -1,5 +1,5 @@
 -- ==============================================================================
--- THE BUSINESS WORK — ADMIN DASHBOARD DATABASE MIGRATION (V3 - HARDENED PRODUCTION)
+-- THE BUSINESS WORK — ADMIN DASHBOARD DATABASE MIGRATION (V4 - FINAL REVIEWED)
 -- Project: The Business Work (https://www.thebusinesswork.com/)
 -- Target Database: Supabase PostgreSQL (Fresh or Existing Project)
 -- Authorized Administrator Email: thebusinesswork.co@gmail.com
@@ -13,7 +13,7 @@
 -- 6. Read-only SELECT policy on admin_user_allowlist; client mutations (INSERT/UPDATE/DELETE) blocked.
 -- 7. Trigger functions restricted with REVOKE FROM PUBLIC, anon, authenticated (no client RPC exposure).
 -- 8. Deduplication unique index on admin_messages.external_message_id for Meta webhooks.
--- 9. Deterministic safe demo-data purge in child-to-parent order with safe unlinking.
+-- 9. Demo-data purge aborts on real children and never mutates non-demo rows.
 -- 10. All 12 isolated admin tables preserved with full data integrity. Zero dummy data.
 -- ==============================================================================
 
@@ -33,37 +33,28 @@ CREATE TABLE IF NOT EXISTS public.admin_user_allowlist (
 
 CREATE INDEX IF NOT EXISTS idx_admin_user_allowlist_email ON public.admin_user_allowlist(email);
 
+REVOKE INSERT, UPDATE, DELETE ON public.admin_user_allowlist FROM anon, authenticated;
+
 -- Enable RLS on allowlist
 ALTER TABLE public.admin_user_allowlist ENABLE ROW LEVEL SECURITY;
 
--- One-time initial enrollment block:
--- Safely finds exactly one account in auth.users matching the admin email.
--- If exactly one is found, inserts into allowlist.
--- If multiple are found, raises an exception to fail safely against ambiguity.
--- If none are found (fresh empty Supabase project), raises an informational notice without crashing.
+-- Pin initial admin to the approved UUID from this project's Auth Users screen.
+-- Abort the migration if the UUID/email pairing is not exactly as expected.
 DO $$
 DECLARE
-    v_user_count INT;
-    v_user_id UUID;
+    v_uid CONSTANT UUID := '92318d7c-0b0d-40a2-942f-002d425fcb73';
     v_email CONSTANT TEXT := 'thebusinesswork.co@gmail.com';
 BEGIN
-    SELECT COUNT(*), MAX(id)
-    INTO v_user_count, v_user_id
-    FROM auth.users
-    WHERE LOWER(email) = LOWER(v_email);
-
-    IF v_user_count = 1 THEN
-        INSERT INTO public.admin_user_allowlist (user_id, email, role)
-        VALUES (v_user_id, v_email, 'superadmin')
-        ON CONFLICT (user_id) DO UPDATE 
-        SET email = EXCLUDED.email, role = EXCLUDED.role;
-
-        RAISE NOTICE 'Admin authorization established: user ID % linked for %', v_user_id, v_email;
-    ELSIF v_user_count > 1 THEN
-        RAISE EXCEPTION 'Security Error: Multiple accounts found with email % in auth.users. Ambiguity must be resolved manually.', v_email;
-    ELSE
-        RAISE NOTICE 'Notice: Admin user % does not exist in auth.users yet. Once the account is created in Supabase Authentication, insert its user ID into public.admin_user_allowlist.', v_email;
+    IF NOT EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE id = v_uid AND lower(email) = lower(v_email)
+    ) THEN
+        RAISE EXCEPTION 'Admin UID/email mismatch: migration aborted';
     END IF;
+    INSERT INTO public.admin_user_allowlist (user_id, email, role)
+    VALUES (v_uid, v_email, 'superadmin')
+    ON CONFLICT (user_id) DO UPDATE
+        SET email = EXCLUDED.email, role = EXCLUDED.role;
 END;
 $$;
 
@@ -535,7 +526,7 @@ CREATE POLICY admin_audit_logs_policy ON public.admin_audit_logs
 -- ==============================================================================
 -- SECTION F: SAFE DEMO DATA PURGE (STRICT DEPENDENCY ORDER)
 -- Deletes ONLY records where is_demo = TRUE.
--- Safely unlinks any non-demo records referencing demo records first.
+-- Aborts if non-demo child records would be cascaded; never updates real records.
 -- Never affects real production contacts, conversations, leads, or auth accounts.
 -- ==============================================================================
 
@@ -563,58 +554,36 @@ BEGIN
         RAISE EXCEPTION 'Access Denied: Only authorized administrator can perform demo data cleanup.';
     END IF;
 
-    -- 2. Delete child Quotation Items before parent Quotations
-    DELETE FROM public.admin_quotation_items 
-    WHERE is_demo = TRUE 
-       OR quotation_id IN (SELECT id FROM public.admin_quotations WHERE is_demo = TRUE);
-    GET DIAGNOSTICS cnt_quot_items = ROW_COUNT;
+    -- Safety: never delete or modify a real row during demo cleanup.
+    -- A demo parent with real children is an inconsistent dataset: abort atomically.
+    IF EXISTS (
+        SELECT 1 FROM public.admin_quotation_items qi
+        JOIN public.admin_quotations q ON q.id = qi.quotation_id
+        WHERE q.is_demo IS TRUE AND qi.is_demo IS NOT TRUE
+    ) OR EXISTS (
+        SELECT 1 FROM public.admin_messages m
+        JOIN public.admin_conversations c ON c.id = m.conversation_id
+        WHERE c.is_demo IS TRUE AND m.is_demo IS NOT TRUE
+    ) THEN
+        RAISE EXCEPTION 'Demo cleanup blocked: real child records reference demo parents';
+    END IF;
 
-    -- 3. Delete parent Quotations
-    DELETE FROM public.admin_quotations WHERE is_demo = TRUE;
+    DELETE FROM public.admin_quotation_items WHERE is_demo IS TRUE;
+    GET DIAGNOSTICS cnt_quot_items = ROW_COUNT;
+    DELETE FROM public.admin_quotations WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_quots = ROW_COUNT;
 
-    -- 4. Delete child Messages before parent Conversations
-    DELETE FROM public.admin_messages 
-    WHERE is_demo = TRUE 
-       OR conversation_id IN (SELECT id FROM public.admin_conversations WHERE is_demo = TRUE);
+    DELETE FROM public.admin_messages WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_msgs = ROW_COUNT;
-
-    -- 5. Safe unlinking: If any real (is_demo = FALSE) records reference demo conversations, unlink them
-    UPDATE public.admin_leads 
-    SET source_conversation_id = NULL 
-    WHERE is_demo = FALSE 
-      AND source_conversation_id IN (SELECT id FROM public.admin_conversations WHERE is_demo = TRUE);
-
-    UPDATE public.admin_appointments 
-    SET conversation_id = NULL 
-    WHERE is_demo = FALSE 
-      AND conversation_id IN (SELECT id FROM public.admin_conversations WHERE is_demo = TRUE);
-
-    -- 6. Delete parent Conversations
-    DELETE FROM public.admin_conversations WHERE is_demo = TRUE;
+    DELETE FROM public.admin_conversations WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_conv = ROW_COUNT;
 
-    -- 7. Delete Leads
-    DELETE FROM public.admin_leads WHERE is_demo = TRUE;
+    DELETE FROM public.admin_leads WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_leads = ROW_COUNT;
-
-    -- 8. Delete Appointments
-    DELETE FROM public.admin_appointments WHERE is_demo = TRUE;
+    DELETE FROM public.admin_appointments WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_appts = ROW_COUNT;
 
-    -- 9. Safe unlinking: If any real records reference demo contacts, unlink them before deleting contacts
-    UPDATE public.admin_conversations 
-    SET contact_id = NULL 
-    WHERE is_demo = FALSE 
-      AND contact_id IN (SELECT id FROM public.admin_contacts WHERE is_demo = TRUE);
-
-    UPDATE public.admin_leads 
-    SET contact_id = NULL 
-    WHERE is_demo = FALSE 
-      AND contact_id IN (SELECT id FROM public.admin_contacts WHERE is_demo = TRUE);
-
-    -- 10. Delete parent Contacts
-    DELETE FROM public.admin_contacts WHERE is_demo = TRUE;
+    DELETE FROM public.admin_contacts WHERE is_demo IS TRUE;
     GET DIAGNOSTICS cnt_contacts = ROW_COUNT;
 
     -- 11. Delete standalone telemetry and automations

@@ -27,6 +27,7 @@ import {
   DEMO_VPS_METRICS,
   DEMO_INTEGRATION_STATUS,
 } from '../demo-data';
+import { createClient } from '../supabase/client';
 
 interface DashboardStoreContextType {
   // Data
@@ -159,10 +160,178 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
 
   const [workflows, setWorkflows] = useState<AdminWorkflow[]>(DEMO_WORKFLOWS);
   const [vpsMetrics, setVpsMetrics] = useState<AdminVpsMetrics>(DEMO_VPS_METRICS);
-  const [integrationStatuses] = useState<AdminIntegrationStatus[]>(DEMO_INTEGRATION_STATUS);
+  const [integrationStatuses, setIntegrationStatuses] = useState<AdminIntegrationStatus[]>(DEMO_INTEGRATION_STATUS);
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
 
-  // Sync to localStorage
+  // Supabase live database sync & Authenticated Realtime subscriptions
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) return;
+
+    let isMounted = true;
+
+    async function syncSupabaseData() {
+      try {
+        const { data: { user } } = await supabase!.auth.getUser();
+        if (!user || !isMounted) return;
+
+        // 1. Fetch conversations
+        const { data: liveConvs, error: convErr } = await supabase!
+          .from('admin_conversations')
+          .select('*, contact:admin_contacts(*)')
+          .order('last_message_at', { ascending: false });
+
+        if (!convErr && liveConvs && isMounted && liveConvs.length > 0) {
+          setConversations(liveConvs as unknown as AdminConversation[]);
+        }
+
+        // 2. Fetch messages
+        const { data: liveMsgs, error: msgErr } = await supabase!
+          .from('admin_messages')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (!msgErr && liveMsgs && isMounted && liveMsgs.length > 0) {
+          const grouped: Record<string, AdminMessage[]> = {};
+          (liveMsgs as AdminMessage[]).forEach((m) => {
+            if (!grouped[m.conversation_id]) {
+              grouped[m.conversation_id] = [];
+            }
+            grouped[m.conversation_id].push(m);
+          });
+          setMessages(grouped);
+        }
+
+        // 3. Fetch leads
+        const { data: liveLeads, error: leadErr } = await supabase!
+          .from('admin_leads')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!leadErr && liveLeads && isMounted && liveLeads.length > 0) {
+          setLeads(liveLeads as AdminLead[]);
+        }
+
+        // 4. Fetch appointments
+        const { data: liveAppts, error: apptErr } = await supabase!
+          .from('admin_appointments')
+          .select('*')
+          .order('appointment_date', { ascending: true });
+
+        if (!apptErr && liveAppts && isMounted && liveAppts.length > 0) {
+          setAppointments(liveAppts as AdminAppointment[]);
+        }
+
+        // 5. Fetch comment automations
+        const { data: liveAutos, error: autoErr } = await supabase!
+          .from('admin_comment_automations')
+          .select('*')
+          .order('publish_date', { ascending: false });
+
+        if (!autoErr && liveAutos && isMounted && liveAutos.length > 0) {
+          setCommentAutomations(liveAutos as AdminCommentAutomation[]);
+        }
+
+        // 6. Fetch quotations
+        const { data: liveQuots, error: quotErr } = await supabase!
+          .from('admin_quotations')
+          .select('*, items:admin_quotation_items(*)')
+          .order('quotation_date', { ascending: false });
+
+        if (!quotErr && liveQuots && isMounted && liveQuots.length > 0) {
+          setQuotations(liveQuots as unknown as AdminQuotation[]);
+        }
+
+        // 7. Fetch integration status
+        const { data: liveStatus, error: statusErr } = await supabase!
+          .from('admin_integration_status')
+          .select('*');
+
+        if (!statusErr && liveStatus && isMounted && liveStatus.length > 0) {
+          setIntegrationStatuses(liveStatus as AdminIntegrationStatus[]);
+        }
+      } catch (err) {
+        console.warn('Supabase data synchronization notice:', err);
+      }
+    }
+
+    syncSupabaseData();
+
+    // Authenticated Realtime subscriptions for admin_conversations and admin_messages
+    const channel = supabase
+      .channel('admin_realtime_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'admin_conversations' },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload.eventType === 'INSERT') {
+            const newConv = payload.new as AdminConversation;
+            setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== newConv.id)]);
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedConv = payload.new as AdminConversation;
+            setConversations((prev) =>
+              prev.map((c) => (c.id === updatedConv.id ? { ...c, ...updatedConv } : c))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) {
+              setConversations((prev) => prev.filter((c) => c.id !== oldId));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'admin_messages' },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as AdminMessage;
+            setMessages((prev) => {
+              const convMsgs = prev[newMsg.conversation_id] || [];
+              if (
+                convMsgs.some(
+                  (m) =>
+                    m.id === newMsg.id ||
+                    (newMsg.external_message_id &&
+                      m.external_message_id === newMsg.external_message_id)
+                )
+              ) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [newMsg.conversation_id]: [...convMsgs, newMsg],
+              };
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = payload.new as AdminMessage;
+            setMessages((prev) => {
+              const convMsgs = prev[updatedMsg.conversation_id] || [];
+              return {
+                ...prev,
+                [updatedMsg.conversation_id]: convMsgs.map((m) =>
+                  m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
+                ),
+              };
+            });
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime channel warning:', err);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Sync to localStorage as local cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
@@ -184,47 +353,78 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     commentAutomations.some((ca) => ca.is_demo);
 
   const updateConversationStatus = (id: string, status: ConversationStatus) => {
+    const updated_at = new Date().toISOString();
     setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status, updated_at: new Date().toISOString() } : c))
+      prev.map((c) => (c.id === id ? { ...c, status, updated_at } : c))
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_conversations').update({ status, updated_at }).eq('id', id).then();
+    }
   };
 
   const toggleAutomationPaused = (id: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              automation_paused: !c.automation_paused,
-              updated_at: new Date().toISOString(),
-            }
-          : c
-      )
-    );
-  };
-
-  const toggleManualTakeover = (id: string) => {
+    let nextVal = false;
+    const updated_at = new Date().toISOString();
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          const nextTakeover = !c.manual_takeover;
+          nextVal = !c.automation_paused;
           return {
             ...c,
-            manual_takeover: nextTakeover,
-            // When manual takeover is active, automation should automatically pause
-            automation_paused: nextTakeover ? true : c.automation_paused,
-            updated_at: new Date().toISOString(),
+            automation_paused: nextVal,
+            updated_at,
           };
         }
         return c;
       })
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_conversations').update({ automation_paused: nextVal, updated_at }).eq('id', id).then();
+    }
+  };
+
+  const toggleManualTakeover = (id: string) => {
+    let nextTakeover = false;
+    const updated_at = new Date().toISOString();
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          nextTakeover = !c.manual_takeover;
+          return {
+            ...c,
+            manual_takeover: nextTakeover,
+            automation_paused: nextTakeover ? true : c.automation_paused,
+            updated_at,
+          };
+        }
+        return c;
+      })
+    );
+    const supabase = createClient();
+    if (supabase) {
+      supabase
+        .from('admin_conversations')
+        .update({
+          manual_takeover: nextTakeover,
+          automation_paused: nextTakeover ? true : undefined,
+          updated_at,
+        })
+        .eq('id', id)
+        .then();
+    }
   };
 
   const updateInternalNotes = (id: string, notes: string) => {
+    const updated_at = new Date().toISOString();
     setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, internal_notes: notes, updated_at: new Date().toISOString() } : c))
+      prev.map((c) => (c.id === id ? { ...c, internal_notes: notes, updated_at } : c))
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_conversations').update({ internal_notes: notes, updated_at }).eq('id', id).then();
+    }
   };
 
   const sendMessage = async (
@@ -232,15 +432,16 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     content: string,
     senderType: 'human_agent' | 'automation_rule' = 'human_agent'
   ) => {
+    const nowIso = new Date().toISOString();
     const newMessage: AdminMessage = {
       id: `msg-${Date.now()}`,
       conversation_id: conversationId,
       sender_type: senderType,
       sender_name: senderType === 'human_agent' ? 'Aman Rajbhar (Manual Takeover)' : 'TBW Bot',
       content,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
       status: 'sent',
-      is_demo: false, // manual messages by admin are real actions
+      is_demo: false,
     };
 
     setMessages((prev) => ({
@@ -254,57 +455,139 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           ? {
               ...c,
               last_message: content,
-              last_message_at: new Date().toISOString(),
+              last_message_at: nowIso,
               manual_takeover: true,
               automation_paused: true,
-              updated_at: new Date().toISOString(),
+              updated_at: nowIso,
             }
           : c
       )
     );
+
+    const supabase = createClient();
+    if (supabase) {
+      await supabase.from('admin_messages').insert({
+        conversation_id: conversationId,
+        sender_type: senderType,
+        sender_name: newMessage.sender_name,
+        content,
+        status: 'sent',
+        is_demo: false,
+      });
+
+      await supabase
+        .from('admin_conversations')
+        .update({
+          last_message: content,
+          last_message_at: nowIso,
+          manual_takeover: true,
+          automation_paused: true,
+          updated_at: nowIso,
+        })
+        .eq('id', conversationId);
+    }
   };
 
   const updateLeadStatus = (id: string, status: LeadStatus) => {
+    const updated_at = new Date().toISOString();
     setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status, updated_at: new Date().toISOString() } : l))
+      prev.map((l) => (l.id === id ? { ...l, status, updated_at } : l))
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_leads').update({ status, updated_at }).eq('id', id).then();
+    }
   };
 
   const addLead = (newLeadData: Omit<AdminLead, 'id' | 'created_at' | 'updated_at'>) => {
+    const nowIso = new Date().toISOString();
     const newLead: AdminLead = {
       ...newLeadData,
       id: `lead-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: nowIso,
+      updated_at: nowIso,
       is_demo: false,
     };
     setLeads((prev) => [newLead, ...prev]);
+
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_leads').insert({
+        ...newLeadData,
+        is_demo: false,
+      }).then();
+    }
   };
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
     setAppointments((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status } : a))
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_appointments').update({ status }).eq('id', id).then();
+    }
   };
 
   const addAppointment = (newApptData: Omit<AdminAppointment, 'id' | 'created_at'>) => {
+    const nowIso = new Date().toISOString();
     const newAppt: AdminAppointment = {
       ...newApptData,
       id: `appt-${Date.now()}`,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
       is_demo: false,
     };
     setAppointments((prev) => [newAppt, ...prev]);
+
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_appointments').insert({
+        ...newApptData,
+        is_demo: false,
+      }).then();
+    }
   };
 
   const saveQuotation = (quotation: AdminQuotation) => {
+    const updated_at = new Date().toISOString();
     setQuotations((prev) => {
       const exists = prev.some((q) => q.id === quotation.id);
       if (exists) {
-        return prev.map((q) => (q.id === quotation.id ? { ...quotation, updated_at: new Date().toISOString() } : q));
+        return prev.map((q) => (q.id === quotation.id ? { ...quotation, updated_at } : q));
       }
       return [quotation, ...prev];
     });
+
+    const supabase = createClient();
+    if (supabase) {
+      const { items, ...quotationRecord } = quotation;
+      supabase
+        .from('admin_quotations')
+        .upsert({
+          ...quotationRecord,
+          is_demo: false,
+          updated_at,
+        })
+        .then(() => {
+          if (items && items.length > 0) {
+            supabase
+              .from('admin_quotation_items')
+              .insert(
+                items.map((it) => ({
+                  quotation_id: quotation.id,
+                  service_category: it.service_category,
+                  service_name: it.service_name,
+                  description: it.description,
+                  quantity: it.quantity,
+                  setup_charge: it.setup_charge,
+                  monthly_recurring_charge: it.monthly_recurring_charge,
+                  is_demo: false,
+                }))
+              )
+              .then();
+          }
+        });
+    }
   };
 
   const updateQuotationStatus = (
@@ -312,24 +595,48 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     status: QuotationStatus,
     sentVia?: 'whatsapp' | 'instagram'
   ) => {
+    const updated_at = new Date().toISOString();
     setQuotations((prev) =>
       prev.map((q) =>
         q.id === id
           ? {
               ...q,
               status,
-              ...(sentVia ? { sent_via: sentVia, sent_at: new Date().toISOString() } : {}),
-              updated_at: new Date().toISOString(),
+              ...(sentVia ? { sent_via: sentVia, sent_at: updated_at } : {}),
+              updated_at,
             }
           : q
       )
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase
+        .from('admin_quotations')
+        .update({
+          status,
+          ...(sentVia ? { sent_via: sentVia, sent_at: updated_at } : {}),
+          updated_at,
+        })
+        .eq('id', id)
+        .then();
+    }
   };
 
   const toggleReelAutomation = (id: string) => {
+    let nextVal = false;
     setCommentAutomations((prev) =>
-      prev.map((ra) => (ra.id === id ? { ...ra, is_enabled: !ra.is_enabled } : ra))
+      prev.map((ra) => {
+        if (ra.id === id) {
+          nextVal = !ra.is_enabled;
+          return { ...ra, is_enabled: nextVal };
+        }
+        return ra;
+      })
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase.from('admin_comment_automations').update({ is_enabled: nextVal }).eq('id', id).then();
+    }
   };
 
   const updateReelAutomation = (id: string, trigger_keyword: string, automatic_dm_message: string) => {
@@ -338,6 +645,14 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         ra.id === id ? { ...ra, trigger_keyword, automatic_dm_message } : ra
       )
     );
+    const supabase = createClient();
+    if (supabase) {
+      supabase
+        .from('admin_comment_automations')
+        .update({ trigger_keyword, automatic_dm_message })
+        .eq('id', id)
+        .then();
+    }
   };
 
   const removeDemoData = () => {
@@ -391,6 +706,12 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       localStorage.removeItem(STORAGE_KEYS.QUOTATIONS);
     } catch {
       // ignore
+    }
+
+    // Call Supabase RPC to purge server-side demo rows
+    const supabase = createClient();
+    if (supabase) {
+      supabase.rpc('remove_all_demo_data').then();
     }
   };
 

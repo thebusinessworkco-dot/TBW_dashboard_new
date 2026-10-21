@@ -22,6 +22,7 @@ export interface AdminMessage {
   media_type?: 'image' | 'pdf' | 'audio' | 'document';
   created_at: string;
   status: MessageStatus;
+  external_message_id?: string;
   is_demo?: boolean;
 }
 
