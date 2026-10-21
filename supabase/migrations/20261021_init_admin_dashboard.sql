@@ -1,21 +1,20 @@
 -- ==============================================================================
--- THE BUSINESS WORK — ADMIN DASHBOARD DATABASE MIGRATION (V2 - PRODUCTION SECURED)
+-- THE BUSINESS WORK — ADMIN DASHBOARD DATABASE MIGRATION (V3 - HARDENED PRODUCTION)
 -- Project: The Business Work (https://www.thebusinesswork.com/)
--- Target Database: Supabase PostgreSQL (Standard or Empty Project)
+-- Target Database: Supabase PostgreSQL (Fresh or Existing Project)
 -- Authorized Administrator Email: thebusinesswork.co@gmail.com
 --
--- Security & Hardening Changes Implemented:
--- 1. All 12 dashboard tables preserved with full data integrity.
--- 2. Auth User ID allowlist (public.admin_user_allowlist) replacing email-only checks.
--- 3. Automatic synchronization of existing & new auth.users with the admin email.
--- 4. Fixed search_path (public, auth, pg_temp) on all SECURITY DEFINER functions.
--- 5. Restricted function EXECUTE permissions (REVOKE FROM PUBLIC, GRANT TO authenticated, service_role).
--- 6. Comprehensive RLS policies with explicit USING and WITH CHECK for all operations.
--- 7. Deterministic demo-data purge in safe dependency order preventing foreign-key errors.
--- 8. Unique partial index on external_message_id for Meta/WhatsApp/Instagram deduplication.
--- 9. Automatic updated_at timestamp triggers.
--- 10. Completely idempotent: safe to run repeatedly on empty or existing Supabase projects.
--- 11. Zero dummy data inserted.
+-- Security Corrections Implemented:
+-- 1. Strict Auth User ID allowlist (public.admin_user_allowlist) as single source of truth.
+-- 2. is_authorized_admin() is a read-only STABLE SQL function checking only admin_user_allowlist.
+-- 3. Removed automatic enrollment trigger on auth.users (no unexpected triggers on auth schema).
+-- 4. Removed fallback queries and INSERT mutations from authorization functions.
+-- 5. One-time initial enrollment DO block that safely finds exactly one admin user in auth.users.
+-- 6. Read-only SELECT policy on admin_user_allowlist; client mutations (INSERT/UPDATE/DELETE) blocked.
+-- 7. Trigger functions restricted with REVOKE FROM PUBLIC, anon, authenticated (no client RPC exposure).
+-- 8. Deduplication unique index on admin_messages.external_message_id for Meta webhooks.
+-- 9. Deterministic safe demo-data purge in child-to-parent order with safe unlinking.
+-- 10. All 12 isolated admin tables preserved with full data integrity. Zero dummy data.
 -- ==============================================================================
 
 -- 0. EXTENSIONS & PREREQUISITES
@@ -34,110 +33,81 @@ CREATE TABLE IF NOT EXISTS public.admin_user_allowlist (
 
 CREATE INDEX IF NOT EXISTS idx_admin_user_allowlist_email ON public.admin_user_allowlist(email);
 
--- Secure the allowlist table with RLS
+-- Enable RLS on allowlist
 ALTER TABLE public.admin_user_allowlist ENABLE ROW LEVEL SECURITY;
 
--- If administrator already exists in Supabase Authentication, link their User ID immediately
-INSERT INTO public.admin_user_allowlist (user_id, email, role)
-SELECT id, email, 'superadmin'
-FROM auth.users
-WHERE email = 'thebusinesswork.co@gmail.com'
-ON CONFLICT (user_id) DO NOTHING;
-
--- Automated trigger to sync administrator User ID whenever account is created or updated
-CREATE OR REPLACE FUNCTION public.sync_admin_user_to_allowlist()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth, pg_temp
-AS $$
+-- One-time initial enrollment block:
+-- Safely finds exactly one account in auth.users matching the admin email.
+-- If exactly one is found, inserts into allowlist.
+-- If multiple are found, raises an exception to fail safely against ambiguity.
+-- If none are found (fresh empty Supabase project), raises an informational notice without crashing.
+DO $$
+DECLARE
+    v_user_count INT;
+    v_user_id UUID;
+    v_email CONSTANT TEXT := 'thebusinesswork.co@gmail.com';
 BEGIN
-    IF LOWER(NEW.email) = 'thebusinesswork.co@gmail.com' THEN
+    SELECT COUNT(*), MAX(id)
+    INTO v_user_count, v_user_id
+    FROM auth.users
+    WHERE LOWER(email) = LOWER(v_email);
+
+    IF v_user_count = 1 THEN
         INSERT INTO public.admin_user_allowlist (user_id, email, role)
-        VALUES (NEW.id, NEW.email, 'superadmin')
-        ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email;
+        VALUES (v_user_id, v_email, 'superadmin')
+        ON CONFLICT (user_id) DO UPDATE 
+        SET email = EXCLUDED.email, role = EXCLUDED.role;
+
+        RAISE NOTICE 'Admin authorization established: user ID % linked for %', v_user_id, v_email;
+    ELSIF v_user_count > 1 THEN
+        RAISE EXCEPTION 'Security Error: Multiple accounts found with email % in auth.users. Ambiguity must be resolved manually.', v_email;
+    ELSE
+        RAISE NOTICE 'Notice: Admin user % does not exist in auth.users yet. Once the account is created in Supabase Authentication, insert its user ID into public.admin_user_allowlist.', v_email;
     END IF;
-    RETURN NEW;
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.sync_admin_user_to_allowlist() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_admin_user_to_allowlist() TO authenticated, service_role;
-
+-- Clean up any obsolete triggers from previous revisions if present
 DROP TRIGGER IF EXISTS trg_sync_admin_user_on_auth ON auth.users;
-CREATE TRIGGER trg_sync_admin_user_on_auth
-AFTER INSERT OR UPDATE OF email ON auth.users
-FOR EACH ROW
-EXECUTE FUNCTION public.sync_admin_user_to_allowlist();
+DROP FUNCTION IF EXISTS public.sync_admin_user_to_allowlist();
 
 -- ==============================================================================
--- SECTION B: CORE SECURITY DEFINER AUTHORIZATION FUNCTION
--- Checks auth.uid() against admin_user_allowlist and verifies against auth.users.
--- Fixed search_path prevents search_path poisoning.
+-- SECTION B: READ-ONLY STABLE AUTHORIZATION FUNCTION
+-- Returns TRUE only when auth.uid() exists in admin_user_allowlist.
+-- Strictly read-only, deterministic, with fixed search_path.
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.is_authorized_admin()
 RETURNS BOOLEAN
-LANGUAGE plpgsql
+LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, auth, pg_temp
+SET search_path = public, pg_temp
 AS $$
-DECLARE
-    current_uid UUID;
-    is_admin BOOLEAN := FALSE;
-BEGIN
-    current_uid := auth.uid();
-
-    -- Reject immediately if unauthenticated
-    IF current_uid IS NULL THEN
-        RETURN FALSE;
-    END IF;
-
-    -- 1. Check verified User ID in allowlist table
     SELECT EXISTS (
         SELECT 1 
         FROM public.admin_user_allowlist 
-        WHERE user_id = current_uid
-    ) INTO is_admin;
-
-    IF is_admin THEN
-        RETURN TRUE;
-    END IF;
-
-    -- 2. Fallback check: verify user directly in auth.users
-    SELECT EXISTS (
-        SELECT 1 
-        FROM auth.users 
-        WHERE id = current_uid 
-          AND LOWER(email) = 'thebusinesswork.co@gmail.com'
-    ) INTO is_admin;
-
-    -- If verified in auth.users, cache into allowlist for future fast checks
-    IF is_admin THEN
-        INSERT INTO public.admin_user_allowlist (user_id, email, role)
-        VALUES (current_uid, 'thebusinesswork.co@gmail.com', 'superadmin')
-        ON CONFLICT (user_id) DO NOTHING;
-        RETURN TRUE;
-    END IF;
-
-    RETURN FALSE;
-END;
+        WHERE user_id = auth.uid()
+    );
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.is_authorized_admin() FROM PUBLIC;
+-- Restrict EXECUTE to authenticated and service_role only
+REVOKE EXECUTE ON FUNCTION public.is_authorized_admin() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_authorized_admin() TO authenticated, service_role;
 
--- Allowlist table policy
+-- Allowlist RLS: Strictly read-only SELECT for authorized admins.
+-- Client APIs CANNOT insert, update, or delete allowlist entries.
 DROP POLICY IF EXISTS admin_user_allowlist_policy ON public.admin_user_allowlist;
-CREATE POLICY admin_user_allowlist_policy ON public.admin_user_allowlist
-    FOR ALL
+DROP POLICY IF EXISTS admin_user_allowlist_select_policy ON public.admin_user_allowlist;
+
+CREATE POLICY admin_user_allowlist_select_policy ON public.admin_user_allowlist
+    FOR SELECT
     TO authenticated
-    USING (public.is_authorized_admin())
-    WITH CHECK (public.is_authorized_admin());
+    USING (public.is_authorized_admin());
 
 -- ==============================================================================
--- SECTION C: HELPER FUNCTIONS & TRIGGERS
+-- SECTION C: TRIGGER FUNCTIONS (NON-RPC EXPOSURE)
+-- Trigger functions must not be callable by clients via PostgREST RPC.
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_admin_updated_at()
@@ -152,8 +122,9 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.handle_admin_updated_at() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.handle_admin_updated_at() TO authenticated, service_role;
+-- Revoke execute from PUBLIC, anon, and authenticated so this cannot be called as client RPC
+REVOKE EXECUTE ON FUNCTION public.handle_admin_updated_at() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.handle_admin_updated_at() TO service_role;
 
 -- ==============================================================================
 -- SECTION D: 12 ISOLATED ADMIN DASHBOARD TABLES
@@ -227,7 +198,7 @@ CREATE TABLE IF NOT EXISTS public.admin_messages (
     media_url TEXT,
     media_type TEXT,
     status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('queued', 'sent', 'delivered', 'read', 'failed')),
-    external_message_id TEXT, -- Meta/WhatsApp message ID for deduplication
+    external_message_id TEXT, -- Meta/WhatsApp message ID for idempotency
     is_demo BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -441,7 +412,7 @@ CREATE TABLE IF NOT EXISTS public.admin_integration_status (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed initial integration status indicators (safe to re-run)
+-- Seed static service indicators (safe to re-run; zero dummy data)
 INSERT INTO public.admin_integration_status (service_name, status, last_sync_at, details)
 VALUES 
     ('supabase', 'connected', NOW(), '{"note": "Primary PostgreSQL & Auth engine ready"}'::jsonb),
@@ -703,7 +674,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.remove_all_demo_data() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.remove_all_demo_data() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.remove_all_demo_data() TO authenticated, service_role;
 
 -- ==============================================================================
