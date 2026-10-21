@@ -552,7 +552,60 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       }
     }
 
-    // Direct Supabase write for non-WhatsApp channels (e.g. internal testing or Instagram)
+    // If target is Instagram, dispatch via official Meta Instagram Graph API endpoint
+    if (targetConv?.platform === 'instagram') {
+      try {
+        const response = await fetch('/api/instagram/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId,
+            content,
+            senderType,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          // Update optimistic message status to failed
+          setMessages((prev) => ({
+            ...prev,
+            [conversationId]: (prev[conversationId] || []).map((m) =>
+              m.id === tempId ? { ...m, status: 'failed' } : m
+            ),
+          }));
+
+          return {
+            success: false,
+            error: data.error || 'Meta Instagram Graph API failed to send message.',
+          };
+        }
+
+        // Update optimistic message with real messageId from Meta
+        setMessages((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) =>
+            m.id === tempId
+              ? { ...m, status: 'sent', external_message_id: data.messageId }
+              : m
+          ),
+        }));
+
+        return { success: true };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Network error';
+        setMessages((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'failed' } : m
+          ),
+        }));
+        return { success: false, error: message };
+      }
+    }
+
+    // Direct Supabase write for custom/internal channels
     const supabase = createClient();
     if (supabase) {
       await supabase.from('admin_messages').insert({

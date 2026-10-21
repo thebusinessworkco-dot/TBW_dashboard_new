@@ -42,6 +42,7 @@ export default function InstagramPage() {
   const [dmSearchQuery, setDmSearchQuery] = useState('');
   const [dmReplyText, setDmReplyText] = useState('');
   const [dmSending, setDmSending] = useState(false);
+  const [dmSendError, setDmSendError] = useState<string | null>(null);
 
   // TAB B States
   const [reelSearch, setReelSearch] = useState('');
@@ -80,9 +81,14 @@ export default function InstagramPage() {
     e.preventDefault();
     if (!dmReplyText.trim() || !activeDm || dmSending) return;
 
+    setDmSendError(null);
     setDmSending(true);
-    await sendMessage(activeDm.id, dmReplyText.trim(), 'human_agent');
-    setDmReplyText('');
+    const result = await sendMessage(activeDm.id, dmReplyText.trim(), 'human_agent');
+    if (!result?.success) {
+      setDmSendError(result?.error || 'Failed to dispatch Instagram DM via Meta Graph API.');
+    } else {
+      setDmReplyText('');
+    }
     setDmSending(false);
   };
 
@@ -473,6 +479,21 @@ export default function InstagramPage() {
 
               {/* Reply Box */}
               <div className="border-t border-[#E2DDD3] bg-white p-4">
+                {dmSendError && (
+                  <div className="mb-3 flex items-start justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
+                    <div className="flex items-start gap-2">
+                      <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                      <span>{dmSendError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDmSendError(null)}
+                      className="text-rose-500 hover:text-rose-700"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 <form onSubmit={handleSendDm} className="flex gap-2">
                   <input
                     type="text"

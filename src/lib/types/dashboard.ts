@@ -31,6 +31,7 @@ export interface AdminContact {
   name: string;
   phone?: string;
   instagram_username?: string;
+  instagram_scoped_id?: string;
   email?: string;
   avatar_url?: string;
   company_name?: string;
