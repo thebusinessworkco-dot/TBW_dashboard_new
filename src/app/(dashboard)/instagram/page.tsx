@@ -8,6 +8,7 @@ import {
   X,
   Send,
   ShieldAlert,
+  Film,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
@@ -175,7 +176,20 @@ export default function InstagramPage() {
 
           {/* Reel Automations List / Cards */}
           <div className="space-y-4">
-            {filteredReels.map((reel) => (
+            {filteredReels.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#E2DDD3] bg-white p-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FAF8F5] text-[#7A756D] mb-3">
+                  <Film className="h-6 w-6" />
+                </div>
+                <h4 className="text-sm font-semibold text-[#141413]">No reel automations configured</h4>
+                <p className="mt-1 text-xs text-[#7A756D] max-w-sm mx-auto">
+                  {reelFilter === 'all'
+                    ? 'Connect an Instagram Reel trigger above to auto-reply to comments and dispatch instant direct messages.'
+                    : `No automations found with status "${reelFilter}".`}
+                </p>
+              </div>
+            ) : (
+              filteredReels.map((reel) => (
               <div
                 key={reel.id}
                 className="overflow-hidden rounded-xl border border-[#E2DDD3] bg-white shadow-2xs hover:shadow-xs transition-shadow"
@@ -289,7 +303,8 @@ export default function InstagramPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       ) : (

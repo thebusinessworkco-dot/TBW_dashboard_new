@@ -125,7 +125,20 @@ function N8nWorkflowsContent() {
 
         {/* Workflow Cards */}
         <div className="space-y-4">
-          {filteredWorkflows.map((wf) => {
+          {filteredWorkflows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#E2DDD3] bg-white p-12 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FAF8F5] text-[#7A756D] mb-3">
+                <Workflow className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-[#141413]">No n8n workflows found</h4>
+              <p className="mt-1 text-xs text-[#7A756D] max-w-sm mx-auto">
+                {searchQuery || statusFilter !== 'all'
+                  ? 'No workflows match the selected filter criteria.'
+                  : 'Automations will appear here once connected to your self-hosted n8n instance.'}
+              </p>
+            </div>
+          ) : (
+            filteredWorkflows.map((wf) => {
             const isExpanded = expandedWorkflowId === wf.id;
             const isHealthy = wf.last_execution_status === 'success';
 
@@ -213,7 +226,12 @@ function N8nWorkflowsContent() {
                     </div>
 
                     <div className="space-y-3">
-                      {wf.recent_executions.map((exec) => (
+                      {!wf.recent_executions || wf.recent_executions.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-[#E2DDD3] bg-white p-6 text-center text-xs text-[#7A756D]">
+                          No recent executions logged for this workflow.
+                        </div>
+                      ) : (
+                        wf.recent_executions.map((exec) => (
                         <div
                           key={exec.id}
                           className={`rounded-xl border p-4 text-xs transition-colors ${
@@ -272,13 +290,15 @@ function N8nWorkflowsContent() {
                             </a>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    )}
+                  </div>
                   </div>
                 )}
               </div>
             );
-          })}
+          })
+          )}
         </div>
       </div>
     </div>

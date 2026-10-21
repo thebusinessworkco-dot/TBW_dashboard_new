@@ -18,6 +18,7 @@ import {
   Save,
   Check,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -65,6 +66,7 @@ function WhatsAppPageContent() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [notesDraft, setNotesDraft] = useState(waConversations[0]?.internal_notes || '');
   const [notesSaved, setNotesSaved] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,9 +98,14 @@ function WhatsAppPageContent() {
     e.preventDefault();
     if (!replyText.trim() || !activeConversation || isSending) return;
 
+    setSendError(null);
     setIsSending(true);
-    await sendMessage(activeConversation.id, replyText.trim(), 'human_agent');
-    setReplyText('');
+    const result = await sendMessage(activeConversation.id, replyText.trim(), 'human_agent');
+    if (!result?.success) {
+      setSendError(result?.error || 'Failed to dispatch message via Meta WhatsApp Cloud API.');
+    } else {
+      setReplyText('');
+    }
     setIsSending(false);
   };
 
@@ -403,6 +410,23 @@ function WhatsAppPageContent() {
 
             {/* Manual Reply Box */}
             <div className="border-t border-[#E2DDD3] bg-white p-4">
+              {sendError && (
+                <div className="mb-3 flex items-start justify-between rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="font-semibold">Dispatch Error:</strong> {sendError}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSendError(null)}
+                    className="text-rose-700 hover:text-rose-900 ml-2"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSendManualReply} className="flex gap-2">
                 <input
                   type="text"

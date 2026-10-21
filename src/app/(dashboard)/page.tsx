@@ -445,35 +445,41 @@ export default function OverviewPage() {
             </div>
 
             <div className="space-y-3">
-              {recentWaChats.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => router.push('/whatsapp')}
-                  className="cursor-pointer rounded-lg border border-[#EFECE4] bg-[#FAF8F5] p-3 hover:border-[#CDC7BA] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-[#141413]">
-                      {chat.contact.name} ({chat.contact.phone})
-                    </span>
-                    <span className="text-[10px] text-[#7A756D]">
-                      {formatRelativeTime(chat.last_message_at)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#555047] line-clamp-2">
-                    {chat.last_message}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-[#7A756D]">
-                      Status: <strong className="text-[#141413] capitalize">{chat.status.replace('_', ' ')}</strong>
-                    </span>
-                    {chat.manual_takeover ? (
-                      <span className="font-semibold text-purple-700">Manual Takeover Active</span>
-                    ) : (
-                      <span className="text-emerald-700">Automation Running</span>
-                    )}
-                  </div>
+              {recentWaChats.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#E2DDD3] bg-[#FAF8F5] p-6 text-center text-xs text-[#7A756D]">
+                  No WhatsApp conversations recorded yet.
                 </div>
-              ))}
+              ) : (
+                recentWaChats.map((chat) => (
+                  <div
+                    key={chat.id}
+                    onClick={() => router.push('/whatsapp')}
+                    className="cursor-pointer rounded-lg border border-[#EFECE4] bg-[#FAF8F5] p-3 hover:border-[#CDC7BA] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-[#141413]">
+                        {chat.contact.name} ({chat.contact.phone})
+                      </span>
+                      <span className="text-[10px] text-[#7A756D]">
+                        {formatRelativeTime(chat.last_message_at)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#555047] line-clamp-2">
+                      {chat.last_message}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                      <span className="text-[#7A756D]">
+                        Status: <strong className="text-[#141413] capitalize">{chat.status.replace('_', ' ')}</strong>
+                      </span>
+                      {chat.manual_takeover ? (
+                        <span className="font-semibold text-purple-700">Manual Takeover Active</span>
+                      ) : (
+                        <span className="text-emerald-700">Automation Running</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -495,33 +501,39 @@ export default function OverviewPage() {
             </div>
 
             <div className="space-y-3">
-              {recentIgChats.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => router.push('/instagram')}
-                  className="cursor-pointer rounded-lg border border-[#EFECE4] bg-[#FAF8F5] p-3 hover:border-[#CDC7BA] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-[#141413]">
-                      @{chat.contact.instagram_username} ({chat.contact.name})
-                    </span>
-                    <span className="text-[10px] text-[#7A756D]">
-                      {formatRelativeTime(chat.last_message_at)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#555047] line-clamp-2">
-                    {chat.last_message}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-[#7A756D]">
-                      Status: <strong className="text-[#141413] capitalize">{chat.status.replace('_', ' ')}</strong>
-                    </span>
-                    <span className="text-[#7A756D]">
-                      {chat.unread_count > 0 ? `${chat.unread_count} unread` : 'Read'}
-                    </span>
-                  </div>
+              {recentIgChats.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#E2DDD3] bg-[#FAF8F5] p-6 text-center text-xs text-[#7A756D]">
+                  No Instagram conversations recorded yet.
                 </div>
-              ))}
+              ) : (
+                recentIgChats.map((chat) => (
+                  <div
+                    key={chat.id}
+                    onClick={() => router.push('/instagram')}
+                    className="cursor-pointer rounded-lg border border-[#EFECE4] bg-[#FAF8F5] p-3 hover:border-[#CDC7BA] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-[#141413]">
+                        @{chat.contact.instagram_username} ({chat.contact.name})
+                      </span>
+                      <span className="text-[10px] text-[#7A756D]">
+                        {formatRelativeTime(chat.last_message_at)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#555047] line-clamp-2">
+                      {chat.last_message}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                      <span className="text-[#7A756D]">
+                        Status: <strong className="text-[#141413] capitalize">{chat.status.replace('_', ' ')}</strong>
+                      </span>
+                      <span className="text-[#7A756D]">
+                        {chat.unread_count > 0 ? `${chat.unread_count} unread` : 'Read'}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -600,32 +612,38 @@ export default function OverviewPage() {
             </div>
 
             <div className="divide-y divide-[#EFECE4]">
-              {latestQuotations.map((q) => {
-                const subtotal = q.items.reduce(
-                  (sum, item) => sum + (item.setup_charge * item.quantity),
-                  0
-                );
-                return (
-                  <div key={q.id} className="py-2.5 flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-xs text-[#141413]">
-                        {q.customer_name}
+              {latestQuotations.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#E2DDD3] bg-[#FAF8F5] p-6 text-center text-xs text-[#7A756D]">
+                  No quotations created yet.
+                </div>
+              ) : (
+                latestQuotations.map((q) => {
+                  const subtotal = q.items.reduce(
+                    (sum, item) => sum + (item.setup_charge * item.quantity),
+                    0
+                  );
+                  return (
+                    <div key={q.id} className="py-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-xs text-[#141413]">
+                          {q.customer_name}
+                        </div>
+                        <div className="text-[11px] text-[#7A756D]">
+                          {q.quotation_number} · {q.status.toUpperCase()}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-[#7A756D]">
-                        {q.quotation_number} · {q.status.toUpperCase()}
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-[#141413]">
+                          {formatINR(subtotal - q.discount_amount)}
+                        </div>
+                        <div className="text-[10px] text-[#7A756D]">
+                          {q.sent_via ? `Sent via ${q.sent_via}` : 'Draft'}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-[#141413]">
-                        {formatINR(subtotal - q.discount_amount)}
-                      </div>
-                      <div className="text-[10px] text-[#7A756D]">
-                        {q.sent_via ? `Sent via ${q.sent_via}` : 'Draft'}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-[#EFECE4]">

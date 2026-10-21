@@ -204,7 +204,7 @@ export interface AdminVpsMetrics {
 export interface AdminIntegrationStatus {
   service_name: 'supabase' | 'whatsapp' | 'instagram' | 'n8n' | 'google_sheets' | 'vps';
   status: 'connected' | 'disconnected' | 'error';
-  last_sync_at?: string;
+  last_sync_at?: string | null;
   error_message?: string;
   details?: Record<string, unknown>;
 }
