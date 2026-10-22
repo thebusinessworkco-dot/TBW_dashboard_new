@@ -18,24 +18,24 @@ export function TopNavbar({
   const hasIssues = integrationStatuses.some((i) => i.status === 'error') || vpsMetrics.status === 'critical';
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E2DDD3] bg-[#FAF8F5]/90 px-4 sm:px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E6E1D7] bg-white/85 px-4 sm:px-6 backdrop-blur-md">
       {/* Left: Mobile hamburger & Titles */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
           onClick={onOpenMobile}
-          className="rounded-lg p-2 text-[#555047] hover:bg-[#EFECE4] lg:hidden"
+          className="rounded-xl p-2 text-stone-600 hover:bg-stone-100 lg:hidden cursor-pointer transition-colors"
           aria-label="Open navigation menu"
         >
           <Menu className="h-5 w-5" />
         </button>
 
-        <div>
-          <h1 className="text-base sm:text-lg font-bold text-[#141413] tracking-tight">
+        <div className="min-w-0">
+          <h1 className="text-sm sm:text-base font-bold text-stone-900 tracking-tight truncate">
             {title}
           </h1>
           {subtitle && (
-            <p className="hidden sm:block text-xs text-[#7A756D]">
+            <p className="hidden sm:block text-xs text-stone-500 truncate max-w-xl">
               {subtitle}
             </p>
           )}
@@ -43,16 +43,16 @@ export function TopNavbar({
       </div>
 
       {/* Right: Time Range filter & System Status Pill */}
-      <div className="flex items-center gap-2 sm:gap-4">
-        {/* Time Filter Pills */}
-        <div className="flex items-center rounded-lg border border-[#E2DDD3] bg-white p-0.5 text-xs shadow-2xs">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Time Filter Segmented Control */}
+        <div className="flex items-center rounded-xl border border-stone-200/80 bg-stone-100/80 p-0.5 text-xs shadow-2xs">
           <button
             type="button"
             onClick={() => setTimeFilter('today')}
-            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
               timeFilter === 'today'
-                ? 'bg-[#141413] text-white shadow-xs'
-                : 'text-[#555047] hover:text-[#141413]'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
             Today
@@ -60,38 +60,41 @@ export function TopNavbar({
           <button
             type="button"
             onClick={() => setTimeFilter('7d')}
-            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
               timeFilter === '7d'
-                ? 'bg-[#141413] text-white shadow-xs'
-                : 'text-[#555047] hover:text-[#141413]'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Last 7D
+            7D
           </button>
           <button
             type="button"
             onClick={() => setTimeFilter('30d')}
-            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
               timeFilter === '30d'
-                ? 'bg-[#141413] text-white shadow-xs'
-                : 'text-[#555047] hover:text-[#141413]'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Last 30D
+            30D
           </button>
         </div>
 
         {/* Integration Status Badge */}
-        <div className="hidden md:flex items-center gap-1.5 rounded-full border border-[#E2DDD3] bg-white px-3 py-1 text-xs text-[#555047] shadow-2xs">
+        <div className="hidden md:flex items-center gap-1.5 rounded-full border border-stone-200/80 bg-white px-3 py-1 text-xs text-stone-600 shadow-2xs">
           {hasIssues ? (
             <>
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-              <span className="font-medium text-amber-800">Check Integrations</span>
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+              <span className="font-semibold text-amber-800">Check Integrations</span>
             </>
           ) : (
             <>
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-medium text-[#141413]">System Active</span>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-medium text-stone-800">Systems Operational</span>
             </>
           )}
         </div>
@@ -99,3 +102,4 @@ export function TopNavbar({
     </header>
   );
 }
+

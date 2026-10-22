@@ -1,17 +1,23 @@
+
+
+
 @import "tailwindcss";
 
 :root {
-  --background: #F8F7F3;
-  --foreground: #141413;
+  --background: #F8F7F4;
+  --foreground: #18181B;
   --surface: #FFFFFF;
-  --surface-muted: #F2EFE9;
-  --border: #E2DDD3;
-  --border-strong: #CDC7BA;
-  --text-primary: #141413;
-  --text-secondary: #555047;
-  --text-muted: #7A756D;
-  --brand-accent: #141413;
-  --whatsapp: #25D366;
+  --surface-muted: #F4F2EB;
+  --surface-subtle: #FAF9F6;
+  --border: #E5E1D8;
+  --border-subtle: #EFECE5;
+  --border-strong: #CDC7BC;
+  --text-primary: #18181B;
+  --text-secondary: #52525B;
+  --text-muted: #71717A;
+  --brand-accent: #18181B;
+  --whatsapp: #10B981;
+  --whatsapp-dark: #059669;
   --instagram: #E1306C;
 }
 
@@ -23,10 +29,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom smooth scrollbar */
+/* Premium micro scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -34,12 +40,18 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CDC7BA;
+  background: #D4CFCA;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #A8A193;
+  background: #A8A29E;
+}
+
+/* Focus styles for keyboard accessibility */
+:focus-visible {
+  outline: 2px solid #18181B;
+  outline-offset: 2px;
 }
 
 /* Print styling for Quotations */
@@ -54,3 +66,4 @@ body {
     display: block !important;
   }
 }
+

@@ -59,54 +59,54 @@ export default function VpsHealthPage() {
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Main Status Hero Card */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-6 shadow-2xs">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div
-                className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl border shadow-2xs ${
                   vpsMetrics.status === 'healthy'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    ? 'bg-emerald-50 border-emerald-200/80 text-emerald-700'
                     : vpsMetrics.status === 'warning'
-                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    ? 'bg-amber-50 border-amber-200/80 text-amber-700'
                     : vpsMetrics.status === 'not_connected'
                     ? 'bg-stone-100 border-stone-200 text-stone-600'
-                    : 'bg-rose-50 border-rose-200 text-rose-700'
+                    : 'bg-rose-50 border-rose-200/80 text-rose-700'
                 }`}
               >
                 <Server className="h-7 w-7" />
               </div>
 
               <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-[#141413]">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg font-bold text-stone-900">
                     VPS Host: vps.thebusinesswork.com
                   </h2>
                   <span
-                    className={`rounded-full px-3 py-0.5 text-xs font-bold uppercase tracking-wider border ${
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
                       vpsMetrics.status === 'healthy'
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
                         : vpsMetrics.status === 'warning'
-                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200/80'
                         : vpsMetrics.status === 'not_connected'
                         ? 'bg-stone-100 text-stone-700 border-stone-200'
-                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200/80'
                     }`}
                   >
                     {vpsMetrics.status === 'not_connected' ? 'Not Connected' : vpsMetrics.status}
                   </span>
                 </div>
-                <p className="text-xs text-[#7A756D] mt-1">
-                  Location: Mumbai, India (ap-south-1) · Uptime: <strong>{formatUptime(vpsMetrics.uptime_seconds)}</strong> · Last check: {formatDateTime(vpsMetrics.last_checked_at)}
+                <p className="text-xs text-stone-500 mt-1">
+                  Location: Mumbai, India (ap-south-1) · Uptime: <strong className="text-stone-800 font-mono">{formatUptime(vpsMetrics.uptime_seconds)}</strong> · Last check: {formatDateTime(vpsMetrics.last_checked_at)}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="rounded-xl border border-[#E2DDD3] bg-[#FAF8F5] px-4 py-2.5 text-right">
-                <span className="block text-[10px] font-semibold uppercase text-[#7A756D]">
+              <div className="rounded-xl border border-stone-200/80 bg-stone-50/70 px-4 py-2.5 text-right">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                   n8n HTTP Latency
                 </span>
-                <span className="font-mono text-base font-bold text-[#141413]">
+                <span className="font-mono text-base font-bold text-stone-900">
                   {vpsMetrics.n8n_response_time_ms} ms
                 </span>
               </div>
@@ -117,81 +117,81 @@ export default function VpsHealthPage() {
         {/* 3 Utilization Progress Gauges */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {/* CPU Gauge */}
-          <div className="rounded-xl border border-[#E2DDD3] bg-white p-5 shadow-2xs space-y-3">
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-[#7A756D]" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#555047]">
+                <Cpu className="h-4 w-4 text-stone-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600">
                   CPU Load
                 </h3>
               </div>
-              <span className={`rounded px-2 py-0.5 text-xs font-bold font-mono border ${cpuColor.badge}`}>
+              <span className={`rounded-md px-2 py-0.5 text-xs font-bold font-mono border ${cpuColor.badge}`}>
                 {vpsMetrics.cpu_percent}%
               </span>
             </div>
 
-            <div className="h-3 w-full rounded-full bg-[#FAF8F5] border border-[#E2DDD3] overflow-hidden">
+            <div className="h-2.5 w-full rounded-full bg-stone-100 overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${cpuColor.bg}`}
+                className={`h-full transition-all duration-500 rounded-full ${cpuColor.bg}`}
                 style={{ width: `${vpsMetrics.cpu_percent}%` }}
               />
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-[#7A756D]">
+            <div className="flex items-center justify-between text-[11px] text-stone-500 font-mono">
               <span>4 vCPU Cores</span>
               <span>{vpsMetrics.cpu_percent >= 80 ? 'Heavy Load' : 'Normal Operating Load'}</span>
             </div>
           </div>
 
           {/* RAM Gauge */}
-          <div className="rounded-xl border border-[#E2DDD3] bg-white p-5 shadow-2xs space-y-3">
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-[#7A756D]" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#555047]">
+                <Activity className="h-4 w-4 text-stone-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600">
                   RAM Memory
                 </h3>
               </div>
-              <span className={`rounded px-2 py-0.5 text-xs font-bold font-mono border ${ramColor.badge}`}>
+              <span className={`rounded-md px-2 py-0.5 text-xs font-bold font-mono border ${ramColor.badge}`}>
                 {vpsMetrics.ram_percent}%
               </span>
             </div>
 
-            <div className="h-3 w-full rounded-full bg-[#FAF8F5] border border-[#E2DDD3] overflow-hidden">
+            <div className="h-2.5 w-full rounded-full bg-stone-100 overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${ramColor.bg}`}
+                className={`h-full transition-all duration-500 rounded-full ${ramColor.bg}`}
                 style={{ width: `${vpsMetrics.ram_percent}%` }}
               />
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-[#7A756D]">
+            <div className="flex items-center justify-between text-[11px] text-stone-500 font-mono">
               <span>Used: {vpsMetrics.ram_used_gb} GB</span>
               <span>Total: {vpsMetrics.ram_total_gb} GB</span>
             </div>
           </div>
 
           {/* Disk Gauge */}
-          <div className="rounded-xl border border-[#E2DDD3] bg-white p-5 shadow-2xs space-y-3">
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <HardDrive className="h-4 w-4 text-[#7A756D]" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#555047]">
+                <HardDrive className="h-4 w-4 text-stone-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600">
                   NVMe Storage
                 </h3>
               </div>
-              <span className={`rounded px-2 py-0.5 text-xs font-bold font-mono border ${diskColor.badge}`}>
+              <span className={`rounded-md px-2 py-0.5 text-xs font-bold font-mono border ${diskColor.badge}`}>
                 {vpsMetrics.disk_percent}%
               </span>
             </div>
 
-            <div className="h-3 w-full rounded-full bg-[#FAF8F5] border border-[#E2DDD3] overflow-hidden">
+            <div className="h-2.5 w-full rounded-full bg-stone-100 overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${diskColor.bg}`}
+                className={`h-full transition-all duration-500 rounded-full ${diskColor.bg}`}
                 style={{ width: `${vpsMetrics.disk_percent}%` }}
               />
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-[#7A756D]">
+            <div className="flex items-center justify-between text-[11px] text-stone-500 font-mono">
               <span>Used: {vpsMetrics.disk_used_gb} GB</span>
               <span>Total: {vpsMetrics.disk_total_gb} GB</span>
             </div>
@@ -201,38 +201,38 @@ export default function VpsHealthPage() {
         {/* n8n Service Status & Recent Errors */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Service Health Card */}
-          <div className="rounded-xl border border-[#E2DDD3] bg-white p-5 shadow-2xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#7A756D] border-b border-[#EFECE4] pb-2">
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600 border-b border-stone-100 pb-2">
               Background Services Status
             </h3>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD3] bg-[#FAF8F5]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="font-semibold text-[#141413]">n8n Automation Engine (Docker)</span>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200/80 bg-stone-50/70">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="font-semibold text-stone-900">n8n Automation Engine (Docker)</span>
                 </div>
-                <span className="font-bold text-emerald-700 capitalize font-mono">
+                <span className="font-bold text-emerald-700 capitalize font-mono text-[11px] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
                   {vpsMetrics.n8n_status}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD3] bg-[#FAF8F5]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-[#141413]">PostgreSQL Database (Local Port 5432)</span>
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200/80 bg-stone-50/70">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-stone-900">PostgreSQL Database (Local Port 5432)</span>
                 </div>
-                <span className="font-bold text-emerald-700 font-mono">
+                <span className="font-bold text-emerald-700 font-mono text-[11px] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
                   ACTIVE
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD3] bg-[#FAF8F5]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-[#141413]">Caddy / Nginx Reverse Proxy (SSL)</span>
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200/80 bg-stone-50/70">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-stone-900">Caddy / Nginx Reverse Proxy (SSL)</span>
                 </div>
-                <span className="font-bold text-emerald-700 font-mono">
+                <span className="font-bold text-emerald-700 font-mono text-[11px] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
                   HEALTHY
                 </span>
               </div>
@@ -240,8 +240,8 @@ export default function VpsHealthPage() {
           </div>
 
           {/* Service Logs & Alerts */}
-          <div className="rounded-xl border border-[#E2DDD3] bg-white p-5 shadow-2xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#7A756D] border-b border-[#EFECE4] pb-2">
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600 border-b border-stone-100 pb-2">
               Recent Service Events & System Alerts
             </h3>
 
@@ -250,7 +250,7 @@ export default function VpsHealthPage() {
                 {vpsMetrics.recent_errors.map((err, i) => (
                   <div
                     key={i}
-                    className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900"
+                    className="flex items-start gap-2.5 rounded-xl border border-amber-200/90 bg-amber-50/70 p-3.5 text-xs text-amber-950"
                   >
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                     <span className="font-mono text-[11px] leading-relaxed">{err}</span>
@@ -258,8 +258,8 @@ export default function VpsHealthPage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-800 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <div className="rounded-xl bg-emerald-50/80 border border-emerald-200/80 p-4 text-xs text-emerald-800 flex items-center gap-2.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>Zero system faults or memory limit warnings detected.</span>
               </div>
             )}
@@ -267,28 +267,31 @@ export default function VpsHealthPage() {
         </div>
 
         {/* Lightweight Monitoring Agent Setup Instructions */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-6 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EFECE4] pb-3">
-            <div className="flex items-center gap-2">
-              <Terminal className="h-5 w-5 text-[#141413]" />
-              <h3 className="text-sm font-bold text-[#141413]">
-                Lightweight VPS Monitoring Setup (Zero Secrets Exposed)
-              </h3>
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+            <div className="flex items-center gap-2.5">
+              <Terminal className="h-5 w-5 text-stone-700" />
+              <div>
+                <h3 className="text-sm font-bold text-stone-900">
+                  Lightweight VPS Monitoring Setup
+                </h3>
+                <p className="text-[11px] text-stone-500">Zero open ports, zero exposed secrets</p>
+              </div>
             </div>
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] px-3 py-1 text-xs font-semibold text-[#141413] hover:bg-[#EFECE4]"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50/60 px-3.5 py-1.5 text-xs font-semibold text-stone-800 hover:bg-stone-100 transition-all self-start sm:self-auto cursor-pointer shadow-2xs"
             >
-              {copiedCode ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedCode ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-stone-500" />}
               <span>{copiedCode ? 'Copied to Clipboard' : 'Copy Heartbeat Script'}</span>
             </button>
           </div>
 
-          <p className="text-xs text-[#555047] leading-relaxed">
-            To feed live metrics from your VPS into this dashboard without opening ports or exposing SSH credentials, add a 5-minute cron job or systemd timer on your VPS to POST telemetry to <code className="font-mono bg-stone-100 px-1.5 py-0.5 rounded">/api/vps/health</code>.
+          <p className="text-xs text-stone-600 leading-relaxed">
+            To feed live metrics from your VPS into this dashboard without opening ports or exposing SSH credentials, add a 5-minute cron job or systemd timer on your VPS to POST telemetry to <code className="font-mono bg-stone-100 text-stone-800 px-1.5 py-0.5 rounded border border-stone-200/60">/api/vps/health</code>.
           </p>
 
-          <pre className="overflow-x-auto rounded-xl bg-[#141413] p-4 font-mono text-[11px] text-stone-200 leading-relaxed">
+          <pre className="overflow-x-auto rounded-xl bg-stone-900 p-4 font-mono text-[11px] text-stone-200 leading-relaxed shadow-inner">
             {sampleCronCommand}
           </pre>
         </div>

@@ -87,133 +87,141 @@ export default function LeadsPage() {
   return (
     <div className="min-h-full pb-16">
       <TopNavbar
-        title="Leads Pipeline (Google Sheets Synced)"
-        subtitle="Track leads captured from Website, WhatsApp, and the new Instagram Leads worksheet."
+        title="Leads Pipeline"
+        subtitle="Real-time multi-channel pipeline synchronized with Google Sheets via n8n automation."
       />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Google Sheets Sync Architecture Banner */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-4 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#141413]">
-                  Connected Master Google Spreadsheet
-                </h3>
-                <p className="text-xs text-[#555047]">
-                  Tabs: <strong>Website Leads</strong> (Existing) · <strong>WhatsApp Leads</strong> (Existing) · <strong>Instagram Leads</strong> (New Tab)
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-900">
+                    Connected Master Google Spreadsheet
+                  </h3>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Sync Active
+                  </span>
+                </div>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Synchronizing worksheets: <strong className="text-stone-700">Website Leads</strong> · <strong className="text-stone-700">WhatsApp Leads</strong> · <strong className="text-stone-700">Instagram Leads</strong>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-800">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live Sync Active via n8n
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-[11px] font-mono text-stone-500 bg-stone-50 border border-stone-200/80 px-3 py-1 rounded-lg">
+                {leads.length} Total Synced Leads
               </span>
             </div>
           </div>
         </div>
 
         {/* Tab Selection & Search / Filter Controls */}
-        <div className="flex flex-col gap-4 rounded-xl border border-[#E2DDD3] bg-white p-4 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EFECE4] pb-4">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
             {/* Tabs */}
-            <div className="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wider">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-stone-100/80 border border-stone-200/60">
               <button
                 onClick={() => setActiveTab('all')}
-                className={`rounded-lg px-3 py-1.5 transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                   activeTab === 'all'
-                    ? 'bg-[#141413] text-white shadow-xs'
-                    : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                    ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                    : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                All Leads ({leads.length})
+                All Leads <span className="ml-1 text-[11px] text-stone-400">({leads.length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('website')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                   activeTab === 'website'
-                    ? 'bg-[#141413] text-white shadow-xs'
-                    : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                    ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                    : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                <Globe className="h-3.5 w-3.5" />
-                <span>Website Leads</span>
+                <Globe className="h-3.5 w-3.5 text-stone-500" />
+                <span>Website</span>
+                <span className="text-[11px] text-stone-400">({leads.filter(l => l.source === 'website').length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('whatsapp')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                   activeTab === 'whatsapp'
-                    ? 'bg-[#141413] text-white shadow-xs'
-                    : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                    ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                    : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                <MessageSquare className="h-3.5 w-3.5 text-[#25D366]" />
-                <span>WhatsApp Leads</span>
+                <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                <span>WhatsApp</span>
+                <span className="text-[11px] text-stone-400">({leads.filter(l => l.source === 'whatsapp').length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('instagram')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                   activeTab === 'instagram'
-                    ? 'bg-[#141413] text-white shadow-xs'
-                    : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                    ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                    : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                <Instagram className="h-3.5 w-3.5 text-[#E1306C]" />
-                <span>Instagram Leads</span>
+                <Instagram className="h-3.5 w-3.5 text-rose-500" />
+                <span>Instagram</span>
+                <span className="text-[11px] text-stone-400">({leads.filter(l => l.source === 'instagram').length})</span>
               </button>
             </div>
 
             <button
               onClick={() => setNewLeadModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#141413] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#2A2825] shadow-xs cursor-pointer self-start sm:self-auto"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 shadow-sm shadow-stone-950/10 cursor-pointer self-start sm:self-auto transition-all active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
-              <span>Add Lead</span>
+              <span>Add New Lead</span>
             </button>
           </div>
 
           {/* Search bar & status filters */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#7A756D]" />
+              <Search className="pointer-events-none absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
               <input
                 type="text"
-                placeholder="Search leads by name, phone, email, or service..."
+                placeholder="Search by name, phone, email, handle, service..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] py-2 pl-9 pr-3 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50/60 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
               />
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-[#7A756D]">Status:</span>
+              <span className="text-stone-500 font-medium">Status Filter:</span>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] px-2.5 py-1.5 text-xs text-[#141413] focus:border-[#141413] focus:outline-none"
+                className="rounded-xl border border-stone-200 bg-stone-50/60 px-3 py-1.5 text-xs font-medium text-stone-800 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
               >
-                <option value="all">All Statuses</option>
-                <option value="new">New</option>
-                <option value="contacted">Contacted</option>
-                <option value="qualified">Qualified</option>
-                <option value="converted">Converted</option>
-                <option value="lost">Lost</option>
+                <option value="all">All Statuses ({leads.length})</option>
+                <option value="new">New ({leads.filter(l => l.status === 'new').length})</option>
+                <option value="contacted">Contacted ({leads.filter(l => l.status === 'contacted').length})</option>
+                <option value="qualified">Qualified ({leads.filter(l => l.status === 'qualified').length})</option>
+                <option value="converted">Converted ({leads.filter(l => l.status === 'converted').length})</option>
+                <option value="lost">Lost ({leads.filter(l => l.status === 'lost').length})</option>
               </select>
             </div>
           </div>
         </div>
 
         {/* Leads Table */}
-        <div className="overflow-hidden rounded-xl border border-[#E2DDD3] bg-white shadow-2xs">
+        <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#E2DDD3] bg-[#FAF8F5] text-[11px] font-bold uppercase tracking-wider text-[#7A756D]">
+                <tr className="border-b border-stone-200/70 bg-stone-50/80 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
                   <th className="py-3 px-4">Lead Contact</th>
                   <th className="py-3 px-4">Source Channel</th>
                   <th className="py-3 px-4">Service Interest</th>
@@ -223,11 +231,15 @@ export default function LeadsPage() {
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#EFECE4] text-xs">
+              <tbody className="divide-y divide-stone-100 text-xs">
                 {filteredLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-xs text-[#7A756D]">
-                      No leads found matching your criteria.
+                    <td colSpan={7} className="py-16 text-center text-xs text-stone-500">
+                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-400 mb-2">
+                        <Search className="h-5 w-5" />
+                      </div>
+                      <p className="font-medium text-stone-700">No leads found</p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">Try clearing your search query or selecting a different status filter.</p>
                     </td>
                   </tr>
                 ) : (
@@ -235,30 +247,37 @@ export default function LeadsPage() {
                     const statusBadge = getLeadStatusBadge(lead.status);
 
                     return (
-                      <tr key={lead.id} className="hover:bg-[#FAF8F5] transition-colors">
+                      <tr key={lead.id} className="hover:bg-stone-50/70 transition-colors">
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-[#141413]">
-                            {lead.contact_name}
-                          </div>
-                          <div className="text-[11px] text-[#7A756D]">
-                            {lead.contact_phone || (lead.instagram_username ? `@${lead.instagram_username}` : lead.contact_email)}
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-700 font-semibold text-xs border border-stone-200/60">
+                              {lead.contact_name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-stone-900">
+                                {lead.contact_name}
+                              </div>
+                              <div className="text-[11px] text-stone-500 font-mono">
+                                {lead.contact_phone || (lead.instagram_username ? `@${lead.instagram_username}` : lead.contact_email)}
+                              </div>
+                            </div>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <div className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold bg-[#FAF8F5] border border-[#E2DDD3] text-[#141413] capitalize">
-                            {lead.source === 'whatsapp' && <MessageSquare className="h-3 w-3 text-[#25D366]" />}
-                            {lead.source === 'instagram' && <Instagram className="h-3 w-3 text-[#E1306C]" />}
-                            {lead.source === 'website' && <Globe className="h-3 w-3 text-[#141413]" />}
+                          <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-stone-100/80 border border-stone-200/60 text-stone-800 capitalize">
+                            {lead.source === 'whatsapp' && <MessageSquare className="h-3 w-3 text-emerald-600" />}
+                            {lead.source === 'instagram' && <Instagram className="h-3 w-3 text-rose-500" />}
+                            {lead.source === 'website' && <Globe className="h-3 w-3 text-stone-600" />}
                             <span>{lead.source}</span>
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-4 font-medium text-[#141413]">
+                        <td className="py-3.5 px-4 font-medium text-stone-800">
                           {lead.service_interest}
                         </td>
 
-                        <td className="py-3.5 px-4 font-bold text-[#141413]">
+                        <td className="py-3.5 px-4 font-semibold text-stone-900 font-mono">
                           {lead.estimated_value ? formatINR(lead.estimated_value) : '—'}
                         </td>
 
@@ -266,7 +285,7 @@ export default function LeadsPage() {
                           <select
                             value={lead.status}
                             onChange={(e) => updateLeadStatus(lead.id, e.target.value as LeadStatus)}
-                            className={`rounded-md px-2 py-1 text-xs font-semibold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} focus:outline-none`}
+                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} focus:outline-none cursor-pointer transition-all`}
                           >
                             <option value="new">New</option>
                             <option value="contacted">Contacted</option>
@@ -276,19 +295,21 @@ export default function LeadsPage() {
                           </select>
                         </td>
 
-                        <td className="py-3.5 px-4 font-mono text-[11px] text-[#7A756D]">
-                          {lead.google_sheet_row_id || 'Auto-Syncing'}
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono text-[11px] text-stone-600 bg-stone-100/70 border border-stone-200/50 px-2 py-0.5 rounded-md">
+                            {lead.google_sheet_row_id || 'Auto-Syncing'}
+                          </span>
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             {lead.source === 'whatsapp' && (
                               <button
                                 onClick={() => router.push('/whatsapp')}
                                 title="Open WhatsApp Chat"
-                                className="rounded-md border border-[#E2DDD3] p-1.5 text-[#555047] hover:bg-white hover:text-[#141413]"
+                                className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors"
                               >
-                                <MessageSquare className="h-3.5 w-3.5 text-[#25D366]" />
+                                <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
                               </button>
                             )}
 
@@ -296,16 +317,16 @@ export default function LeadsPage() {
                               <button
                                 onClick={() => router.push('/instagram')}
                                 title="Open Instagram DM"
-                                className="rounded-md border border-[#E2DDD3] p-1.5 text-[#555047] hover:bg-white hover:text-[#141413]"
+                                className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors"
                               >
-                                <Instagram className="h-3.5 w-3.5 text-[#E1306C]" />
+                                <Instagram className="h-3.5 w-3.5 text-rose-500" />
                               </button>
                             )}
 
                             <button
                               onClick={() => router.push('/quotations')}
                               title="Create Quotation for Lead"
-                              className="rounded-md bg-[#141413] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#2A2825]"
+                              className="rounded-lg bg-stone-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-stone-800 transition-all shadow-xs"
                             >
                               Quote ₹
                             </button>
@@ -323,15 +344,18 @@ export default function LeadsPage() {
 
       {/* ADD LEAD MODAL */}
       {newLeadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl border border-[#E2DDD3] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#EFECE4] pb-3 mb-4">
-              <h3 className="text-base font-bold text-[#141413]">
-                Add New Lead (Syncs with Google Sheets)
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-stone-900">
+                  Add New Lead
+                </h3>
+                <p className="text-[11px] text-stone-500 mt-0.5">Appends directly to master Google Sheet worksheets</p>
+              </div>
               <button
                 onClick={() => setNewLeadModalOpen(false)}
-                className="text-[#7A756D] hover:text-[#141413]"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -339,7 +363,7 @@ export default function LeadsPage() {
 
             <form onSubmit={handleCreateLead} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold uppercase text-[#555047] mb-1">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                   Contact Full Name *
                 </label>
                 <input
@@ -347,34 +371,34 @@ export default function LeadsPage() {
                   required
                   value={leadName}
                   onChange={(e) => setLeadName(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                   placeholder="e.g. Ramesh Patel"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold uppercase text-[#555047] mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                     Phone Number
                   </label>
                   <input
                     type="text"
                     value={leadPhone}
                     onChange={(e) => setLeadPhone(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                     placeholder="+91 98200 00000"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold uppercase text-[#555047] mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                     Instagram Handle
                   </label>
                   <input
                     type="text"
                     value={leadIg}
                     onChange={(e) => setLeadIg(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                     placeholder="e.g. business_user"
                   />
                 </div>
@@ -382,13 +406,13 @@ export default function LeadsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold uppercase text-[#555047] mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                     Lead Source Channel *
                   </label>
                   <select
                     value={leadSource}
                     onChange={(e) => setLeadSource(e.target.value as LeadSource)}
-                    className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                   >
                     <option value="whatsapp">WhatsApp Leads Tab</option>
                     <option value="instagram">Instagram Leads Tab (New)</option>
@@ -397,26 +421,26 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold uppercase text-[#555047] mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                     Estimated Deal Value (INR ₹)
                   </label>
                   <input
                     type="number"
                     value={leadEstValue}
                     onChange={(e) => setLeadEstValue(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold uppercase text-[#555047] mb-1">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                   Service Category Interest
                 </label>
                 <select
                   value={leadService}
                   onChange={(e) => setLeadService(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                 >
                   {servicesList.map((svc) => (
                     <option key={svc} value={svc}>
@@ -427,7 +451,7 @@ export default function LeadsPage() {
               </div>
 
               <div>
-                <label className="block font-semibold uppercase text-[#555047] mb-1">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
                   Notes & Requirements
                 </label>
                 <textarea
@@ -435,21 +459,21 @@ export default function LeadsPage() {
                   value={leadNotes}
                   onChange={(e) => setLeadNotes(e.target.value)}
                   placeholder="Specific automations needed, budget notes, etc."
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#EFECE4]">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
                 <button
                   type="button"
                   onClick={() => setNewLeadModalOpen(false)}
-                  className="rounded-lg border border-[#E2DDD3] px-4 py-2 font-semibold text-[#555047] hover:bg-[#FAF8F5]"
+                  className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#141413] px-4 py-2 font-semibold text-white hover:bg-[#2A2825]"
+                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-all shadow-xs"
                 >
                   Save & Append to Google Sheet
                 </button>

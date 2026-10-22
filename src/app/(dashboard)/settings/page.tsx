@@ -86,38 +86,38 @@ export default function SettingsPage() {
         subtitle="Review integration health, administrator account security, and database connectivity."
       />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* SECTION 1: PROFILE & ACCOUNT */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-6 shadow-2xs space-y-4">
-          <div className="border-b border-[#EFECE4] pb-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#141413]">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
+          <div className="border-b border-stone-100 pb-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-900">
               Administrator Profile & Security
             </h2>
-            <p className="text-xs text-[#7A756D]">
+            <p className="text-xs text-stone-500 mt-0.5">
               Authorized administrator account mapped to Supabase Authentication.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#141413] text-white font-bold text-lg shadow-xs">
+              <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-stone-900 text-white font-bold text-base shadow-sm shadow-stone-950/20">
                 AR
               </div>
               <div className="space-y-0.5">
-                <div className="font-bold text-base text-[#141413]">
+                <div className="font-semibold text-base text-stone-900">
                   Aman Rajbhar
                 </div>
-                <div className="font-mono text-xs text-[#555047]">
+                <div className="font-mono text-xs text-stone-600">
                   thebusinesswork.co@gmail.com
                 </div>
-                <div className="text-[11px] text-[#7A756D]">
+                <div className="text-[11px] text-stone-400">
                   Role: Principal Administrator & Owner · Boisar, Maharashtra, India
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200/80">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                 <span>Superadmin Allowlisted</span>
               </span>
@@ -126,17 +126,17 @@ export default function SettingsPage() {
         </div>
 
         {/* SECTION 2: INTEGRATION HEALTH CARDS */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-6 shadow-2xs space-y-4">
-          <div className="border-b border-[#EFECE4] pb-3 flex items-center justify-between">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
+          <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#141413]">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-900">
                 External System Integrations
               </h2>
-              <p className="text-xs text-[#7A756D]">
+              <p className="text-xs text-stone-500 mt-0.5">
                 Real-time operational status for all automation, database, and telemetry endpoints.
               </p>
             </div>
-            <span className="rounded-md bg-stone-100 border border-stone-200 px-2.5 py-1 text-[11px] font-mono text-[#555047]">
+            <span className="rounded-lg bg-stone-100 border border-stone-200/80 px-2.5 py-1 text-[11px] font-mono text-stone-600 self-start sm:self-auto">
               Zero Secrets Exposed to Browser
             </span>
           </div>
@@ -147,43 +147,43 @@ export default function SettingsPage() {
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-[#E2DDD3] bg-[#FAF8F5] p-4 flex flex-col justify-between space-y-3 hover:border-[#CDC7BA] transition-colors"
+                  className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4.5 flex flex-col justify-between space-y-3 hover:border-stone-300 hover:bg-stone-50 transition-all shadow-2xs"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="rounded-lg bg-white p-2 border border-[#E2DDD3] shadow-2xs">
-                          <Icon className="h-4 w-4 text-[#141413]" />
+                        <div className="rounded-xl bg-white p-2 border border-stone-200/80 shadow-2xs">
+                          <Icon className="h-4 w-4 text-stone-800" />
                         </div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A756D]">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                           {item.category}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs font-bold text-emerald-700 capitalize">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-semibold text-emerald-700 capitalize">
                           {item.status}
                         </span>
                       </div>
                     </div>
 
                     <div>
-                      <h3 className="font-bold text-sm text-[#141413]">
+                      <h3 className="font-semibold text-sm text-stone-900">
                         {item.name}
                       </h3>
-                      <p className="text-xs text-[#555047] leading-relaxed mt-1">
+                      <p className="text-xs text-stone-600 leading-relaxed mt-1">
                         {item.description}
                       </p>
                     </div>
                   </div>
 
-                  <div className="border-t border-[#EFECE4] pt-2 text-[11px] font-mono text-[#7A756D] space-y-0.5">
+                  <div className="border-t border-stone-200/60 pt-2.5 text-[11px] font-mono text-stone-500 space-y-0.5">
                     <div className="truncate">
-                      Endpoint: <strong>{item.endpoint}</strong>
+                      Endpoint: <strong className="text-stone-700">{item.endpoint}</strong>
                     </div>
                     <div>
-                      Status: <strong>{item.lastSync}</strong>
+                      Status: <strong className="text-stone-700">{item.lastSync}</strong>
                     </div>
                   </div>
                 </div>
@@ -193,18 +193,18 @@ export default function SettingsPage() {
         </div>
 
         {/* SECTION 3: DATABASE & SYSTEM INTEGRITY */}
-        <div className="rounded-xl border border-[#E2DDD3] bg-white p-6 shadow-2xs space-y-4">
-          <div className="border-b border-[#EFECE4] pb-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#141413]">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
+          <div className="border-b border-stone-100 pb-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-900">
               Database & Architecture Integrity
             </h2>
-            <p className="text-xs text-[#7A756D]">
+            <p className="text-xs text-stone-500 mt-0.5">
               Supabase PostgreSQL operates as the exclusive single source of truth. All mock records have been permanently eliminated.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-1.5">
+            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/60 p-4.5 space-y-1.5">
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 <span>Production Mode Active</span>
@@ -214,23 +214,23 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-[#E2DDD3] bg-[#FAF8F5] p-4 space-y-1.5">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#141413]">
-                <Lock className="h-4 w-4 text-[#555047]" />
+            <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4.5 space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-stone-900">
+                <Lock className="h-4 w-4 text-stone-500" />
                 <span>Row Level Security (RLS)</span>
               </div>
-              <p className="text-xs text-[#555047] leading-relaxed">
-                Protected by <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-[#E2DDD3]">admin_user_allowlist</code> and Auth User ID checks on all 12 operational tables.
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Protected by <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-stone-200">admin_user_allowlist</code> and Auth User ID checks on all 12 operational tables.
               </p>
             </div>
 
-            <div className="rounded-xl border border-[#E2DDD3] bg-[#FAF8F5] p-4 space-y-1.5">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#141413]">
-                <Layers className="h-4 w-4 text-[#555047]" />
+            <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4.5 space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-stone-900">
+                <Layers className="h-4 w-4 text-stone-500" />
                 <span>Realtime & Storage</span>
               </div>
-              <p className="text-xs text-[#555047] leading-relaxed">
-                Authenticated Realtime enabled for live chat streaming. Quotation PDFs secured in <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-[#E2DDD3]">tbw-quotations</code>.
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Authenticated Realtime enabled for live chat streaming. Quotation PDFs secured in <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-stone-200">tbw-quotations</code>.
               </p>
             </div>
           </div>

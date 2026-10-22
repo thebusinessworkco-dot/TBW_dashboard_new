@@ -116,36 +116,36 @@ export default function InstagramPage() {
       />
 
       {/* Tab Switcher Header */}
-      <div className="flex items-center justify-between border-b border-[#E2DDD3] bg-white px-4 sm:px-6 py-2.5">
+      <div className="flex items-center justify-between border-b border-[#E6E1D7] bg-white px-4 sm:px-6 py-2.5 shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('comment_dm')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'comment_dm'
-                ? 'bg-[#141413] text-white shadow-xs'
-                : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200/60'
             }`}
           >
-            <MessageCircle className="h-4 w-4 text-[#E1306C]" />
-            <span>Tab B — Comment to DM Manager ({commentAutomations.length})</span>
+            <MessageCircle className="h-3.5 w-3.5 text-[#E1306C]" />
+            <span>Comment to DM Manager ({commentAutomations.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('dms')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'dms'
-                ? 'bg-[#141413] text-white shadow-xs'
-                : 'bg-[#FAF8F5] text-[#555047] hover:bg-[#EFECE4]'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200/60'
             }`}
           >
-            <Instagram className="h-4 w-4 text-[#E1306C]" />
-            <span>Tab A — Instagram DMs ({igConversations.length})</span>
+            <Instagram className="h-3.5 w-3.5 text-[#E1306C]" />
+            <span>Direct Messages ({igConversations.length})</span>
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#7A756D]">
-          <span>Connected Account:</span>
-          <strong className="text-[#141413]">@thebusinesswork.co</strong>
+        <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500">
+          <span>Official Meta Graph Account:</span>
+          <span className="font-semibold text-stone-900 font-mono">@thebusinesswork.co</span>
         </div>
       </div>
 
@@ -154,15 +154,15 @@ export default function InstagramPage() {
         /* TAB B: COMMENT TO DM MANAGER */
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Controls Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#E2DDD3] bg-white p-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-stone-200/90 bg-white p-4 shadow-2xs">
             <div className="relative flex-1 max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#7A756D]" />
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
               <input
                 type="text"
                 placeholder="Search reels by caption, trigger keyword or media ID..."
                 value={reelSearch}
                 onChange={(e) => setReelSearch(e.target.value)}
-                className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] py-2 pl-9 pr-3 text-xs text-[#141413] focus:border-[#141413] focus:outline-none"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition shadow-2xs"
               />
             </div>
 
@@ -171,10 +171,10 @@ export default function InstagramPage() {
                 <button
                   key={mode}
                   onClick={() => setReelFilter(mode)}
-                  className={`rounded-lg px-3 py-1.5 capitalize font-medium transition-colors ${
+                  className={`rounded-xl px-3 py-1.5 capitalize font-medium transition-all cursor-pointer ${
                     reelFilter === mode
-                      ? 'bg-[#141413] text-white shadow-xs'
-                      : 'border border-[#E2DDD3] bg-white text-[#555047] hover:bg-[#FAF8F5]'
+                      ? 'bg-stone-900 text-white shadow-xs'
+                      : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
                   }`}
                 >
                   {mode}
@@ -186,12 +186,12 @@ export default function InstagramPage() {
           {/* Reel Automations List / Cards */}
           <div className="space-y-4">
             {filteredReels.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[#E2DDD3] bg-white p-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FAF8F5] text-[#7A756D] mb-3">
+              <div className="rounded-2xl border border-dashed border-stone-200 bg-white p-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400 mb-3">
                   <Film className="h-6 w-6" />
                 </div>
-                <h4 className="text-sm font-semibold text-[#141413]">No reel automations configured</h4>
-                <p className="mt-1 text-xs text-[#7A756D] max-w-sm mx-auto">
+                <h4 className="text-sm font-semibold text-stone-900">No reel automations configured</h4>
+                <p className="mt-1 text-xs text-stone-400 max-w-sm mx-auto">
                   {reelFilter === 'all'
                     ? 'Connect an Instagram Reel trigger above to auto-reply to comments and dispatch instant direct messages.'
                     : `No automations found with status "${reelFilter}".`}
@@ -201,7 +201,7 @@ export default function InstagramPage() {
               filteredReels.map((reel) => (
               <div
                 key={reel.id}
-                className="overflow-hidden rounded-xl border border-[#E2DDD3] bg-white shadow-2xs hover:shadow-xs transition-shadow"
+                className="overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-2xs hover:shadow-xs transition-shadow"
               >
                 <div className="p-5 flex flex-col md:flex-row gap-5 items-start">
                   {/* Reel Thumbnail & Media Meta */}
@@ -210,21 +210,21 @@ export default function InstagramPage() {
                     <img
                       src={reel.reel_thumbnail}
                       alt="Instagram Reel"
-                      className="h-28 w-20 rounded-lg object-cover border border-[#CDC7BA] shadow-2xs bg-stone-100"
+                      className="h-28 w-20 rounded-xl object-cover border border-stone-200 shadow-2xs bg-stone-100"
                     />
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="rounded bg-stone-100 px-2 py-0.5 text-[10px] font-mono font-bold text-stone-700 border border-stone-200">
+                        <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-mono font-bold text-stone-700 border border-stone-200">
                           MEDIA: {reel.reel_media_id}
                         </span>
-                        <span className="text-[11px] text-[#7A756D]">
+                        <span className="text-[11px] text-stone-400 font-medium">
                           {formatDate(reel.publish_date)}
                         </span>
                       </div>
-                      <div className="mt-2 text-xs font-semibold text-[#141413]">
+                      <div className="mt-2 text-xs font-semibold text-stone-900">
                         Trigger Keyword:
                       </div>
-                      <span className="inline-block rounded-md bg-stone-900 px-2.5 py-1 text-xs font-mono font-bold text-amber-400">
+                      <span className="inline-block rounded-lg bg-stone-900 px-2.5 py-1 text-xs font-mono font-bold text-amber-400 shadow-2xs">
                         {reel.trigger_keyword}
                       </span>
                     </div>
@@ -233,29 +233,29 @@ export default function InstagramPage() {
                   {/* Caption & Automation Status */}
                   <div className="flex-1 space-y-3 min-w-0">
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#7A756D] mb-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-1">
                         Reel Caption
                       </h4>
-                      <p className="text-xs text-[#141413] leading-relaxed line-clamp-2">
+                      <p className="text-xs text-stone-800 leading-relaxed line-clamp-2">
                         {reel.reel_caption}
                       </p>
                     </div>
 
-                    <div className="rounded-lg bg-[#FAF8F5] border border-[#E2DDD3] p-3">
-                      <div className="text-[11px] font-semibold text-[#555047] mb-1">
+                    <div className="rounded-xl bg-stone-50 border border-stone-200/80 p-3">
+                      <div className="text-[11px] font-semibold text-stone-600 mb-1">
                         Automated Private DM Message:
                       </div>
-                      <p className="text-xs text-[#141413] font-mono whitespace-pre-wrap">
+                      <p className="text-xs text-stone-900 font-mono whitespace-pre-wrap leading-relaxed">
                         {reel.automatic_dm_message}
                       </p>
                     </div>
 
                     {/* Meta Error Warning if any */}
                     {reel.last_status === 'failed' && (
-                      <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
+                      <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">
                         <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
                         <div>
-                          <strong className="block">Meta Private Reply Failure:</strong>
+                          <strong className="block font-semibold">Meta Private Reply Failure:</strong>
                           <span>{reel.last_error}</span>
                         </div>
                       </div>
@@ -263,10 +263,10 @@ export default function InstagramPage() {
                   </div>
 
                   {/* Stats & Actions */}
-                  <div className="flex flex-col justify-between items-end gap-4 shrink-0 w-full md:w-56 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-[#EFECE4] md:pl-5">
+                  <div className="flex flex-col justify-between items-end gap-4 shrink-0 w-full md:w-56 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-stone-100 md:pl-5">
                     {/* Toggle Switch */}
                     <div className="flex items-center gap-3 w-full justify-between md:justify-end">
-                      <span className="text-xs font-bold text-[#141413]">
+                      <span className="text-xs font-bold text-stone-900">
                         {reel.is_enabled ? 'Active' : 'Disabled'}
                       </span>
                       <button
@@ -286,17 +286,17 @@ export default function InstagramPage() {
 
                     {/* Metrics Stats */}
                     <div className="grid grid-cols-3 gap-2 w-full text-center text-xs">
-                      <div className="rounded-md bg-[#FAF8F5] p-1.5 border border-[#E2DDD3]">
-                        <span className="block text-[10px] text-[#7A756D]">Comments</span>
-                        <strong className="text-[#141413]">{reel.matching_comments_count}</strong>
+                      <div className="rounded-xl bg-stone-50 p-2 border border-stone-200">
+                        <span className="block text-[10px] text-stone-400 font-medium">Comments</span>
+                        <strong className="text-stone-900 text-sm">{reel.matching_comments_count}</strong>
                       </div>
-                      <div className="rounded-md bg-emerald-50 p-1.5 border border-emerald-200">
-                        <span className="block text-[10px] text-emerald-800">Sent DMs</span>
-                        <strong className="text-emerald-700">{reel.successful_replies_count}</strong>
+                      <div className="rounded-xl bg-emerald-50 p-2 border border-emerald-200">
+                        <span className="block text-[10px] text-emerald-800 font-medium">Sent DMs</span>
+                        <strong className="text-emerald-700 text-sm">{reel.successful_replies_count}</strong>
                       </div>
-                      <div className="rounded-md bg-rose-50 p-1.5 border border-rose-200">
-                        <span className="block text-[10px] text-rose-800">Errors</span>
-                        <strong className="text-rose-700">{reel.failed_replies_count}</strong>
+                      <div className="rounded-xl bg-rose-50 p-2 border border-rose-200">
+                        <span className="block text-[10px] text-rose-800 font-medium">Errors</span>
+                        <strong className="text-rose-700 text-sm">{reel.failed_replies_count}</strong>
                       </div>
                     </div>
 
@@ -304,7 +304,7 @@ export default function InstagramPage() {
                     <button
                       type="button"
                       onClick={() => handleOpenEditModal(reel)}
-                      className="flex items-center justify-center gap-1.5 w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] py-1.5 text-xs font-semibold text-[#141413] hover:bg-[#EFECE4]"
+                      className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-stone-200 bg-white py-2 text-xs font-semibold text-stone-800 hover:bg-stone-50 transition shadow-2xs cursor-pointer"
                     >
                       <Edit2 className="h-3 w-3" />
                       <span>Edit Automation Text</span>
@@ -320,23 +320,23 @@ export default function InstagramPage() {
         /* TAB A: INSTAGRAM DMS */
         <div className="flex flex-1 overflow-hidden">
           {/* DM Conversation List */}
-          <div className="flex w-full flex-col border-r border-[#E2DDD3] bg-white sm:w-80 md:w-96 shrink-0">
-            <div className="border-b border-[#E2DDD3] p-3 bg-[#FAF8F5]">
+          <div className="flex w-full flex-col border-r border-[#E6E1D7] bg-white sm:w-72 lg:w-80 shrink-0">
+            <div className="border-b border-[#E6E1D7] p-3.5 bg-[#FAF8F5]/60">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#7A756D]" />
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
                 <input
                   type="text"
                   placeholder="Search Instagram username..."
                   value={dmSearchQuery}
                   onChange={(e) => setDmSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-white py-1.5 pl-9 pr-3 text-xs text-[#141413] focus:border-[#141413] focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-white py-1.5 pl-9 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none transition shadow-2xs"
                 />
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-[#EFECE4]">
+            <div className="flex-1 overflow-y-auto divide-y divide-[#EFECE5]">
               {filteredDms.length === 0 ? (
-                <div className="p-8 text-center text-xs text-[#7A756D]">
+                <div className="p-8 text-center text-xs text-stone-400">
                   No Instagram direct messages matching search.
                 </div>
               ) : (
@@ -348,25 +348,25 @@ export default function InstagramPage() {
                     <div
                       key={conv.id}
                       onClick={() => setSelectedConvId(conv.id)}
-                      className={`cursor-pointer p-3.5 transition-colors ${
+                      className={`cursor-pointer p-3.5 transition-all relative ${
                         isSelected
-                          ? 'bg-[#F2EFE9] border-l-4 border-l-[#E1306C]'
+                          ? 'bg-[#F2EFE7] border-l-3 border-l-[#E1306C] shadow-2xs'
                           : 'hover:bg-[#FAF8F5]'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-[#141413]">
+                        <span className="font-semibold text-xs text-stone-900">
                           @{conv.contact.instagram_username}
                         </span>
-                        <span className="text-[10px] text-[#7A756D]">
+                        <span className="text-[10px] text-stone-400 font-medium">
                           {formatRelativeTime(conv.last_message_at)}
                         </span>
                       </div>
-                      <div className="text-[11px] text-[#7A756D] mb-1">
+                      <div className="text-[11px] text-stone-500 mb-1">
                         {conv.contact.name} · {conv.contact.company_name}
                       </div>
-                      <p className="text-xs text-[#555047] line-clamp-1 mb-2">
-                        {conv.last_message}
+                      <p className="text-xs text-stone-600 line-clamp-1 mb-2">
+                        {conv.last_message || 'No messages'}
                       </p>
                       <div className="flex items-center justify-between text-[10px]">
                         <span
@@ -375,9 +375,14 @@ export default function InstagramPage() {
                           {statusBadge.label}
                         </span>
                         {conv.manual_takeover ? (
-                          <span className="font-bold text-purple-700">Manual Takeover</span>
+                          <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-700 border border-purple-200">
+                            Manual Takeover
+                          </span>
                         ) : (
-                          <span className="text-emerald-700">Bot Active</span>
+                          <span className="text-emerald-700 flex items-center gap-1 font-medium">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Bot Active
+                          </span>
                         )}
                       </div>
                     </div>
@@ -389,17 +394,17 @@ export default function InstagramPage() {
 
           {/* DM Active Conversation & Reply */}
           {activeDm ? (
-            <div className="flex flex-1 flex-col bg-[#F7F5F0] overflow-hidden">
-              <div className="flex h-16 items-center justify-between border-b border-[#E2DDD3] bg-white px-6">
+            <div className="flex flex-1 flex-col bg-[#F7F5F0] overflow-hidden min-w-0">
+              <div className="flex h-16 items-center justify-between border-b border-[#E6E1D7] bg-white px-4 sm:px-6 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-100 text-[#E1306C] font-bold text-xs border border-rose-200">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#E1306C] to-[#C13584] text-white font-bold text-xs shadow-xs">
                     IG
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-[#141413]">
+                    <h2 className="text-sm font-bold text-stone-900">
                       @{activeDm.contact.instagram_username}
                     </h2>
-                    <span className="text-xs text-[#7A756D]">
+                    <span className="text-xs text-stone-500">
                       {activeDm.contact.name} ({activeDm.contact.company_name || 'Instagram User'})
                     </span>
                   </div>
@@ -408,10 +413,10 @@ export default function InstagramPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => toggleManualTakeover(activeDm.id)}
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow-2xs ${
+                    className={`h-8.5 rounded-xl px-3 text-xs font-semibold shadow-2xs transition cursor-pointer ${
                       activeDm.manual_takeover
-                        ? 'bg-purple-700 text-white'
-                        : 'border border-[#E2DDD3] bg-white text-[#555047] hover:bg-[#FAF8F5]'
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                     }`}
                   >
                     {activeDm.manual_takeover ? 'Takeover Active' : 'Manual Takeover'}
@@ -424,10 +429,10 @@ export default function InstagramPage() {
                         activeDm.status === 'completed' ? 'open' : 'completed'
                       )
                     }
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold border shadow-2xs ${
+                    className={`h-8.5 rounded-xl px-3 text-xs font-semibold border shadow-2xs transition cursor-pointer ${
                       activeDm.status === 'completed'
                         ? 'bg-emerald-600 text-white border-emerald-600'
-                        : 'border-[#E2DDD3] bg-white text-[#555047] hover:bg-[#FAF8F5]'
+                        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                     }`}
                   >
                     {activeDm.status === 'completed' ? 'Completed ✓' : 'Mark Completed'}
@@ -445,33 +450,33 @@ export default function InstagramPage() {
                       className={`flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}
                     >
                       <div
-                        className={`max-w-lg rounded-2xl p-3.5 shadow-2xs text-xs sm:text-sm leading-relaxed ${
+                        className={`max-w-lg rounded-2xl p-4 shadow-2xs text-xs sm:text-sm leading-relaxed ${
                           isCustomer
-                            ? 'bg-white border border-[#E2DDD3] text-[#141413] rounded-tl-xs'
-                            : 'bg-[#141413] text-white rounded-tr-xs'
+                            ? 'bg-white border border-stone-200/90 text-stone-900 rounded-tl-xs'
+                            : 'bg-[#18181B] text-white rounded-tr-xs shadow-xs'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 mb-1.5 text-[10px]">
+                        <div className="flex items-center gap-1.5 mb-2 text-[10px]">
                           {msg.sender_type === 'customer' ? (
-                            <span className="font-semibold text-[#555047]">
+                            <span className="font-semibold text-stone-600">
                               @{activeDm.contact.instagram_username}
                             </span>
                           ) : msg.sender_type === 'automation_ai' ? (
-                            <span className="rounded bg-purple-500/20 px-1.5 py-0.5 font-bold text-purple-300">
+                            <span className="rounded-md bg-purple-500/20 px-2 py-0.5 font-bold text-purple-300 border border-purple-500/30">
                               AI BOT
                             </span>
                           ) : msg.sender_type === 'automation_rule' ? (
-                            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 font-bold text-sky-300">
+                            <span className="rounded-md bg-sky-500/20 px-2 py-0.5 font-bold text-sky-300 border border-sky-500/30">
                               COMMENT-TO-DM RULE
                             </span>
                           ) : (
-                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-bold text-amber-300">
+                            <span className="rounded-md bg-amber-500/20 px-2 py-0.5 font-bold text-amber-300 border border-amber-500/30">
                               HUMAN ADMIN
                             </span>
                           )}
                         </div>
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                        <div className="mt-2 text-[10px] text-right opacity-70">
+                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                        <div className="mt-2 text-[10px] text-right opacity-60">
                           {formatDateTime(msg.created_at)}
                         </div>
                       </div>
@@ -481,9 +486,9 @@ export default function InstagramPage() {
               </div>
 
               {/* Reply Box */}
-              <div className="border-t border-[#E2DDD3] bg-white p-4">
+              <div className="border-t border-[#E6E1D7] bg-white p-4">
                 {dmSendError && (
-                  <div className="mb-3 flex items-start justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
+                  <div className="mb-3 flex items-start justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">
                     <div className="flex items-start gap-2">
                       <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
                       <span>{dmSendError}</span>
@@ -491,7 +496,7 @@ export default function InstagramPage() {
                     <button
                       type="button"
                       onClick={() => setDmSendError(null)}
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -503,24 +508,24 @@ export default function InstagramPage() {
                     placeholder="Type official Instagram Graph API DM reply..."
                     value={dmReplyText}
                     onChange={(e) => setDmReplyText(e.target.value)}
-                    className="flex-1 rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] px-4 py-2.5 text-xs sm:text-sm text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition shadow-2xs"
                   />
                   <button
                     type="submit"
                     disabled={!dmReplyText.trim() || dmSending}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#141413] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#2A2825] disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 disabled:opacity-40 transition cursor-pointer"
                   >
                     <Send className="h-3.5 w-3.5" />
                     <span>Send DM</span>
                   </button>
                 </form>
-                <div className="mt-1.5 text-[11px] text-[#7A756D]">
+                <div className="mt-2 text-[11px] text-stone-400">
                   Meta Graph API · Private replies strictly comply with Meta 7-day conversation eligibility window.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-8 text-xs text-[#7A756D]">
+            <div className="flex flex-1 items-center justify-center p-8 text-xs text-stone-400">
               Select an Instagram DM conversation to view history.
             </div>
           )}
@@ -529,15 +534,15 @@ export default function InstagramPage() {
 
       {/* EDIT REEL AUTOMATION MODAL */}
       {editingReel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl border border-[#E2DDD3] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#EFECE4] pb-3 mb-4">
-              <h3 className="text-base font-bold text-[#141413]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <h3 className="text-base font-bold text-stone-900">
                 Configure Comment-to-DM Trigger
               </h3>
               <button
                 onClick={() => setEditingReel(null)}
-                className="text-[#7A756D] hover:text-[#141413]"
+                className="text-stone-400 hover:text-stone-900 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -545,7 +550,7 @@ export default function InstagramPage() {
 
             <form onSubmit={handleSaveReelEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase text-[#555047] mb-1">
+                <label className="block text-xs font-semibold uppercase text-stone-600 mb-1">
                   Trigger Keyword (Uppercase)
                 </label>
                 <input
@@ -553,16 +558,16 @@ export default function InstagramPage() {
                   required
                   value={editKeyword}
                   onChange={(e) => setEditKeyword(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 font-mono text-sm uppercase text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 font-mono text-sm uppercase text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition"
                   placeholder="e.g. AUTOMATION, DEMO, CRM"
                 />
-                <p className="mt-1 text-[11px] text-[#7A756D]">
+                <p className="mt-1 text-[11px] text-stone-400">
                   When a user leaves a comment matching this keyword, n8n will immediately dispatch the private DM.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase text-[#555047] mb-1">
+                <label className="block text-xs font-semibold uppercase text-stone-600 mb-1">
                   Automated Private DM Response
                 </label>
                 <textarea
@@ -570,7 +575,7 @@ export default function InstagramPage() {
                   required
                   value={editMessage}
                   onChange={(e) => setEditMessage(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2DDD3] bg-[#FAF8F5] p-2.5 text-xs text-[#141413] focus:border-[#141413] focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition leading-relaxed"
                   placeholder="Type the exact message to be delivered to the user's Instagram DM inbox..."
                 />
               </div>
@@ -579,13 +584,13 @@ export default function InstagramPage() {
                 <button
                   type="button"
                   onClick={() => setEditingReel(null)}
-                  className="rounded-lg border border-[#E2DDD3] px-4 py-2 text-xs font-semibold text-[#555047] hover:bg-[#FAF8F5]"
+                  className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#141413] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2A2825]"
+                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition shadow-xs cursor-pointer"
                 >
                   Save Trigger Configuration
                 </button>
