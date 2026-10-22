@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -19,6 +19,7 @@ import {
   Check,
   X,
   AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -54,7 +55,29 @@ function WhatsAppPageContent() {
     sendMessage,
   } = useDashboardStore();
 
-  const waConversations = conversations.filter((c) => c.platform === 'whatsapp');
+  // Deduplicate WhatsApp conversations by normalized phone number or contact ID
+  const waConversations = useMemo(() => {
+    const raw = conversations.filter((c) => c.platform === 'whatsapp');
+    const seen = new Set<string>();
+    const unique: typeof raw = [];
+
+    // Sort with freshest message first
+    const sorted = [...raw].sort((a, b) => {
+      const timeA = new Date(a.last_message_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.last_message_at || b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
+
+    for (const c of sorted) {
+      const cleanPhone = (c.contact?.phone || '').replace(/[^0-9]/g, '');
+      const dedupKey = cleanPhone ? `phone:${cleanPhone}` : `contact:${c.contact_id || c.id}`;
+      if (!seen.has(dedupKey)) {
+        seen.add(dedupKey);
+        unique.push(c);
+      }
+    }
+    return unique;
+  }, [conversations]);
 
   const [selectedConvId, setSelectedConvId] = useState<string>(
     waConversations[0]?.id || ''
@@ -351,8 +374,21 @@ function WhatsAppPageContent() {
 
             {/* Messages Feed */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-              {activeMessages.map((msg) => {
-                const isCustomer = msg.sender_type === 'customer';
+              {activeMessages.length === 0 ? (
+                <div className="flex h-64 flex-col items-center justify-center p-8 text-center text-[#7A756D]">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-[#E2DDD3] bg-[#FAF8F5]">
+                    <MessageSquare className="h-6 w-6 text-[#7A756D]" />
+                  </div>
+                  <p className="text-sm font-semibold text-[#141413]">No message history in database</p>
+                  <p className="mt-1 text-xs text-[#7A756D] max-w-sm">
+                    {activeConversation.last_message
+                      ? `Conversation preview: "${activeConversation.last_message}". Individual messages are empty or were archived.`
+                      : 'Send a message below or wait for inbound WhatsApp customer messages.'}
+                  </p>
+                </div>
+              ) : (
+                activeMessages.map((msg) => {
+                  const isCustomer = msg.sender_type === 'customer';
 
                 return (
                   <div
@@ -411,8 +447,9 @@ function WhatsAppPageContent() {
                     </div>
                   </div>
                 );
-              })}
-              <div ref={messagesEndRef} />
+              })
+            )}
+            <div ref={messagesEndRef} />
             </div>
 
             {/* Manual Reply Box */}

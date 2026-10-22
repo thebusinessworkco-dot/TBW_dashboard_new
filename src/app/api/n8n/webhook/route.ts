@@ -389,18 +389,19 @@ export async function POST(request: Request) {
       let contactId: string | null = null;
       let existingContact: { id: string; name: string; phone?: string } | null = null;
 
-      const { data: contactByPhone, error: phoneErr } = await adminSupabase
+      const { data: contactsByPhone } = await adminSupabase
         .from('admin_contacts')
         .select('id, name, phone')
         .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1);
 
-      if (!phoneErr && contactByPhone) {
-        existingContact = contactByPhone;
-        contactId = contactByPhone.id;
+      if (contactsByPhone && contactsByPhone.length > 0) {
+        existingContact = contactsByPhone[0];
+        contactId = existingContact.id;
 
         // If contact had default name but real customer_name now provided, update name
-        if (customerName && (contactByPhone.name.startsWith('+') || contactByPhone.name.startsWith('WhatsApp Contact'))) {
+        if (customerName && (existingContact.name.startsWith('+') || existingContact.name.startsWith('WhatsApp Contact'))) {
           await adminSupabase
             .from('admin_contacts')
             .update({ name: customerName, updated_at: nowIso })
@@ -426,16 +427,15 @@ export async function POST(request: Request) {
 
         if (createContactErr) {
           // If race condition: another request inserted concurrently with same phone
-          if (createContactErr.code === '23505' || createContactErr.message?.includes('duplicate key')) {
-            const { data: retryContact } = await adminSupabase
-              .from('admin_contacts')
-              .select('id, name, phone')
-              .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
-              .maybeSingle();
-            if (retryContact) {
-              contactId = retryContact.id;
-              existingContact = retryContact;
-            }
+          const { data: retryContacts } = await adminSupabase
+            .from('admin_contacts')
+            .select('id, name, phone')
+            .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (retryContacts?.[0]) {
+            contactId = retryContacts[0].id;
+            existingContact = retryContacts[0];
           }
         } else if (newContact) {
           contactId = newContact.id;
@@ -454,12 +454,41 @@ export async function POST(request: Request) {
       let manualTakeover = false;
       let automationPaused = false;
 
-      const { data: existingConv } = await adminSupabase
+      // 1. Check for existing conversation for this specific contact
+      const { data: existingConvs } = await adminSupabase
         .from('admin_conversations')
-        .select('id, unread_count, manual_takeover, automation_paused')
+        .select('id, contact_id, unread_count, manual_takeover, automation_paused')
         .eq('contact_id', contactId)
         .eq('platform', 'whatsapp')
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      let existingConv = existingConvs?.[0] || null;
+
+      // 2. If no conversation for this contact_id, check if any conversation exists for contacts with this phone
+      if (!existingConv) {
+        const { data: phoneContacts } = await adminSupabase
+          .from('admin_contacts')
+          .select('id')
+          .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`);
+
+        if (phoneContacts && phoneContacts.length > 0) {
+          const allContactIds = phoneContacts.map((c) => c.id);
+          const { data: phoneConvs } = await adminSupabase
+            .from('admin_conversations')
+            .select('id, contact_id, unread_count, manual_takeover, automation_paused')
+            .in('contact_id', allContactIds)
+            .eq('platform', 'whatsapp')
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          if (phoneConvs?.[0]) {
+            existingConv = phoneConvs[0];
+            // Link to the primary contact
+            contactId = existingConv.contact_id;
+          }
+        }
+      }
 
       // Parse message created_at timestamp if provided by n8n
       let messageCreatedAt = nowIso;
@@ -644,11 +673,14 @@ export async function POST(request: Request) {
           const rawP = String(phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from);
           const cleanPhone = rawP.replace(/[^0-9]/g, '');
           const formattedPhone = '+' + cleanPhone;
-          const { data: contact } = await adminSupabase
+          const { data: contacts } = await adminSupabase
             .from('admin_contacts')
             .select('id')
             .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
-            .maybeSingle();
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          const contact = contacts?.[0] || null;
 
           if (contact) {
             query = query.eq('contact_id', contact.id).eq('platform', 'whatsapp');
@@ -722,11 +754,14 @@ export async function POST(request: Request) {
         const cleanPhone = String(
           payload.phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from
         ).replace(/[^0-9]/g, '');
-        const { data: contact } = await adminSupabase
+        const { data: contacts } = await adminSupabase
           .from('admin_contacts')
           .select('id')
           .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        const contact = contacts?.[0] || null;
 
         if (contact) {
           const { data: conv } = await adminSupabase

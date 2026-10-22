@@ -200,13 +200,26 @@ async function runTests() {
   assert(deduplicatedIngests.length === 3, `Remaining 3 concurrent requests deduplicated cleanly (got ${deduplicatedIngests.length})`);
   assert(deduplicatedIngests.every((r) => r.can_respond === false), 'All deduplicated concurrent requests have can_respond: false');
 
-  // Clean up concurrent test contact and conversation
-  if (supabase && successfulIngests[0]?.conversation_id) {
-    const cId = successfulIngests[0].conversation_id;
-    await supabase.from('admin_messages').delete().eq('conversation_id', cId);
-    await supabase.from('admin_conversations').delete().eq('id', cId);
-    if (successfulIngests[0].contact_id) {
-      await supabase.from('admin_contacts').delete().eq('id', successfulIngests[0].contact_id);
+  // Clean up all concurrent test contacts, conversations, and messages
+  if (supabase) {
+    const { data: testContacts } = await supabase
+      .from('admin_contacts')
+      .select('id')
+      .or(`phone.eq.${concurrentPhone},phone.eq.+${concurrentPhone}`);
+
+    if (testContacts && testContacts.length > 0) {
+      const contactIds = testContacts.map((c) => c.id);
+      const { data: testConvs } = await supabase
+        .from('admin_conversations')
+        .select('id')
+        .in('contact_id', contactIds);
+
+      if (testConvs && testConvs.length > 0) {
+        const convIds = testConvs.map((cv) => cv.id);
+        await supabase.from('admin_messages').delete().in('conversation_id', convIds);
+        await supabase.from('admin_conversations').delete().in('id', convIds);
+      }
+      await supabase.from('admin_contacts').delete().in('id', contactIds);
     }
   }
 
