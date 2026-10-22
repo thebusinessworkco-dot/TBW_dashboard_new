@@ -109,7 +109,7 @@ export default function InstagramPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#FAF8F5]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAF8F5]">
       <TopNavbar
         title="Instagram Control Center"
         subtitle="Manage official Instagram DMs and configure Reel Comment-to-DM automated triggers."

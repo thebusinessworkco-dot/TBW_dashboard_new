@@ -603,20 +603,27 @@ function WhatsAppPageContent() {
     if (nearBottom) setHasNewBelow(false);
   };
 
-  // Smart scroll effect
+  // Smart scroll effect (contained to feedRef, never scrolling ancestor window)
   useEffect(() => {
     if (prevConvIdRef.current !== effectiveConvId) {
       prevConvIdRef.current = effectiveConvId;
       prevMsgCountRef.current = activeMessages.length;
       setHasNewBelow(false);
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      if (feedRef.current) {
+        feedRef.current.scrollTop = feedRef.current.scrollHeight;
+      }
       return;
     }
 
     if (activeMessages.length > prevMsgCountRef.current) {
       prevMsgCountRef.current = activeMessages.length;
       if (isAtBottom) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (feedRef.current) {
+          feedRef.current.scrollTo({
+            top: feedRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        }
       } else {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setHasNewBelow(true);
@@ -647,14 +654,14 @@ function WhatsAppPageContent() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#FAF8F5]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAF8F5]">
       <TopNavbar
         title="WhatsApp Automation Inbox"
         subtitle="Review what your bot says, take over conversations manually, and monitor message delivery."
       />
 
       {/* 3-Panel Master-Detail Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* PANEL 1: CONVERSATION LIST */}
         <div className="flex w-full flex-col border-r border-[#E6E1D7] bg-white sm:w-72 lg:w-80 shrink-0">
           {/* Search & Filter Header */}
@@ -999,7 +1006,12 @@ function WhatsAppPageContent() {
                 <button
                   type="button"
                   onClick={() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    if (feedRef.current) {
+                      feedRef.current.scrollTo({
+                        top: feedRef.current.scrollHeight,
+                        behavior: 'smooth',
+                      });
+                    }
                     setHasNewBelow(false);
                   }}
                   className="sticky bottom-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg transition hover:bg-black hover:scale-105 z-10 cursor-pointer"
@@ -1011,7 +1023,7 @@ function WhatsAppPageContent() {
             </div>
 
             {/* Manual Reply Box */}
-            <div className="border-t border-[#E6E1D7] bg-white p-4">
+            <div className="border-t border-[#E6E1D7] bg-white p-3 sm:p-4 shrink-0">
               {sendError && (
                 <div className="mb-3 flex items-start justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
                   <div className="flex items-start gap-2">

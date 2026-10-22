@@ -21,7 +21,10 @@
   --instagram: #E1306C;
 }
 
+html,
 body {
+  height: 100%;
+  overflow: hidden;
   background-color: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

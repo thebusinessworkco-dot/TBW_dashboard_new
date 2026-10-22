@@ -14,7 +14,7 @@ export default function DashboardLayout({
   const { error, refreshData } = useDashboardStore();
 
   return (
-    <div className="flex min-h-screen bg-[#F8F7F4]">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-[#F8F7F4]">
       {/* Sidebar (Desktop fixed/static + Mobile slide-over) */}
       <Sidebar
         mobileOpen={mobileOpen}
@@ -22,9 +22,9 @@ export default function DashboardLayout({
       />
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 h-full overflow-hidden">
         {error && (
-          <div className="bg-rose-50/90 border-b border-rose-200 px-4 py-2.5 text-xs text-rose-800 flex items-center justify-between shadow-2xs backdrop-blur-xs">
+          <div className="bg-rose-50/90 border-b border-rose-200 px-4 py-2.5 text-xs text-rose-800 flex items-center justify-between shadow-2xs backdrop-blur-xs shrink-0">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
               <span className="font-medium">{error}</span>
@@ -38,7 +38,7 @@ export default function DashboardLayout({
             </button>
           </div>
         )}
-        <main className="flex-1 overflow-x-hidden">
+        <main className="flex-1 min-h-0 overflow-y-auto">
           {children}
         </main>
       </div>
