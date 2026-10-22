@@ -12,6 +12,65 @@ export type SenderType = 'customer' | 'automation_ai' | 'automation_rule' | 'hum
 
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'failed';
 
+export interface WhatsAppButton {
+  id: string;
+  title: string;
+}
+
+export interface WhatsAppListRow {
+  id: string;
+  title: string;
+  description?: string;
+}
+
+export interface WhatsAppListSection {
+  title?: string;
+  rows: WhatsAppListRow[];
+}
+
+export interface WhatsAppInteractivePayload {
+  type?: 'button' | 'list' | 'flow' | 'button_reply' | 'list_reply' | 'nfm_reply' | 'quick_reply';
+  buttons?: WhatsAppButton[];
+  selected_button?: WhatsAppButton;
+  selected_list_item?: WhatsAppListRow;
+  button_reply?: WhatsAppButton;
+  list_reply?: WhatsAppListRow;
+  sections?: WhatsAppListSection[];
+  flow_name?: string;
+  flow_token?: string;
+  flow_response?: Record<string, unknown> | string;
+}
+
+export interface WhatsAppLocationPayload {
+  latitude: number;
+  longitude: number;
+  name?: string;
+  address?: string;
+}
+
+export interface WhatsAppTemplatePayload {
+  name: string;
+  language?: string;
+  category?: string;
+  components?: Array<Record<string, unknown>>;
+  parameters?: Record<string, string>;
+}
+
+export interface MessageMetadata {
+  interactive?: WhatsAppInteractivePayload;
+  location?: WhatsAppLocationPayload;
+  template?: WhatsAppTemplatePayload;
+  flow_data?: Record<string, unknown>;
+  filename?: string;
+  caption?: string;
+  mime_type?: string;
+  file_size?: number;
+  error_code?: string | number;
+  error_message?: string;
+  raw_payload?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface AdminMessage {
   id: string;
   conversation_id: string;
@@ -19,10 +78,11 @@ export interface AdminMessage {
   sender_name?: string;
   content: string;
   media_url?: string;
-  media_type?: 'image' | 'pdf' | 'audio' | 'document';
+  media_type?: string;
   created_at: string;
   status: MessageStatus;
   external_message_id?: string;
+  metadata?: MessageMetadata;
   is_demo?: boolean;
 }
 

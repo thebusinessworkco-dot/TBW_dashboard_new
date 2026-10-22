@@ -17,6 +17,117 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * 5. Outbound AI Reply Verification: Verifies takeover has not been activated before saving AI replies.
  * 6. Status Integrity: Incoming & outgoing messages saved with status = 'sent' (never fabricated 'delivered').
  */
+/**
+ * Extract rich metadata from WhatsApp and n8n webhook payloads
+ */
+function extractMessageMetadata(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const meta: Record<string, unknown> = {};
+
+  if (payload.interactive && typeof payload.interactive === 'object') {
+    meta.interactive = payload.interactive;
+  }
+  if (payload.button_reply && typeof payload.button_reply === 'object') {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      button_reply: payload.button_reply,
+      selected_button: payload.button_reply,
+    };
+  }
+  if (payload.list_reply && typeof payload.list_reply === 'object') {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      list_reply: payload.list_reply,
+      selected_list_item: payload.list_reply,
+    };
+  }
+  if (payload.nfm_reply && typeof payload.nfm_reply === 'object') {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      nfm_reply: payload.nfm_reply,
+      flow_response: payload.nfm_reply,
+    };
+  }
+  if (Array.isArray(payload.buttons)) {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      buttons: payload.buttons,
+    };
+  }
+  if (Array.isArray(payload.sections)) {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      sections: payload.sections,
+    };
+  }
+
+  if (payload.location && typeof payload.location === 'object') {
+    meta.location = payload.location;
+  }
+  if (payload.template) {
+    meta.template = typeof payload.template === 'string' ? { name: payload.template } : payload.template;
+  }
+  if (payload.flow_data && typeof payload.flow_data === 'object') {
+    meta.flow_data = payload.flow_data;
+  }
+
+  if (payload.filename) meta.filename = payload.filename;
+  if (payload.caption) meta.caption = payload.caption;
+  if (payload.mime_type) meta.mime_type = payload.mime_type;
+  if (payload.file_size) meta.file_size = payload.file_size;
+
+  if (payload.metadata && typeof payload.metadata === 'object') {
+    Object.assign(meta, payload.metadata);
+  }
+
+  return Object.keys(meta).length > 0 ? meta : null;
+}
+
+/**
+ * Resolves a readable textual summary if content is blank but media/interactive elements exist
+ */
+function resolveMessageContent(
+  rawContent: string,
+  mediaType?: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metadata?: any
+): string {
+  if (rawContent && rawContent.trim()) return rawContent.trim();
+
+  // If interactive button reply
+  const btn = metadata?.interactive?.selected_button || metadata?.interactive?.button_reply;
+  if (btn?.title) return `Selected: ${btn.title}`;
+
+  // If interactive list reply
+  const list = metadata?.interactive?.selected_list_item || metadata?.interactive?.list_reply;
+  if (list?.title) return `Selected: ${list.title}${list.description ? ` (${list.description})` : ''}`;
+
+  // If flow reply
+  const nfm = metadata?.interactive?.flow_response || metadata?.interactive?.nfm_reply;
+  if (nfm) return `WhatsApp Flow Submission (${nfm.name || 'Completed'})`;
+
+  // If location
+  const loc = metadata?.location;
+  if (loc) return `Location: ${loc.name || loc.address || `${loc.latitude}, ${loc.longitude}`}`;
+
+  // If template
+  const tmpl = metadata?.template;
+  if (tmpl?.name) return `[Template: ${tmpl.name}]`;
+
+  // If media
+  if (mediaType) {
+    const cap = metadata?.caption ? `: ${metadata.caption}` : '';
+    if (mediaType === 'image') return `[Photo]${cap}`;
+    if (mediaType === 'audio') return '[Voice Note]';
+    if (mediaType === 'video') return `[Video]${cap}`;
+    if (mediaType === 'document' || mediaType === 'pdf') {
+      return `[Document: ${metadata?.filename || 'File'}]${cap}`;
+    }
+    return `[${mediaType}]${cap}`;
+  }
+
+  return '[Interactive Message]';
+}
+
 export async function POST(request: Request) {
   try {
     // 1. Mandatory n8n Webhook Authentication (Fails closed if secret is missing)
@@ -329,7 +440,13 @@ export async function POST(request: Request) {
       ).trim();
       const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
       const formattedPhone = cleanPhone ? '+' + cleanPhone : '';
-      const content = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
+
+      const richMetadata = extractMessageMetadata(payload);
+      const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
+      const mediaUrl = payload.media_url || null;
+      const rawContent = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
+      const content = resolveMessageContent(rawContent, mediaType, richMetadata);
+
       const externalMessageId =
         payload.external_message_id ||
         payload.wa_message_id ||
@@ -568,12 +685,8 @@ export async function POST(request: Request) {
         );
       }
 
-      // Check for media/message_type
-      const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
-      const mediaUrl = payload.media_url || null;
-
       // D. Insert Incoming Message as sender_type: 'customer' (with concurrency-safe duplicate catch)
-      const { error: insertMsgErr } = await adminSupabase.from('admin_messages').insert({
+      const messageInsertPayload: Record<string, unknown> = {
         conversation_id: conversationId,
         sender_type: 'customer',
         sender_name: customerName || existingContact?.name || formattedPhone,
@@ -584,7 +697,20 @@ export async function POST(request: Request) {
         external_message_id: externalMessageId,
         is_demo: false,
         created_at: messageCreatedAt,
-      });
+      };
+
+      if (richMetadata) {
+        messageInsertPayload.metadata = richMetadata;
+      }
+
+      let { error: insertMsgErr } = await adminSupabase.from('admin_messages').insert(messageInsertPayload);
+
+      // Graceful fallback if metadata column is not yet migrated in Supabase
+      if (insertMsgErr && insertMsgErr.message?.includes("'metadata' column")) {
+        delete messageInsertPayload.metadata;
+        const retryRes = await adminSupabase.from('admin_messages').insert(messageInsertPayload);
+        insertMsgErr = retryRes.error;
+      }
 
       if (insertMsgErr) {
         if (insertMsgErr.code === '23505' || insertMsgErr.message?.includes('duplicate key')) {
@@ -728,17 +854,45 @@ export async function POST(request: Request) {
     }
 
     // ========================================================================
-    // 4. LOG WHATSAPP AUTOMATION REPLY (Sent by n8n workflow)
+    // 4. OUTGOING WHATSAPP MESSAGE LOGGING (AI replies, templates, interactive, media)
     // ========================================================================
     if (
+      eventType === 'outgoing_whatsapp_message' ||
       eventType === 'log_whatsapp_reply' ||
       (eventType === 'log_ai_reply' && (payload.platform === 'whatsapp' || payload.phone || payload.wa_id))
     ) {
-      const {
-        content,
-        sender_type = 'automation_ai',
-        sender_name = 'TBW AI Assistant',
-      } = payload;
+      const rawPhone = String(
+        payload.phone ||
+        payload.to ||
+        payload.recipient_phone ||
+        payload.phone_number ||
+        payload.whatsapp_id ||
+        payload.wa_id ||
+        payload.from ||
+        ''
+      ).trim();
+      const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone ? '+' + cleanPhone : '';
+
+      const rawSenderType = String(payload.sender_type || '').toLowerCase();
+      // Normalize sender_type to strictly satisfy PostgreSQL check constraint: ('customer', 'automation_ai', 'automation_rule', 'human_agent')
+      const normalizedSenderType =
+        rawSenderType === 'human_agent' || rawSenderType === 'human' || rawSenderType === 'agent' || rawSenderType === 'admin'
+          ? 'human_agent'
+          : rawSenderType === 'automation_rule' || rawSenderType === 'automation' || rawSenderType === 'system' || rawSenderType === 'rule'
+          ? 'automation_rule'
+          : 'automation_ai';
+
+      const senderName = String(
+        payload.sender_name ||
+        (normalizedSenderType === 'human_agent'
+          ? 'Human Admin (Aman Rajbhar)'
+          : normalizedSenderType === 'automation_rule'
+          ? 'TBW Automation'
+          : 'TBW AI Assistant')
+      ).trim();
+
+      const rawContent = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
       const externalMessageId =
         payload.external_message_id ||
         payload.wa_message_id ||
@@ -748,28 +902,90 @@ export async function POST(request: Request) {
         payload.id ||
         null;
 
+      const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
+      const mediaUrl = payload.media_url || null;
+      const richMetadata = extractMessageMetadata(payload);
+      const content = resolveMessageContent(rawContent, mediaType, richMetadata);
+
       let conversationId = payload.conversation_id;
 
-      if (!conversationId && (payload.phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from)) {
-        const cleanPhone = String(
-          payload.phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from
-        ).replace(/[^0-9]/g, '');
+      // Deduplication check via wamid
+      if (externalMessageId) {
+        const { data: existing } = await adminSupabase
+          .from('admin_messages')
+          .select('id, conversation_id')
+          .eq('external_message_id', externalMessageId)
+          .maybeSingle();
+
+        if (existing) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            conversation_id: existing.conversation_id,
+            message_id: existing.id,
+            notice: 'Duplicate Meta message ID (wamid) ignored.',
+          });
+        }
+      }
+
+      // If conversation_id not provided, resolve via phone
+      if (!conversationId && cleanPhone) {
+        // Resolve or create contact
         const { data: contacts } = await adminSupabase
           .from('admin_contacts')
-          .select('id')
-          .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+          .select('id, name, phone')
+          .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
           .order('created_at', { ascending: true })
           .limit(1);
 
-        const contact = contacts?.[0] || null;
+        let contact = contacts?.[0] || null;
+
+        if (!contact) {
+          const { data: newContact } = await adminSupabase
+            .from('admin_contacts')
+            .insert({
+              name: payload.customer_name || payload.contact_name || formattedPhone,
+              phone: formattedPhone,
+              created_at: nowIso,
+              updated_at: nowIso,
+              is_demo: false,
+            })
+            .select('id, name, phone')
+            .single();
+          contact = newContact;
+        }
 
         if (contact) {
-          const { data: conv } = await adminSupabase
+          const { data: convs } = await adminSupabase
             .from('admin_conversations')
-            .select('id')
+            .select('id, manual_takeover, automation_paused')
             .eq('contact_id', contact.id)
             .eq('platform', 'whatsapp')
-            .maybeSingle();
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          let conv = convs?.[0] || null;
+
+          if (!conv) {
+            const { data: newConv } = await adminSupabase
+              .from('admin_conversations')
+              .insert({
+                contact_id: contact.id,
+                platform: 'whatsapp',
+                status: 'open',
+                last_message: content,
+                last_message_at: nowIso,
+                unread_count: 0,
+                manual_takeover: false,
+                automation_paused: false,
+                is_demo: false,
+                created_at: nowIso,
+                updated_at: nowIso,
+              })
+              .select('id, manual_takeover, automation_paused')
+              .single();
+            conv = newConv;
+          }
 
           if (conv) {
             conversationId = conv.id;
@@ -779,52 +995,65 @@ export async function POST(request: Request) {
 
       if (!conversationId || !content) {
         return NextResponse.json(
-          { error: 'conversation_id (or phone) and content are required' },
+          { error: 'conversation_id (or recipient phone) and content are required' },
           { status: 400 }
         );
       }
 
-      // Deduplication check via wamid
-      if (externalMessageId) {
-        const { data: existing } = await adminSupabase
-          .from('admin_messages')
-          .select('id')
-          .eq('external_message_id', externalMessageId)
+      // Re-verify takeover before writing automated reply
+      if (normalizedSenderType === 'automation_ai') {
+        const { data: convCheck } = await adminSupabase
+          .from('admin_conversations')
+          .select('manual_takeover, automation_paused')
+          .eq('id', conversationId)
           .maybeSingle();
 
-        if (existing) {
-          return NextResponse.json({ success: true, deduplicated: true });
+        if (convCheck?.manual_takeover || convCheck?.automation_paused) {
+          return NextResponse.json({
+            success: false,
+            rejected: true,
+            reason: 'Human takeover active - WhatsApp AI reply discarded to prevent race condition.',
+          }, { status: 409 });
         }
       }
 
-      // Re-verify takeover before writing reply
-      const { data: convCheck } = await adminSupabase
-        .from('admin_conversations')
-        .select('manual_takeover, automation_paused')
-        .eq('id', conversationId)
-        .maybeSingle();
-
-      if (convCheck?.manual_takeover || convCheck?.automation_paused) {
-        return NextResponse.json({
-          success: false,
-          rejected: true,
-          reason: 'Human takeover active - WhatsApp AI reply discarded to prevent race condition.',
-        }, { status: 409 });
-      }
-
-      const { error: insertErr } = await adminSupabase.from('admin_messages').insert({
+      const insertPayload: Record<string, unknown> = {
         conversation_id: conversationId,
-        sender_type: sender_type === 'human_agent' ? 'human_agent' : 'automation_ai',
-        sender_name,
+        sender_type: normalizedSenderType,
+        sender_name: senderName,
         content,
+        media_type: mediaType,
+        media_url: mediaUrl,
         status: 'sent', // strictly sent, never fake delivered
         external_message_id: externalMessageId,
         is_demo: false,
         created_at: nowIso,
-      });
+      };
+
+      if (richMetadata) {
+        insertPayload.metadata = richMetadata;
+      }
+
+      let { data: insertedMsg, error: insertErr } = await adminSupabase
+        .from('admin_messages')
+        .insert(insertPayload)
+        .select('id')
+        .maybeSingle();
+
+      // Graceful fallback if metadata column is not yet migrated in Supabase
+      if (insertErr && insertErr.message?.includes("'metadata' column")) {
+        delete insertPayload.metadata;
+        const retryRes = await adminSupabase
+          .from('admin_messages')
+          .insert(insertPayload)
+          .select('id')
+          .maybeSingle();
+        insertErr = retryRes.error;
+        insertedMsg = retryRes.data;
+      }
 
       if (insertErr && (insertErr.code === '23505' || insertErr.message?.includes('duplicate key'))) {
-        return NextResponse.json({ success: true, deduplicated: true });
+        return NextResponse.json({ success: true, deduplicated: true, conversation_id: conversationId });
       }
 
       await adminSupabase
@@ -841,8 +1070,68 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        action: 'whatsapp_reply_logged',
+        action: eventType === 'log_whatsapp_reply' ? 'whatsapp_reply_logged' : 'whatsapp_outgoing_logged',
         conversation_id: conversationId,
+        message_id: insertedMsg?.id || null,
+        external_message_id: externalMessageId,
+      });
+    }
+
+    // ========================================================================
+    // 5. WHATSAPP MESSAGE STATUS RECEIPTS (Sent, Delivered, Read, Failed)
+    // ========================================================================
+    if (
+      eventType === 'whatsapp_status_update' ||
+      eventType === 'message_status_update' ||
+      eventType === 'status_update' ||
+      eventType === 'status_receipt'
+    ) {
+      const wamid =
+        payload.external_message_id ||
+        payload.wa_message_id ||
+        payload.wamid ||
+        payload.mid ||
+        payload.message_id ||
+        payload.id;
+      const rawStatus = String(payload.status || '').toLowerCase().trim();
+
+      if (!wamid) {
+        return NextResponse.json(
+          { success: false, error: 'external_message_id (wamid) is required for status updates' },
+          { status: 400 }
+        );
+      }
+
+      if (!['sent', 'delivered', 'read', 'failed'].includes(rawStatus)) {
+        return NextResponse.json(
+          { success: false, error: `Invalid status: ${rawStatus}. Allowed: sent, delivered, read, failed` },
+          { status: 400 }
+        );
+      }
+
+      const mappedStatus = rawStatus as 'sent' | 'delivered' | 'read' | 'failed';
+
+      const { data: updatedMsg, error: updateErr } = await adminSupabase
+        .from('admin_messages')
+        .update({ status: mappedStatus })
+        .eq('external_message_id', wamid)
+        .select('id, conversation_id, status')
+        .maybeSingle();
+
+      if (updateErr) {
+        return NextResponse.json({ success: false, error: updateErr.message }, { status: 500 });
+      }
+
+      await touchIntegrationStatus('whatsapp');
+      await touchIntegrationStatus('n8n');
+
+      return NextResponse.json({
+        success: true,
+        action: 'status_updated',
+        wamid,
+        status: mappedStatus,
+        message_id: updatedMsg?.id || null,
+        found: Boolean(updatedMsg),
       });
     }
 

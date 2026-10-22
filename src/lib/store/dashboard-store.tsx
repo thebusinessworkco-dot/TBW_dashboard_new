@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   AdminConversation,
   AdminMessage,
+  AdminContact,
   AdminLead,
   AdminAppointment,
   AdminQuotation,
@@ -33,6 +34,7 @@ interface DashboardStoreContextType {
   isLoading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
+  realtimeStatus: 'connected' | 'connecting' | 'fallback_polling' | 'disconnected';
   timeFilter: 'today' | '7d' | '30d';
   setTimeFilter: (filter: 'today' | '7d' | '30d') => void;
 
@@ -135,6 +137,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
   
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'fallback_polling' | 'disconnected'>('connecting');
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
 
   // Purge any legacy demo keys from localStorage and sessionStorage on mount
@@ -308,7 +311,54 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     }
   }, []);
 
-  // Initial load and Realtime subscriptions
+  // Silent background sync that merges updates without full-page loaders or UI flicker
+  const silentSync = useCallback(async () => {
+    const supabase = createClient();
+    if (!supabase) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const [convsRes, msgsRes] = await Promise.all([
+        supabase
+          .from('admin_conversations')
+          .select('*, contact:admin_contacts(*)')
+          .order('last_message_at', { ascending: false }),
+        supabase
+          .from('admin_messages')
+          .select('*')
+          .order('created_at', { ascending: true }),
+      ]);
+
+      if (convsRes.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sanitized = (convsRes.data as any[]).map((c) => ({
+          ...c,
+          contact: c.contact || {
+            id: c.contact_id || 'unknown',
+            name: c.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+            phone: c.platform === 'whatsapp' ? 'No phone' : undefined,
+            created_at: c.created_at || new Date().toISOString(),
+            is_demo: false,
+          },
+        }));
+        setConversations(sanitized as unknown as AdminConversation[]);
+      }
+
+      if (msgsRes.data) {
+        const grouped: Record<string, AdminMessage[]> = {};
+        (msgsRes.data as AdminMessage[]).forEach((m) => {
+          if (!grouped[m.conversation_id]) grouped[m.conversation_id] = [];
+          grouped[m.conversation_id].push(m);
+        });
+        setMessages(grouped);
+      }
+    } catch {
+      // Quiet background sync - non-blocking
+    }
+  }, []);
+
+  // Initial load, multi-table Realtime subscriptions, and background sync fallback
   useEffect(() => {
     const supabase = createClient();
     if (!supabase) return;
@@ -317,7 +367,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData();
 
-    // Authenticated Realtime subscriptions for admin_conversations and admin_messages
+    // Authenticated Realtime subscriptions for admin_conversations, admin_messages, and admin_contacts
     const channel = supabase
       .channel('admin_realtime_channel')
       .on(
@@ -399,6 +449,23 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                 [newMsg.conversation_id]: [...convMsgs, newMsg],
               };
             });
+
+            // Immediately update the corresponding conversation's preview and timestamp
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === newMsg.conversation_id
+                  ? {
+                      ...c,
+                      last_message: newMsg.content || c.last_message,
+                      last_message_at: newMsg.created_at || new Date().toISOString(),
+                      unread_count:
+                        newMsg.sender_type === 'customer'
+                          ? (c.unread_count || 0) + 1
+                          : c.unread_count,
+                    }
+                  : c
+              )
+            );
           } else if (payload.eventType === 'UPDATE') {
             const updatedMsg = payload.new as AdminMessage;
             setMessages((prev) => {
@@ -413,17 +480,66 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'admin_contacts' },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const updatedContact = payload.new as AdminContact;
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.contact_id === updatedContact.id
+                  ? {
+                      ...c,
+                      contact: { ...c.contact, ...updatedContact },
+                    }
+                  : c
+              )
+            );
+          }
+        }
+      )
       .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime channel warning:', err);
+        if (!isMounted) return;
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('Realtime channel warning:', status, err);
+          setRealtimeStatus('fallback_polling');
         }
       });
 
+    // 10-second background polling fallback to ensure zero missed messages
+    const pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void silentSync();
+      }
+    }, 10000);
+
+    // Reconnection and tab wake listeners
+    const handleOnline = () => {
+      setRealtimeStatus('connecting');
+      void refreshData();
+    };
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void silentSync();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isMounted = false;
+      clearInterval(pollTimer);
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
       supabase.removeChannel(channel);
     };
-  }, [refreshData]);
+  }, [refreshData, silentSync]);
 
   // Production state has no demo records
   const hasDemoData = false;
@@ -865,6 +981,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         isLoading,
         error,
         refreshData,
+        realtimeStatus,
         timeFilter,
         setTimeFilter,
         updateConversationStatus,
