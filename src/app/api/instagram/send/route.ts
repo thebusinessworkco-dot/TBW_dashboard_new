@@ -244,17 +244,24 @@ export async function POST(request: Request) {
     const metaMessageId = result.message_id;
 
     // Persist real Meta message ID to Supabase
+    let insertedMessageRecord: { id: string; [key: string]: unknown } | null = null;
     if (resolvedConversationId) {
-      await adminSupabase.from('admin_messages').insert({
-        conversation_id: resolvedConversationId,
-        sender_type: senderType === 'automation_ai' ? 'automation_ai' : 'human_agent',
-        sender_name: 'Admin',
-        content: messageBody,
-        status: 'sent',
-        external_message_id: metaMessageId,
-        is_demo: false,
-        created_at: nowIso,
-      });
+      const { data: insertedData } = await adminSupabase
+        .from('admin_messages')
+        .insert({
+          conversation_id: resolvedConversationId,
+          sender_type: senderType === 'automation_ai' ? 'automation_ai' : 'human_agent',
+          sender_name: 'Admin',
+          content: messageBody,
+          status: 'sent',
+          external_message_id: metaMessageId,
+          is_demo: false,
+          created_at: nowIso,
+        })
+        .select()
+        .maybeSingle();
+
+      insertedMessageRecord = insertedData as { id: string; [key: string]: unknown } | null;
 
       await adminSupabase
         .from('admin_conversations')
@@ -288,6 +295,9 @@ export async function POST(request: Request) {
       messageId: metaMessageId,
       status: 'sent',
       manual_takeover: true,
+      id: insertedMessageRecord?.id || null,
+      data: insertedMessageRecord,
+      message: insertedMessageRecord,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

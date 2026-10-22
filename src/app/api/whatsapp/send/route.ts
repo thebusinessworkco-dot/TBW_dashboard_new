@@ -155,18 +155,25 @@ export async function POST(request: Request) {
     const nowIso = new Date().toISOString();
 
     // 2. Persist real outgoing message in Supabase
+    let insertedMessageRecord: { id: string; [key: string]: unknown } | null = null;
     if (adminSupabase && resolvedConversationId) {
-      await adminSupabase.from('admin_messages').insert({
-        conversation_id: resolvedConversationId,
-        sender_type: senderType,
-        sender_name:
-          senderType === 'human_agent' ? 'Aman Rajbhar (Manual Takeover)' : 'TBW Bot',
-        content: messageBody,
-        status: 'sent',
-        external_message_id: metaMessageId || null,
-        is_demo: false,
-        created_at: nowIso,
-      });
+      const { data: insertedData } = await adminSupabase
+        .from('admin_messages')
+        .insert({
+          conversation_id: resolvedConversationId,
+          sender_type: senderType,
+          sender_name:
+            senderType === 'human_agent' ? 'Aman Rajbhar (Manual Takeover)' : 'TBW Bot',
+          content: messageBody,
+          status: 'sent',
+          external_message_id: metaMessageId || null,
+          is_demo: false,
+          created_at: nowIso,
+        })
+        .select()
+        .maybeSingle();
+
+      insertedMessageRecord = insertedData as { id: string; [key: string]: unknown } | null;
 
       // 3. Activate Manual Takeover on conversation so n8n AI stops intervening
       await adminSupabase
@@ -186,6 +193,9 @@ export async function POST(request: Request) {
       messageId: metaMessageId,
       status: 'sent',
       manualTakeoverActive: true,
+      id: insertedMessageRecord?.id || null,
+      data: insertedMessageRecord,
+      message: insertedMessageRecord,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

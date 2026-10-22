@@ -12,14 +12,14 @@ import {
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
-import { useDashboardStore } from '@/lib/store/dashboard-store';
+import { useDashboardStore, deduplicateAndSortMessages } from '@/lib/store/dashboard-store';
 import {
   formatDate,
   formatDateTime,
   formatRelativeTime,
   getConversationStatusBadge,
 } from '@/lib/utils';
-import { AdminCommentAutomation } from '@/lib/types/dashboard';
+import { AdminCommentAutomation, AdminMessage } from '@/lib/types/dashboard';
 
 export default function InstagramPage() {
   const [activeTab, setActiveTab] = useState<'dms' | 'comment_dm'>('comment_dm');
@@ -62,7 +62,9 @@ export default function InstagramPage() {
   });
 
   const activeDm = igConversations.find((c) => c.id === selectedConvId) || filteredDms[0];
-  const activeDmMessages = activeDm ? messages[activeDm.id] || [] : [];
+  const activeDmMessages = deduplicateAndSortMessages(
+    activeDm ? messages[activeDm.id] || [] : []
+  );
 
   // Filtered Reels
   const filteredReels = commentAutomations.filter((reel) => {
@@ -435,7 +437,7 @@ export default function InstagramPage() {
 
               {/* Messages feed */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-                {activeDmMessages.map((msg) => {
+                {activeDmMessages.map((msg: AdminMessage) => {
                   const isCustomer = msg.sender_type === 'customer';
                   return (
                     <div

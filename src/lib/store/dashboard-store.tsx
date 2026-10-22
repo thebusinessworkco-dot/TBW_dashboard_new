@@ -145,6 +145,69 @@ export function sortMessagesDeterministic(messages: AdminMessage[]): AdminMessag
   });
 }
 
+/**
+ * Deduplicate and sort messages deterministically:
+ * 1. Discards temporary optimistic messages (id starts with 'msg-' or 'temp-') when a matching confirmed
+ *    message with identical external_message_id or identical (sender_type, content, timestamp ±60s) exists.
+ * 2. Deduplicates by unique database ID and external_message_id (e.g. Meta wamid).
+ * 3. Sorts chronologically with tie-breakers (customer messages precede replies at exact same millisecond).
+ */
+export function deduplicateAndSortMessages(messages: AdminMessage[]): AdminMessage[] {
+  if (!messages || messages.length === 0) return [];
+
+  const result: AdminMessage[] = [];
+  const seenIds = new Set<string>();
+  const seenExternalIds = new Set<string>();
+
+  // Find all confirmed messages (real DB records)
+  const confirmed = messages.filter(
+    (m) => !m.id.startsWith('msg-') && !m.id.startsWith('temp-')
+  );
+  const confirmedExternalIds = new Set(
+    confirmed.map((c) => c.external_message_id).filter(Boolean) as string[]
+  );
+
+  for (const m of messages) {
+    const isTemp = m.id.startsWith('msg-') || m.id.startsWith('temp-');
+
+    if (isTemp) {
+      // 1. If this temp message has an external_message_id already confirmed in DB, skip temp
+      if (m.external_message_id && confirmedExternalIds.has(m.external_message_id)) {
+        continue;
+      }
+      // 2. If a confirmed message with same conversation, sender_type, and content exists within 60s, skip temp
+      const hasConfirmedMatch = confirmed.some((c) => {
+        if (c.conversation_id !== m.conversation_id) return false;
+        if (c.sender_type !== m.sender_type) return false;
+        if ((c.content || '').trim() !== (m.content || '').trim()) return false;
+        const timeDiff = Math.abs(
+          new Date(c.created_at).getTime() - new Date(m.created_at).getTime()
+        );
+        return timeDiff < 60000;
+      });
+      if (hasConfirmedMatch) {
+        continue;
+      }
+    }
+
+    if (seenIds.has(m.id)) {
+      continue;
+    }
+
+    if (m.external_message_id && seenExternalIds.has(m.external_message_id)) {
+      continue;
+    }
+
+    seenIds.add(m.id);
+    if (m.external_message_id) {
+      seenExternalIds.add(m.external_message_id);
+    }
+    result.push(m);
+  }
+
+  return sortMessagesDeterministic(result);
+}
+
 export function DashboardStoreProvider({ children }: { children: React.ReactNode }) {
   // Pure Supabase state: initialized strictly empty without any mock/demo records
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
@@ -282,7 +345,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         grouped[m.conversation_id].push(m);
       });
       Object.keys(grouped).forEach((convId) => {
-        grouped[convId] = sortMessagesDeterministic(grouped[convId]);
+        grouped[convId] = deduplicateAndSortMessages(grouped[convId]);
       });
       setMessages(grouped);
 
@@ -381,10 +444,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           const merged: Record<string, AdminMessage[]> = { ...prev };
           Object.entries(incomingGrouped).forEach(([cId, list]) => {
             const existing = merged[cId] || [];
-            const map = new Map<string, AdminMessage>();
-            existing.forEach((m) => map.set(m.id, m));
-            list.forEach((m) => map.set(m.id, m));
-            merged[cId] = sortMessagesDeterministic(Array.from(map.values()));
+            merged[cId] = deduplicateAndSortMessages([...list, ...existing]);
           });
           return merged;
         });
@@ -414,12 +474,9 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       if (data) {
         setMessages((prev) => {
           const existing = prev[conversationId] || [];
-          const map = new Map<string, AdminMessage>();
-          existing.forEach((m) => map.set(m.id, m));
-          (data as AdminMessage[]).forEach((m) => map.set(m.id, m));
           return {
             ...prev,
-            [conversationId]: sortMessagesDeterministic(Array.from(map.values())),
+            [conversationId]: deduplicateAndSortMessages([...(data as AdminMessage[]), ...existing]),
           };
         });
       }
@@ -519,19 +576,33 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
               const newMsg = payload.new as AdminMessage;
               setMessages((prev) => {
                 const convMsgs = prev[newMsg.conversation_id] || [];
-                if (
-                  convMsgs.some(
-                    (m) =>
-                      m.id === newMsg.id ||
-                      (newMsg.external_message_id &&
-                        m.external_message_id === newMsg.external_message_id)
-                  )
-                ) {
-                  return prev;
+                // Check if there is an in-flight optimistic message matching newMsg
+                const optIndex = convMsgs.findIndex((m) => {
+                  if (m.id === newMsg.id) return true;
+                  if (newMsg.external_message_id && m.external_message_id === newMsg.external_message_id) return true;
+                  const isTemp = m.id.startsWith('msg-') || m.id.startsWith('temp-');
+                  if (
+                    isTemp &&
+                    m.sender_type === newMsg.sender_type &&
+                    (m.content || '').trim() === (newMsg.content || '').trim()
+                  ) {
+                    const diff = Math.abs(new Date(m.created_at).getTime() - new Date(newMsg.created_at).getTime());
+                    return diff < 60000;
+                  }
+                  return false;
+                });
+
+                let updated: AdminMessage[];
+                if (optIndex !== -1) {
+                  updated = [...convMsgs];
+                  updated[optIndex] = newMsg;
+                } else {
+                  updated = [...convMsgs, newMsg];
                 }
+
                 return {
                   ...prev,
-                  [newMsg.conversation_id]: sortMessagesDeterministic([...convMsgs, newMsg]),
+                  [newMsg.conversation_id]: deduplicateAndSortMessages(updated),
                 };
               });
 
@@ -821,15 +892,38 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           };
         }
 
-        // Update optimistic message with real messageId from Meta
-        setMessages((prev) => ({
-          ...prev,
-          [conversationId]: (prev[conversationId] || []).map((m) =>
-            m.id === tempId
-              ? { ...m, status: 'sent', external_message_id: data.messageId }
-              : m
-          ),
-        }));
+        // Reconcile optimistic message with real messageId from Meta and real Supabase DB ID
+        const realDbId = (data.id || data.data?.id || data.message?.id) as string | undefined;
+        const realMetaId = (data.messageId || data.data?.external_message_id) as string | undefined;
+
+        setMessages((prev) => {
+          const convMsgs = prev[conversationId] || [];
+          const alreadyHasReal = convMsgs.some(
+            (m) =>
+              (realDbId && m.id === realDbId) ||
+              (realMetaId && m.external_message_id === realMetaId && m.id !== tempId)
+          );
+
+          let updated: AdminMessage[];
+          if (alreadyHasReal) {
+            updated = convMsgs.filter((m) => m.id !== tempId);
+          } else {
+            updated = convMsgs.map((m) =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: realDbId || m.id,
+                    status: 'sent',
+                    external_message_id: realMetaId || m.external_message_id,
+                  }
+                : m
+            );
+          }
+          return {
+            ...prev,
+            [conversationId]: deduplicateAndSortMessages(updated),
+          };
+        });
 
         return { success: true };
       } catch (err: unknown) {
@@ -874,15 +968,38 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           };
         }
 
-        // Update optimistic message with real messageId from Meta
-        setMessages((prev) => ({
-          ...prev,
-          [conversationId]: (prev[conversationId] || []).map((m) =>
-            m.id === tempId
-              ? { ...m, status: 'sent', external_message_id: data.messageId }
-              : m
-          ),
-        }));
+        // Reconcile optimistic message with real messageId from Meta and real Supabase DB ID
+        const realDbId = (data.id || data.data?.id || data.message?.id) as string | undefined;
+        const realMetaId = (data.messageId || data.data?.external_message_id) as string | undefined;
+
+        setMessages((prev) => {
+          const convMsgs = prev[conversationId] || [];
+          const alreadyHasReal = convMsgs.some(
+            (m) =>
+              (realDbId && m.id === realDbId) ||
+              (realMetaId && m.external_message_id === realMetaId && m.id !== tempId)
+          );
+
+          let updated: AdminMessage[];
+          if (alreadyHasReal) {
+            updated = convMsgs.filter((m) => m.id !== tempId);
+          } else {
+            updated = convMsgs.map((m) =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: realDbId || m.id,
+                    status: 'sent',
+                    external_message_id: realMetaId || m.external_message_id,
+                  }
+                : m
+            );
+          }
+          return {
+            ...prev,
+            [conversationId]: deduplicateAndSortMessages(updated),
+          };
+        });
 
         return { success: true };
       } catch (err: unknown) {

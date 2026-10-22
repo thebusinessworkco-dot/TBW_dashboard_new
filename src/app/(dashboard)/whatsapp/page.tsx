@@ -35,7 +35,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
-import { useDashboardStore } from '@/lib/store/dashboard-store';
+import { useDashboardStore, deduplicateAndSortMessages } from '@/lib/store/dashboard-store';
 import {
   formatDateTime,
   formatRelativeTime,
@@ -601,7 +601,9 @@ function WhatsAppPageContent() {
   });
 
   const activeConversation = conversations.find((c) => c.id === effectiveConvId) || filteredConversations[0];
-  const activeMessages = activeConversation ? messages[activeConversation.id] || [] : [];
+  const activeMessages = deduplicateAndSortMessages(
+    activeConversation ? messages[activeConversation.id] || [] : []
+  );
   const linkedLead = activeConversation?.linked_lead_id
     ? leads.find((l) => l.id === activeConversation.linked_lead_id)
     : undefined;
