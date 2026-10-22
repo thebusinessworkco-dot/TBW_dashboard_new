@@ -34,6 +34,7 @@ interface DashboardStoreContextType {
   isLoading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
+  fetchConversationMessages: (conversationId: string) => Promise<void>;
   realtimeStatus: 'connected' | 'connecting' | 'fallback_polling' | 'disconnected';
   timeFilter: 'today' | '7d' | '30d';
   setTimeFilter: (filter: 'today' | '7d' | '30d') => void;
@@ -393,6 +394,40 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     }
   }, []);
 
+  // Targeted message fetch for active conversation ensuring immediate, non-truncated message list
+  const fetchConversationMessages = useCallback(async (conversationId: string) => {
+    if (!conversationId) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    try {
+      const { data, error: msgErr } = await supabase
+        .from('admin_messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (msgErr) {
+        console.warn('Error fetching messages for conversation:', msgErr.message);
+        return;
+      }
+
+      if (data) {
+        setMessages((prev) => {
+          const existing = prev[conversationId] || [];
+          const map = new Map<string, AdminMessage>();
+          existing.forEach((m) => map.set(m.id, m));
+          (data as AdminMessage[]).forEach((m) => map.set(m.id, m));
+          return {
+            ...prev,
+            [conversationId]: sortMessagesDeterministic(Array.from(map.values())),
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('fetchConversationMessages error:', err);
+    }
+  }, []);
+
   // Initial load, multi-table Realtime subscriptions, and background sync fallback
   useEffect(() => {
     const supabase = createClient();
@@ -520,7 +555,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                     });
                   return prev;
                 }
-                return prev.map((c) =>
+                const updated = prev.map((c) =>
                   c.id === newMsg.conversation_id
                     ? {
                         ...c,
@@ -533,6 +568,12 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                       }
                     : c
                 );
+                // Float the conversation with the freshest message to the top
+                return [...updated].sort((a, b) => {
+                  const timeA = new Date(a.last_message_at || a.created_at || 0).getTime();
+                  const timeB = new Date(b.last_message_at || b.created_at || 0).getTime();
+                  return timeB - timeA;
+                });
               });
             } else if (payload.eventType === 'UPDATE') {
               const updatedMsg = payload.new as AdminMessage;
@@ -594,12 +635,12 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       }
     });
 
-    // 10-second background polling fallback to ensure zero missed messages
+    // 3-second background polling fallback to ensure near real-time synchronization
     const pollTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         void silentSync();
       }
-    }, 10000);
+    }, 3000);
 
     // Reconnection and tab wake listeners
     const handleOnline = () => {
@@ -615,6 +656,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     };
 
     window.addEventListener('online', handleOnline);
+    window.addEventListener('focus', handleVisibility);
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
@@ -622,6 +664,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       clearInterval(pollTimer);
       authSub.unsubscribe();
       window.removeEventListener('online', handleOnline);
+      window.removeEventListener('focus', handleVisibility);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (channel) {
         supabase.removeChannel(channel);
@@ -1069,6 +1112,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         isLoading,
         error,
         refreshData,
+        fetchConversationMessages,
         realtimeStatus,
         timeFilter,
         setTimeFilter,

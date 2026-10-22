@@ -946,6 +946,12 @@ export async function POST(request: Request) {
           manual_takeover: Boolean(conv?.manual_takeover),
           automation_paused: Boolean(conv?.automation_paused),
           can_respond: !isTakeover,
+          data: {
+            mode: isTakeover ? 'human' : 'ai',
+            can_respond: !isTakeover,
+            manual_takeover: Boolean(conv?.manual_takeover),
+            automation_paused: Boolean(conv?.automation_paused),
+          },
           notice: isTakeover
             ? 'Human admin has active takeover. Do not dispatch automated replies.'
             : 'Automation permitted.',

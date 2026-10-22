@@ -32,6 +32,7 @@ import {
   X,
   AlertTriangle,
   MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -251,9 +252,11 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
       )}
 
       {/* 3. Text Content */}
-      {bodyText && (
-        <div className="whitespace-pre-wrap break-words">{bodyText}</div>
-      )}
+      {bodyText &&
+        (!selectedButton || (bodyText !== selectedButton.title && bodyText !== `Selected: ${selectedButton.title}`)) &&
+        (!selectedListRow || (bodyText !== selectedListRow.title && bodyText !== `Selected: ${selectedListRow.title}`)) && (
+          <div className="whitespace-pre-wrap break-words">{bodyText}</div>
+        )}
 
       {/* 4. Interactive Quick-Reply Buttons (Outgoing Options) */}
       {extractedButtons.length > 0 && (
@@ -494,6 +497,8 @@ function WhatsAppPageContent() {
     leads,
     appointments,
     realtimeStatus,
+    refreshData,
+    fetchConversationMessages,
     updateConversationStatus,
     toggleAutomationPaused,
     toggleManualTakeover,
@@ -532,10 +537,48 @@ function WhatsAppPageContent() {
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus || 'all');
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [notesDraft, setNotesDraft] = useState(waConversations[0]?.internal_notes || '');
   const [notesSaved, setNotesSaved] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  // Derived active conversation ID: guarantees instant valid selection without cascading renders
+  const effectiveConvId =
+    selectedConvId && waConversations.some((c) => c.id === selectedConvId)
+      ? selectedConvId
+      : waConversations[0]?.id || '';
+
+  // Immediate message fetch when conversation selection changes
+  useEffect(() => {
+    if (effectiveConvId) {
+      void fetchConversationMessages(effectiveConvId);
+    }
+  }, [effectiveConvId, fetchConversationMessages]);
+
+  // Active conversation polling (3s) while document is visible
+  useEffect(() => {
+    if (!effectiveConvId) return;
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void fetchConversationMessages(effectiveConvId);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [effectiveConvId, fetchConversationMessages]);
+
+  const handleManualSync = async () => {
+    if (isManualSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await Promise.all([
+        refreshData(),
+        effectiveConvId ? fetchConversationMessages(effectiveConvId) : Promise.resolve(),
+      ]);
+    } finally {
+      setTimeout(() => setIsManualSyncing(false), 500);
+    }
+  };
 
   const feedRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -557,7 +600,7 @@ function WhatsAppPageContent() {
     return matchesSearch && matchesStatus;
   });
 
-  const activeConversation = conversations.find((c) => c.id === selectedConvId) || filteredConversations[0];
+  const activeConversation = conversations.find((c) => c.id === effectiveConvId) || filteredConversations[0];
   const activeMessages = activeConversation ? messages[activeConversation.id] || [] : [];
   const linkedLead = activeConversation?.linked_lead_id
     ? leads.find((l) => l.id === activeConversation.linked_lead_id)
@@ -567,7 +610,7 @@ function WhatsAppPageContent() {
     : undefined;
 
   const prevMsgCountRef = useRef(activeMessages.length);
-  const prevConvIdRef = useRef(selectedConvId);
+  const prevConvIdRef = useRef(effectiveConvId);
 
   const handleScrollFeed = () => {
     if (!feedRef.current) return;
@@ -579,8 +622,8 @@ function WhatsAppPageContent() {
 
   // Smart scroll effect: only auto-scroll if user is already at the bottom or switched conversation
   useEffect(() => {
-    if (prevConvIdRef.current !== selectedConvId) {
-      prevConvIdRef.current = selectedConvId;
+    if (prevConvIdRef.current !== effectiveConvId) {
+      prevConvIdRef.current = effectiveConvId;
       prevMsgCountRef.current = activeMessages.length;
       setHasNewBelow(false);
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -596,7 +639,7 @@ function WhatsAppPageContent() {
         setHasNewBelow(true);
       }
     }
-  }, [activeMessages.length, selectedConvId, isAtBottom]);
+  }, [activeMessages.length, effectiveConvId, isAtBottom]);
 
   const handleSendManualReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -782,6 +825,18 @@ function WhatsAppPageContent() {
                       : 'Connecting...'}
                   </span>
                 </div>
+
+                {/* Instant Sync Button */}
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isManualSyncing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2DDD3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#555047] shadow-2xs hover:bg-[#FAF8F5] transition disabled:opacity-60 cursor-pointer"
+                  title="Force refresh conversation & message records"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isManualSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+                  <span className="hidden sm:inline">{isManualSyncing ? 'Syncing...' : 'Sync'}</span>
+                </button>
 
                 {/* Manual Takeover Toggle */}
                 <button

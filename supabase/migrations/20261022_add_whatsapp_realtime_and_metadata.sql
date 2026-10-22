@@ -51,10 +51,7 @@ BEGIN
     END;
 END $$;
 
--- 4. Set REPLICA IDENTITY FULL so Realtime updates and deletes broadcast all columns
-ALTER TABLE public.admin_conversations REPLICA IDENTITY FULL;
-ALTER TABLE public.admin_messages REPLICA IDENTITY FULL;
-ALTER TABLE public.admin_contacts REPLICA IDENTITY FULL;
+-- 4. Note: REPLICA IDENTITY remains DEFAULT (Primary Key id) for optimal performance and zero WAL overhead.
 
 -- ==============================================================================
 -- VERIFICATION QUERIES (Run after executing migration)
