@@ -123,6 +123,27 @@ const DEFAULT_INTEGRATION_STATUSES: AdminIntegrationStatus[] = [
   },
 ];
 
+/**
+ * Deterministically sorts WhatsApp and Instagram messages:
+ * 1. Primary: Event timestamp with millisecond precision
+ * 2. Secondary (tie-breaker for identical timestamps): Customer message precedes automation/bot reply
+ * 3. Tertiary: Stable unique message ID
+ */
+export function sortMessagesDeterministic(messages: AdminMessage[]): AdminMessage[] {
+  return [...messages].sort((a, b) => {
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    if (timeA !== timeB) {
+      return timeA - timeB;
+    }
+    // Tie-breaker: customer messages always precede replies at the exact same timestamp
+    if (a.sender_type === 'customer' && b.sender_type !== 'customer') return -1;
+    if (a.sender_type !== 'customer' && b.sender_type === 'customer') return 1;
+    // Tie-breaker 2: stable ID comparison
+    return (a.id || '').localeCompare(b.id || '');
+  });
+}
+
 export function DashboardStoreProvider({ children }: { children: React.ReactNode }) {
   // Pure Supabase state: initialized strictly empty without any mock/demo records
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
@@ -259,6 +280,9 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         }
         grouped[m.conversation_id].push(m);
       });
+      Object.keys(grouped).forEach((convId) => {
+        grouped[convId] = sortMessagesDeterministic(grouped[convId]);
+      });
       setMessages(grouped);
 
       setLeads((leadsRes.data || []) as AdminLead[]);
@@ -359,9 +383,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
             const map = new Map<string, AdminMessage>();
             existing.forEach((m) => map.set(m.id, m));
             list.forEach((m) => map.set(m.id, m));
-            merged[cId] = Array.from(map.values()).sort(
-              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            );
+            merged[cId] = sortMessagesDeterministic(Array.from(map.values()));
           });
           return merged;
         });
@@ -474,7 +496,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                 }
                 return {
                   ...prev,
-                  [newMsg.conversation_id]: [...convMsgs, newMsg],
+                  [newMsg.conversation_id]: sortMessagesDeterministic([...convMsgs, newMsg]),
                 };
               });
 
@@ -518,8 +540,10 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                 const convMsgs = prev[updatedMsg.conversation_id] || [];
                 return {
                   ...prev,
-                  [updatedMsg.conversation_id]: convMsgs.map((m) =>
-                    m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
+                  [updatedMsg.conversation_id]: sortMessagesDeterministic(
+                    convMsgs.map((m) =>
+                      m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
+                    )
                   ),
                 };
               });

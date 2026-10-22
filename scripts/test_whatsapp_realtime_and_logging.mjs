@@ -385,6 +385,148 @@ async function runTests() {
   const locRes = await n8nPost(locReq);
   assert(locRes.status === 200, 'Incoming location ingested with 200');
 
+  console.log('\n--- 4. Testing Appointment Flow & Deterministic Ordering ---');
+
+  // Test 4.1: Outgoing Appointment Available Dates & Time Slots
+  const apptSlotsWamid = `wamid.OUT_APPT_${Date.now()}`;
+  const apptSlotsReq = new Request('http://localhost/api/n8n/webhook', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.N8N_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({
+      event_type: 'outgoing_whatsapp_message',
+      phone: testPhone,
+      sender_type: 'automation_ai',
+      content: 'Please choose an available appointment date and time for your consultation:',
+      external_message_id: apptSlotsWamid,
+      metadata: {
+        appointment: {
+          available_dates: ['2026-10-23', '2026-10-24', '2026-10-25'],
+          available_slots: ['10:00 AM', '02:00 PM', '04:30 PM'],
+          service_name: 'Full Stack Web Development & AI Automation',
+        },
+      },
+    }),
+  });
+  const apptSlotsRes = await n8nPost(apptSlotsReq);
+  const apptSlotsData = await apptSlotsRes.json();
+  assert(apptSlotsRes.status === 200, 'Outgoing appointment slots ingested with 200');
+  assert(apptSlotsData.success === true, 'Response marked success: true');
+
+  // Verify appointment metadata stored in Supabase
+  if (supabase && apptSlotsData.message_id) {
+    const { data: dbApptMsg } = await supabase
+      .from('admin_messages')
+      .select('metadata')
+      .eq('id', apptSlotsData.message_id)
+      .maybeSingle();
+
+    const storedMeta = typeof dbApptMsg?.metadata === 'string'
+      ? JSON.parse(dbApptMsg.metadata)
+      : dbApptMsg?.metadata;
+
+    assert(
+      storedMeta?.appointment?.available_dates?.length === 3,
+      'Appointment available_dates preserved accurately in message metadata'
+    );
+    assert(
+      storedMeta?.appointment?.available_slots?.includes('02:00 PM'),
+      'Appointment available_slots preserved accurately in message metadata'
+    );
+  }
+
+  // Test 4.2: Outgoing Booking Confirmation
+  const apptConfirmWamid = `wamid.OUT_CONFIRM_${Date.now()}`;
+  const confirmReq = new Request('http://localhost/api/n8n/webhook', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.N8N_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({
+      event_type: 'outgoing_whatsapp_message',
+      phone: testPhone,
+      sender_type: 'automation_ai',
+      content: 'Your appointment has been confirmed! We look forward to meeting you.',
+      external_message_id: apptConfirmWamid,
+      metadata: {
+        appointment: {
+          status: 'confirmed',
+          confirmation_id: 'TBW-APPT-8899',
+          service_name: 'AI Automation Strategy',
+          date: '2026-10-24',
+          time: '02:00 PM',
+          customer_name: 'Test Customer',
+        },
+      },
+    }),
+  });
+  const confirmRes = await n8nPost(confirmReq);
+  const confirmData = await confirmRes.json();
+  assert(confirmRes.status === 200, 'Booking confirmation ingested with 200');
+  assert(confirmData.success === true, 'Booking confirmation marked success: true');
+
+  // Test 4.3: Rapid-fire duplicate suppression when external_message_id is absent
+  const identicalContent = `Rapid duplicate test content ${Date.now()}`;
+  const rapidReq1 = new Request('http://localhost/api/n8n/webhook', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.N8N_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({
+      event_type: 'outgoing_whatsapp_message',
+      phone: testPhone,
+      sender_type: 'automation_ai',
+      content: identicalContent,
+      // No external_message_id
+    }),
+  });
+  const rapidRes1 = await n8nPost(rapidReq1);
+  const rapidData1 = await rapidRes1.json();
+  assert(rapidRes1.status === 200, 'Initial message without external ID saved with 200');
+  assert(rapidData1.success === true, 'Initial message response success: true');
+
+  const rapidReq2 = new Request('http://localhost/api/n8n/webhook', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.N8N_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({
+      event_type: 'outgoing_whatsapp_message',
+      phone: testPhone,
+      sender_type: 'automation_ai',
+      content: identicalContent,
+      // Identical message sent immediately without external ID
+    }),
+  });
+  const rapidRes2 = await n8nPost(rapidReq2);
+  const rapidData2 = await rapidRes2.json();
+  assert(rapidRes2.status === 200, 'Rapid duplicate request returned 200');
+  assert(rapidData2.deduplicated === true, 'Rapid duplicate correctly suppressed with deduplicated: true');
+
+  // Test 4.4: Deterministic Sorting logic verification
+  const { sortMessagesDeterministic } = await import('../src/lib/store/dashboard-store.tsx');
+  const tieTime = '2026-10-22T15:00:00.000Z';
+  const earlierTime = '2026-10-22T14:59:59.999Z';
+  const laterTime = '2026-10-22T15:00:00.001Z';
+
+  const testMessages = [
+    { id: 'msg-3', created_at: tieTime, sender_type: 'automation_ai', content: 'Bot reply' },
+    { id: 'msg-1', created_at: earlierTime, sender_type: 'customer', content: 'Earlier greeting' },
+    { id: 'msg-2', created_at: tieTime, sender_type: 'customer', content: 'Customer request at tie' },
+    { id: 'msg-4', created_at: laterTime, sender_type: 'automation_ai', content: 'Later follow-up' },
+  ];
+
+  const sorted = sortMessagesDeterministic(testMessages);
+  assert(sorted[0].id === 'msg-1', 'Earlier message sorted first');
+  assert(sorted[1].id === 'msg-2', 'Customer message precedes bot reply on exact timestamp tie');
+  assert(sorted[2].id === 'msg-3', 'Bot reply placed after customer message on exact timestamp tie');
+  assert(sorted[3].id === 'msg-4', 'Later message sorted last');
+
   // Clean up all test-generated records from database
   if (supabase) {
     const { data: contacts } = await supabase

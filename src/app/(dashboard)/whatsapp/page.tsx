@@ -102,6 +102,7 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
   const interactive = meta.interactive;
   const location = meta.location;
   const template = meta.template;
+  const appointment = meta.appointment;
 
   // 1. Extract interactive buttons from both Meta WhatsApp action.buttons and flat buttons arrays
   const extractedButtons: Array<{ id: string; title: string }> = (() => {
@@ -336,6 +337,132 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 9. Appointment Booking Flow (Available dates, available time slots, booking confirmation) */}
+      {appointment && (
+        <div className="pt-1 space-y-2">
+          {/* Available Dates */}
+          {Array.isArray(appointment.available_dates) && appointment.available_dates.length > 0 && (
+            <div className={`p-2.5 rounded-xl border text-xs ${
+              isCustomer ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-emerald-500/30 bg-emerald-950/40 text-emerald-100'
+            }`}>
+              <div className="flex items-center gap-1.5 font-semibold mb-2">
+                <Calendar className="h-4 w-4 text-emerald-400" />
+                <span>Available Appointment Dates</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {appointment.available_dates.map((dateStr, idx) => (
+                  <span
+                    key={idx}
+                    className={`rounded-md px-2 py-1 text-[11px] font-medium border ${
+                      isCustomer ? 'bg-white border-emerald-300 text-emerald-900' : 'bg-white/10 border-emerald-400/30 text-white'
+                    }`}
+                  >
+                    📅 {String(dateStr)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Available Time Slots */}
+          {Array.isArray(appointment.available_slots) && appointment.available_slots.length > 0 && (
+            <div className={`p-2.5 rounded-xl border text-xs ${
+              isCustomer ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-sky-500/30 bg-sky-950/40 text-sky-100'
+            }`}>
+              <div className="flex items-center gap-1.5 font-semibold mb-2">
+                <Clock className="h-4 w-4 text-sky-400" />
+                <span>Available Time Slots</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {appointment.available_slots.map((slotStr, idx) => (
+                  <span
+                    key={idx}
+                    className={`rounded-md px-2 py-1 text-[11px] font-medium border ${
+                      isCustomer ? 'bg-white border-sky-300 text-sky-900' : 'bg-white/10 border-sky-400/30 text-white'
+                    }`}
+                  >
+                    ⏰ {String(slotStr)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Selection of Date or Time */}
+          {Boolean(isCustomer && (appointment.date || appointment.time) && !appointment.available_slots?.length && !appointment.available_dates?.length) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+              <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              {appointment.date ? <span>Selected Date: <strong>{String(appointment.date)}</strong></span> : null}
+              {appointment.time ? <span>· Time: <strong>{String(appointment.time)}</strong></span> : null}
+            </div>
+          )}
+
+          {/* Confirmed Booking Card */}
+          {Boolean(appointment.status === 'confirmed' || appointment.confirmation_id || (appointment.date && appointment.time && !isCustomer)) && (
+            <div className={`rounded-xl border p-3 text-xs ${
+              isCustomer
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                : 'border-emerald-500/40 bg-emerald-950/40 text-white'
+            }`}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                  <CheckCheck className="h-4 w-4" />
+                  <span>Booking Confirmation</span>
+                </div>
+                {appointment.confirmation_id ? (
+                  <span className="font-mono text-[10px] rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-300 border border-emerald-500/30">
+                    ID: {String(appointment.confirmation_id)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="space-y-1 text-[11px]">
+                {appointment.service_name ? (
+                  <p><span className="opacity-70">Service:</span> <strong>{String(appointment.service_name)}</strong></p>
+                ) : null}
+                {appointment.date ? (
+                  <p><span className="opacity-70">Appointment Date:</span> <strong>{String(appointment.date)}</strong></p>
+                ) : null}
+                {appointment.time ? (
+                  <p><span className="opacity-70">Time Slot:</span> <strong>{String(appointment.time)}</strong></p>
+                ) : null}
+                {appointment.customer_name ? (
+                  <p><span className="opacity-70">Customer:</span> {String(appointment.customer_name)}</p>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Reschedule Notice */}
+          {Boolean(appointment.status === 'rescheduled' || appointment.rescheduled_from) && (
+            <div className="rounded-xl border border-amber-400/40 bg-amber-950/30 p-2.5 text-xs text-amber-200">
+              <p className="font-bold flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5 text-amber-400" />
+                <span>Appointment Rescheduled</span>
+              </p>
+              {appointment.rescheduled_from ? (
+                <p className="text-[11px] opacity-80 mt-1">Previous: {String(appointment.rescheduled_from)}</p>
+              ) : null}
+              {appointment.date ? (
+                <p className="text-[11px] font-semibold mt-0.5">New: {String(appointment.date)} at {String(appointment.time)}</p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Cancellation Notice */}
+          {Boolean(appointment.status === 'cancelled') && (
+            <div className="rounded-xl border border-rose-400/40 bg-rose-950/30 p-2.5 text-xs text-rose-200">
+              <p className="font-bold flex items-center gap-1">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-400" />
+                <span>Appointment Cancelled</span>
+              </p>
+              {appointment.cancelled_reason ? (
+                <p className="text-[11px] opacity-80 mt-1">Reason: {String(appointment.cancelled_reason)}</p>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 

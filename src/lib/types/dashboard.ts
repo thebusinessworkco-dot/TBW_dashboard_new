@@ -76,10 +76,24 @@ export interface WhatsAppTemplatePayload {
   parameters?: Record<string, string>;
 }
 
+export interface WhatsAppAppointmentPayload {
+  service_name?: string;
+  date?: string;
+  time?: string;
+  slot?: string;
+  status?: string;
+  available_dates?: string[];
+  available_slots?: string[];
+  customer_name?: string;
+  notes?: string;
+  [key: string]: unknown;
+}
+
 export interface MessageMetadata {
   interactive?: WhatsAppInteractivePayload;
   location?: WhatsAppLocationPayload;
   template?: WhatsAppTemplatePayload;
+  appointment?: WhatsAppAppointmentPayload;
   flow_data?: Record<string, unknown>;
   filename?: string;
   caption?: string;

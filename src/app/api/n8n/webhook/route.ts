@@ -18,35 +18,111 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * 6. Status Integrity: Incoming & outgoing messages saved with status = 'sent' (never fabricated 'delivered').
  */
 /**
+ * Parses incoming timestamp (Unix seconds, milliseconds, or ISO string) preserving millisecond precision
+ */
+function parseTimestamp(rawTs: unknown, fallbackIso: string): string {
+  if (!rawTs) return fallbackIso;
+  if (typeof rawTs === 'number' || /^\d+$/.test(String(rawTs))) {
+    const num = Number(rawTs);
+    const ms = num < 10000000000 ? num * 1000 : num;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? fallbackIso : d.toISOString();
+  }
+  const d = new Date(String(rawTs));
+  return isNaN(d.getTime()) ? fallbackIso : d.toISOString();
+}
+
+/**
  * Extract rich metadata from WhatsApp and n8n webhook payloads
  */
 function extractMessageMetadata(payload: Record<string, unknown>): Record<string, unknown> | null {
   const meta: Record<string, unknown> = {};
 
-  if (payload.interactive && typeof payload.interactive === 'object') {
-    meta.interactive = payload.interactive;
+  // Check top-level metadata object first
+  if (payload.metadata && typeof payload.metadata === 'object') {
+    Object.assign(meta, payload.metadata);
   }
-  if (payload.button_reply && typeof payload.button_reply === 'object') {
+
+  // Interactive object
+  const interactivePayload = payload.interactive || (payload.metadata as Record<string, unknown>)?.interactive;
+  if (interactivePayload && typeof interactivePayload === 'object') {
     meta.interactive = {
       ...((meta.interactive as Record<string, unknown>) || {}),
-      button_reply: payload.button_reply,
-      selected_button: payload.button_reply,
+      ...(interactivePayload as Record<string, unknown>),
     };
   }
-  if (payload.list_reply && typeof payload.list_reply === 'object') {
+
+  const interactiveRecord = (meta.interactive && typeof meta.interactive === 'object'
+    ? meta.interactive
+    : {}) as Record<string, unknown>;
+
+  // If top-level action passed (Meta WhatsApp Cloud API payload root)
+  if (payload.action && typeof payload.action === 'object') {
+    meta.interactive = {
+      ...interactiveRecord,
+      type: (payload.type as string) || (payload.message_type as string) || 'interactive',
+      body: (payload.body as { text?: string }) || (interactiveRecord.body as { text?: string }),
+      action: payload.action as Record<string, unknown>,
+    };
+  }
+
+  // Button reply
+  const btnReply = payload.button_reply || (interactiveRecord.button_reply as Record<string, unknown>);
+  if (btnReply && typeof btnReply === 'object') {
     meta.interactive = {
       ...((meta.interactive as Record<string, unknown>) || {}),
-      list_reply: payload.list_reply,
-      selected_list_item: payload.list_reply,
+      type: 'button_reply',
+      button_reply: btnReply,
+      selected_button: btnReply,
     };
   }
-  if (payload.nfm_reply && typeof payload.nfm_reply === 'object') {
+
+  // List reply
+  const listReply = payload.list_reply || (interactiveRecord.list_reply as Record<string, unknown>);
+  if (listReply && typeof listReply === 'object') {
     meta.interactive = {
       ...((meta.interactive as Record<string, unknown>) || {}),
-      nfm_reply: payload.nfm_reply,
-      flow_response: payload.nfm_reply,
+      type: 'list_reply',
+      list_reply: listReply,
+      selected_list_item: listReply,
     };
   }
+
+  // Flow submission
+  const nfmReply = payload.nfm_reply || (interactiveRecord.nfm_reply as Record<string, unknown>);
+  if (nfmReply && typeof nfmReply === 'object') {
+    meta.interactive = {
+      ...((meta.interactive as Record<string, unknown>) || {}),
+      type: 'nfm_reply',
+      nfm_reply: nfmReply,
+      flow_response: nfmReply,
+    };
+  }
+
+  // Appointment / booking flow payload
+  const metaObj = payload.metadata && typeof payload.metadata === 'object' ? (payload.metadata as Record<string, unknown>) : null;
+  const appointment =
+    payload.appointment ||
+    metaObj?.appointment ||
+    payload.booking ||
+    metaObj?.booking;
+  if (appointment && typeof appointment === 'object') {
+    meta.appointment = {
+      ...((meta.appointment as Record<string, unknown>) || {}),
+      ...(appointment as Record<string, unknown>),
+    };
+  } else if (payload.selected_date || payload.selected_time || payload.available_dates || payload.available_slots) {
+    meta.appointment = {
+      ...((meta.appointment as Record<string, unknown>) || {}),
+      date: payload.selected_date as string,
+      time: payload.selected_time as string,
+      available_dates: payload.available_dates as string[],
+      available_slots: (payload.available_slots || payload.time_slots) as string[],
+      service_name: (payload.service_name || payload.service) as string,
+    };
+  }
+
+  // Top level buttons / sections
   if (Array.isArray(payload.buttons)) {
     meta.interactive = {
       ...((meta.interactive as Record<string, unknown>) || {}),
@@ -70,14 +146,10 @@ function extractMessageMetadata(payload: Record<string, unknown>): Record<string
     meta.flow_data = payload.flow_data;
   }
 
-  if (payload.filename) meta.filename = payload.filename;
-  if (payload.caption) meta.caption = payload.caption;
-  if (payload.mime_type) meta.mime_type = payload.mime_type;
-  if (payload.file_size) meta.file_size = payload.file_size;
-
-  if (payload.metadata && typeof payload.metadata === 'object') {
-    Object.assign(meta, payload.metadata);
-  }
+  if (payload.filename) meta.filename = String(payload.filename);
+  if (payload.caption) meta.caption = String(payload.caption);
+  if (payload.mime_type) meta.mime_type = String(payload.mime_type);
+  if (payload.file_size) meta.file_size = Number(payload.file_size);
 
   return Object.keys(meta).length > 0 ? meta : null;
 }
@@ -95,6 +167,20 @@ function resolveMessageContent(
   if (metadata?.interactive?.body?.text) return String(metadata.interactive.body.text).trim();
   if (metadata?.text?.body) return String(metadata.text.body).trim();
 
+  // If appointment confirmation or selection
+  if (metadata?.appointment) {
+    const appt = metadata.appointment;
+    if (appt.service_name && (appt.date || appt.time)) {
+      return `Appointment: ${appt.service_name} on ${appt.date || ''} at ${appt.time || ''}`.trim();
+    }
+    if (appt.available_dates && Array.isArray(appt.available_dates)) {
+      return `Available Dates: ${appt.available_dates.join(', ')}`;
+    }
+    if (appt.available_slots && Array.isArray(appt.available_slots)) {
+      return `Available Slots: ${appt.available_slots.join(', ')}`;
+    }
+  }
+
   // If interactive button reply
   const btn = metadata?.interactive?.selected_button || metadata?.interactive?.button_reply;
   if (btn?.title) return `Selected: ${btn.title}`;
@@ -106,6 +192,13 @@ function resolveMessageContent(
   // If flow reply
   const nfm = metadata?.interactive?.flow_response || metadata?.interactive?.nfm_reply;
   if (nfm) return `WhatsApp Flow Submission (${nfm.name || 'Completed'})`;
+
+  // If interactive list menu header / action
+  if (metadata?.interactive?.action?.button) {
+    const btnTitle = metadata.interactive.action.button;
+    const header = metadata.interactive.header?.text || '';
+    return header ? `${header} [${btnTitle}]` : `[Menu: ${btnTitle}]`;
+  }
 
   // If location
   const loc = metadata?.location;
@@ -609,20 +702,8 @@ export async function POST(request: Request) {
         }
       }
 
-      // Parse message created_at timestamp if provided by n8n
-      let messageCreatedAt = nowIso;
-      if (payload.timestamp) {
-        const ts = payload.timestamp;
-        if (typeof ts === 'number' || /^\d+$/.test(String(ts))) {
-          const num = Number(ts);
-          const ms = num < 10000000000 ? num * 1000 : num;
-          const d = new Date(ms);
-          if (!isNaN(d.getTime())) messageCreatedAt = d.toISOString();
-        } else {
-          const d = new Date(ts);
-          if (!isNaN(d.getTime())) messageCreatedAt = d.toISOString();
-        }
-      }
+      // Parse message created_at timestamp if provided by n8n (preserves millisecond precision)
+      const messageCreatedAt = parseTimestamp(payload.timestamp, nowIso);
 
       if (existingConv) {
         conversationId = existingConv.id;
@@ -685,6 +766,30 @@ export async function POST(request: Request) {
           { success: false, can_respond: false, error: 'Failed to create or resolve WhatsApp conversation' },
           { status: 500 }
         );
+      }
+
+      // Fallback deduplication: If externalMessageId was not provided, guard against rapid duplicate webhooks (<4s)
+      if (!externalMessageId && conversationId && content) {
+        const fourSecondsAgo = new Date(Date.now() - 4000).toISOString();
+        const { data: recentDuplicate } = await adminSupabase
+          .from('admin_messages')
+          .select('id, created_at')
+          .eq('conversation_id', conversationId)
+          .eq('sender_type', 'customer')
+          .eq('content', content)
+          .gte('created_at', fourSecondsAgo)
+          .limit(1)
+          .maybeSingle();
+
+        if (recentDuplicate) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            can_respond: false,
+            conversation_id: conversationId,
+            notice: 'Rapid-fire duplicate incoming message suppressed without external ID.',
+          });
+        }
       }
 
       // D. Insert Incoming Message as sender_type: 'customer' (with concurrency-safe duplicate catch)
@@ -901,8 +1006,11 @@ export async function POST(request: Request) {
         payload.wamid ||
         payload.mid ||
         payload.message_id ||
+        payload.event_id ||
+        payload.request_id ||
         payload.id ||
         null;
+      const messageCreatedAt = parseTimestamp(payload.timestamp, nowIso);
 
       const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
       const mediaUrl = payload.media_url || null;
@@ -1019,6 +1127,30 @@ export async function POST(request: Request) {
         }
       }
 
+      // Fallback deduplication: If externalMessageId was not provided, guard against rapid duplicate webhooks (<4s)
+      if (!externalMessageId && conversationId && content) {
+        const fourSecondsAgo = new Date(Date.now() - 4000).toISOString();
+        const { data: recentDuplicate } = await adminSupabase
+          .from('admin_messages')
+          .select('id, created_at')
+          .eq('conversation_id', conversationId)
+          .eq('sender_type', normalizedSenderType)
+          .eq('content', content)
+          .gte('created_at', fourSecondsAgo)
+          .limit(1)
+          .maybeSingle();
+
+        if (recentDuplicate) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            conversation_id: conversationId,
+            message_id: recentDuplicate.id,
+            notice: 'Rapid-fire duplicate outgoing message suppressed without external ID.',
+          });
+        }
+      }
+
       const insertPayload: Record<string, unknown> = {
         conversation_id: conversationId,
         sender_type: normalizedSenderType,
@@ -1029,7 +1161,7 @@ export async function POST(request: Request) {
         status: 'sent', // strictly sent, never fake delivered
         external_message_id: externalMessageId,
         is_demo: false,
-        created_at: nowIso,
+        created_at: messageCreatedAt,
       };
 
       if (richMetadata) {
@@ -1062,7 +1194,7 @@ export async function POST(request: Request) {
         .from('admin_conversations')
         .update({
           last_message: content,
-          last_message_at: nowIso,
+          last_message_at: messageCreatedAt,
           updated_at: nowIso,
         })
         .eq('id', conversationId);
