@@ -134,6 +134,77 @@ async function runTests() {
   await outRes2.json();
   assert(outRes2.status === 200, 'Interactive outgoing message logged with 200');
 
+  // Test 1.4: Meta WhatsApp Cloud API exact interactive action structure with Book Appointment and Explore Services
+  const testWamidOutgoing3 = 'wamid.HBgM' + Date.now() + 'TESTMETA';
+  const outReq3 = new Request('http://localhost/api/n8n/webhook', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.N8N_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({
+      event_type: 'outgoing_whatsapp_message',
+      phone: testPhone,
+      sender_type: 'automation_rule',
+      message_type: 'interactive',
+      metadata: {
+        interactive: {
+          type: 'button',
+          body: {
+            text: 'Welcome to The Business Work! 👋\nHow can we help you today?',
+          },
+          action: {
+            buttons: [
+              {
+                type: 'reply',
+                reply: {
+                  id: 'tbw_intent_appointment',
+                  title: 'Book Appointment',
+                },
+              },
+              {
+                type: 'reply',
+                reply: {
+                  id: 'tbw_intent_service',
+                  title: 'Explore Services',
+                },
+              },
+            ],
+          },
+        },
+      },
+      external_message_id: testWamidOutgoing3,
+    }),
+  });
+  const outRes3 = await n8nPost(outReq3);
+  const outData3 = await outRes3.json();
+  assert(outRes3.status === 200, 'Meta action.buttons interactive message logged with 200');
+  assert(outData3.success === true, 'Meta action.buttons success is true');
+
+  // Verify stored in Supabase with resolved content from interactive.body.text
+  const { data: savedMetaMsg } = await supabase
+    .from('admin_messages')
+    .select('*')
+    .eq('external_message_id', testWamidOutgoing3)
+    .single();
+  assert(savedMetaMsg, 'Saved message found in Supabase');
+  assert(
+    savedMetaMsg.content === 'Welcome to The Business Work! 👋\nHow can we help you today?',
+    'Content automatically resolved from interactive.body.text'
+  );
+  assert(
+    savedMetaMsg.metadata?.interactive?.action?.buttons?.length === 2,
+    'Stored metadata contains both action.buttons'
+  );
+  assert(
+    savedMetaMsg.metadata?.interactive?.action?.buttons[0].reply?.title === 'Book Appointment',
+    'First button title matches Book Appointment'
+  );
+  assert(
+    savedMetaMsg.metadata?.interactive?.action?.buttons[1].reply?.title === 'Explore Services',
+    'Second button title matches Explore Services'
+  );
+
   console.log('\n--- 2. Testing whatsapp_status_update Receipt Handling ---');
 
   // Create message to test status transitions

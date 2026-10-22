@@ -41,7 +41,7 @@ import {
   getConversationStatusBadge,
   formatINR,
 } from '@/lib/utils';
-import { ConversationStatus, AdminMessage, MessageStatus } from '@/lib/types/dashboard';
+import { ConversationStatus, AdminMessage, MessageStatus, MessageMetadata, WhatsAppListSection } from '@/lib/types/dashboard';
 
 function MessageStatusIcon({ status }: { status: MessageStatus }) {
   if (status === 'read') {
@@ -86,11 +86,97 @@ function MessageStatusIcon({ status }: { status: MessageStatus }) {
 
 function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
   const isCustomer = msg.sender_type === 'customer';
-  const meta = msg.metadata || {};
+
+  // Safely parse metadata if provided as object or string
+  let meta: MessageMetadata = {};
+  if (typeof msg.metadata === 'string') {
+    try {
+      meta = JSON.parse(msg.metadata);
+    } catch {
+      meta = {};
+    }
+  } else if (msg.metadata && typeof msg.metadata === 'object') {
+    meta = msg.metadata;
+  }
+
   const interactive = meta.interactive;
   const location = meta.location;
   const template = meta.template;
-  const flowData = meta.flow_data || (interactive?.flow_response as Record<string, unknown>);
+
+  // 1. Extract interactive buttons from both Meta WhatsApp action.buttons and flat buttons arrays
+  const extractedButtons: Array<{ id: string; title: string }> = (() => {
+    // A. Meta WhatsApp Cloud API interactive button structure: interactive.action.buttons
+    const actionButtons = interactive?.action?.buttons;
+    if (Array.isArray(actionButtons) && actionButtons.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return actionButtons.map((b: any, idx: number) => {
+        const title = b.reply?.title || b.title || b.text || `Option ${idx + 1}`;
+        const id = b.reply?.id || b.id || `btn_${idx}`;
+        return { id, title };
+      });
+    }
+
+    // B. Direct interactive.buttons array
+    if (Array.isArray(interactive?.buttons) && interactive.buttons.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return interactive.buttons.map((b: any, idx: number) => {
+        const title = b.title || b.reply?.title || b.text || `Option ${idx + 1}`;
+        const id = b.id || b.reply?.id || `btn_${idx}`;
+        return { id, title };
+      });
+    }
+
+    return [];
+  })();
+
+  // 2. Extract interactive list sections
+  const extractedSections: WhatsAppListSection[] = (() => {
+    const actionSections = interactive?.action?.sections;
+    if (Array.isArray(actionSections) && actionSections.length > 0) {
+      return actionSections;
+    }
+    if (Array.isArray(interactive?.sections) && interactive.sections.length > 0) {
+      return interactive.sections;
+    }
+    return [];
+  })();
+
+  // 3. Extract incoming button selection reply
+  const selectedButton = (() => {
+    if (interactive?.selected_button?.title) return interactive.selected_button;
+    if (interactive?.button_reply?.title) return interactive.button_reply;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((interactive as any)?.reply?.title) return (interactive as any).reply;
+    return null;
+  })();
+
+  // 4. Extract incoming list selection reply
+  const selectedListRow = (() => {
+    if (interactive?.selected_list_item?.title) return interactive.selected_list_item;
+    if (interactive?.list_reply?.title) return interactive.list_reply;
+    return null;
+  })();
+
+  // 5. Extract WhatsApp Flow submission
+  const parsedFlowData: Record<string, unknown> | null = (() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawFlow = meta.flow_data || interactive?.flow_response || (interactive as any)?.nfm_reply?.response_json;
+    if (!rawFlow) return null;
+    if (typeof rawFlow === 'string') {
+      try {
+        const parsed = JSON.parse(rawFlow);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {
+        return { response: rawFlow };
+      }
+    }
+    if (typeof rawFlow === 'object') {
+      return rawFlow as Record<string, unknown>;
+    }
+    return null;
+  })();
+
+  const bodyText = msg.content || interactive?.body?.text || '';
 
   return (
     <div className="space-y-2">
@@ -164,42 +250,45 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
       )}
 
       {/* 3. Text Content */}
-      {msg.content && (
-        <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+      {bodyText && (
+        <div className="whitespace-pre-wrap break-words">{bodyText}</div>
       )}
 
       {/* 4. Interactive Quick-Reply Buttons (Outgoing Options) */}
-      {interactive?.buttons && Array.isArray(interactive.buttons) && interactive.buttons.length > 0 && (
-        <div className="pt-1.5 flex flex-wrap gap-1.5">
-          {interactive.buttons.map((btn) => (
+      {extractedButtons.length > 0 && (
+        <div className="pt-2 flex flex-wrap gap-2">
+          {extractedButtons.map((btn) => (
             <div
               key={btn.id}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium border ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm border transition select-none ${
                 isCustomer
                   ? 'border-purple-300 bg-purple-50 text-purple-900'
-                  : 'border-white/25 bg-white/15 text-white'
+                  : 'border-white/30 bg-white/20 text-white'
               }`}
             >
-              {btn.title}
+              <span>{btn.title}</span>
             </div>
           ))}
         </div>
       )}
 
       {/* 5. Button Selection Reply (Incoming) */}
-      {(interactive?.selected_button || interactive?.button_reply) && (
+      {selectedButton && (
         <div className="flex items-center gap-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1.5">
           <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
           <span>
-            Selected: <strong>{(interactive.selected_button || interactive.button_reply)?.title}</strong>
+            Selected: <strong>{selectedButton.title}</strong>
           </span>
         </div>
       )}
 
       {/* 6. Interactive List Sections (Outgoing) */}
-      {interactive?.sections && Array.isArray(interactive.sections) && (
+      {extractedSections.length > 0 && (
         <div className="pt-1 space-y-1.5">
-          {interactive.sections.map((sec, idx) => (
+          {interactive?.action?.button && (
+            <p className="text-[11px] font-semibold opacity-90">{interactive.action.button}</p>
+          )}
+          {extractedSections.map((sec, idx) => (
             <div key={idx} className="rounded-lg border border-white/20 bg-white/5 p-2 text-xs">
               {sec.title && <p className="font-bold text-[11px] text-white/80 uppercase tracking-wide mb-1">{sec.title}</p>}
               <div className="space-y-1">
@@ -216,16 +305,14 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
       )}
 
       {/* 7. List Selection (Incoming) */}
-      {(interactive?.selected_list_item || interactive?.list_reply) && (
+      {selectedListRow && (
         <div className="flex items-start gap-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
           <ListIcon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold">
-              {(interactive.selected_list_item || interactive.list_reply)?.title}
-            </p>
-            {(interactive.selected_list_item || interactive.list_reply)?.description && (
+            <p className="font-bold">{selectedListRow.title}</p>
+            {selectedListRow.description && (
               <p className="text-[10px] text-emerald-700 font-normal">
-                {(interactive.selected_list_item || interactive.list_reply)?.description}
+                {selectedListRow.description}
               </p>
             )}
           </div>
@@ -233,17 +320,19 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
       )}
 
       {/* 8. WhatsApp Flow Submission */}
-      {flowData && typeof flowData === 'object' && (
+      {parsedFlowData && (
         <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-2.5 text-xs text-sky-950 space-y-1.5">
           <div className="flex items-center gap-1.5 font-bold text-sky-900">
             <Layers className="h-4 w-4" />
             <span>WhatsApp Flow Submission</span>
           </div>
           <div className="space-y-1 text-[11px]">
-            {Object.entries(flowData).map(([key, val]) => (
+            {Object.entries(parsedFlowData).map(([key, val]) => (
               <div key={key} className="flex justify-between gap-2 border-b border-sky-100 pb-0.5 last:border-0">
                 <span className="capitalize font-medium text-sky-800">{key.replace(/_/g, ' ')}:</span>
-                <span className="font-semibold text-right">{String(val)}</span>
+                <span className="font-semibold text-right">
+                  {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                </span>
               </div>
             ))}
           </div>

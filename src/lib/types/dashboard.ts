@@ -28,8 +28,27 @@ export interface WhatsAppListSection {
   rows: WhatsAppListRow[];
 }
 
+export interface WhatsAppMetaActionButton {
+  type?: string;
+  reply?: WhatsAppButton;
+  id?: string;
+  title?: string;
+  text?: string;
+  url?: string;
+  phone_number?: string;
+}
+
+export interface WhatsAppMetaAction {
+  button?: string;
+  buttons?: WhatsAppMetaActionButton[];
+  sections?: WhatsAppListSection[];
+  [key: string]: unknown;
+}
+
 export interface WhatsAppInteractivePayload {
-  type?: 'button' | 'list' | 'flow' | 'button_reply' | 'list_reply' | 'nfm_reply' | 'quick_reply';
+  type?: 'button' | 'list' | 'flow' | 'button_reply' | 'list_reply' | 'nfm_reply' | 'quick_reply' | string;
+  body?: { text?: string };
+  action?: WhatsAppMetaAction;
   buttons?: WhatsAppButton[];
   selected_button?: WhatsAppButton;
   selected_list_item?: WhatsAppListRow;
@@ -39,6 +58,7 @@ export interface WhatsAppInteractivePayload {
   flow_name?: string;
   flow_token?: string;
   flow_response?: Record<string, unknown> | string;
+  [key: string]: unknown;
 }
 
 export interface WhatsAppLocationPayload {

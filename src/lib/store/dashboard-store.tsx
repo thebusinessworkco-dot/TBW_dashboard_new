@@ -346,12 +346,25 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       }
 
       if (msgsRes.data) {
-        const grouped: Record<string, AdminMessage[]> = {};
+        const incomingGrouped: Record<string, AdminMessage[]> = {};
         (msgsRes.data as AdminMessage[]).forEach((m) => {
-          if (!grouped[m.conversation_id]) grouped[m.conversation_id] = [];
-          grouped[m.conversation_id].push(m);
+          if (!incomingGrouped[m.conversation_id]) incomingGrouped[m.conversation_id] = [];
+          incomingGrouped[m.conversation_id].push(m);
         });
-        setMessages(grouped);
+
+        setMessages((prev) => {
+          const merged: Record<string, AdminMessage[]> = { ...prev };
+          Object.entries(incomingGrouped).forEach(([cId, list]) => {
+            const existing = merged[cId] || [];
+            const map = new Map<string, AdminMessage>();
+            existing.forEach((m) => map.set(m.id, m));
+            list.forEach((m) => map.set(m.id, m));
+            merged[cId] = Array.from(map.values()).sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+          });
+          return merged;
+        });
       }
     } catch {
       // Quiet background sync - non-blocking
@@ -364,151 +377,198 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     if (!supabase) return;
 
     let isMounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData();
 
-    // Authenticated Realtime subscriptions for admin_conversations, admin_messages, and admin_contacts
-    const channel = supabase
-      .channel('admin_realtime_channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'admin_conversations' },
-        (payload) => {
-          if (!isMounted) return;
-          if (payload.eventType === 'INSERT') {
-            const rawNew = payload.new as AdminConversation;
-            // Fetch complete record with joined contact relation
-            supabase
-              .from('admin_conversations')
-              .select('*, contact:admin_contacts(*)')
-              .eq('id', rawNew.id)
-              .maybeSingle()
-              .then(({ data }) => {
-                if (!isMounted) return;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const fresh = data as any;
-                const safeConv: AdminConversation = {
-                  ...(fresh || rawNew),
-                  contact: fresh?.contact || {
-                    id: rawNew.contact_id || 'unknown',
-                    name: rawNew.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
-                    created_at: rawNew.created_at,
-                    is_demo: false,
-                  },
-                };
-                setConversations((prev) => [safeConv, ...prev.filter((c) => c.id !== safeConv.id)]);
-              });
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedConv = payload.new as AdminConversation;
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === updatedConv.id
-                  ? {
-                      ...c,
-                      ...updatedConv,
-                      // Preserve existing joined contact relation!
-                      contact: c.contact || {
-                        id: updatedConv.contact_id || 'unknown',
-                        name: updatedConv.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
-                        created_at: updatedConv.created_at,
-                        is_demo: false,
-                      },
-                    }
-                  : c
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const oldId = (payload.old as { id?: string })?.id;
-            if (oldId) {
-              setConversations((prev) => prev.filter((c) => c.id !== oldId));
+    // Setup authenticated Realtime subscriptions for admin_conversations, admin_messages, and admin_contacts
+    const setupRealtime = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          // Explicitly pass session JWT to Realtime WebSocket so PostgreSQL evaluates RLS as authenticated
+          await supabase.realtime.setAuth(session.access_token);
+        }
+      } catch (err) {
+        console.warn('Realtime setAuth init warning:', err);
+      }
+
+      if (!isMounted) return;
+
+      channel = supabase
+        .channel('admin_realtime_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'admin_conversations' },
+          (payload) => {
+            if (!isMounted) return;
+            if (payload.eventType === 'INSERT') {
+              const rawNew = payload.new as AdminConversation;
+              // Fetch complete record with joined contact relation
+              supabase
+                .from('admin_conversations')
+                .select('*, contact:admin_contacts(*)')
+                .eq('id', rawNew.id)
+                .maybeSingle()
+                .then(({ data }) => {
+                  if (!isMounted) return;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const fresh = data as any;
+                  const safeConv: AdminConversation = {
+                    ...(fresh || rawNew),
+                    contact: fresh?.contact || {
+                      id: rawNew.contact_id || 'unknown',
+                      name: rawNew.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+                      created_at: rawNew.created_at,
+                      is_demo: false,
+                    },
+                  };
+                  setConversations((prev) => [safeConv, ...prev.filter((c) => c.id !== safeConv.id)]);
+                });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedConv = payload.new as AdminConversation;
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === updatedConv.id
+                    ? {
+                        ...c,
+                        ...updatedConv,
+                        // Preserve existing joined contact relation!
+                        contact: c.contact || {
+                          id: updatedConv.contact_id || 'unknown',
+                          name: updatedConv.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+                          created_at: updatedConv.created_at,
+                          is_demo: false,
+                        },
+                      }
+                    : c
+                )
+              );
+            } else if (payload.eventType === 'DELETE') {
+              const oldId = (payload.old as { id?: string })?.id;
+              if (oldId) {
+                setConversations((prev) => prev.filter((c) => c.id !== oldId));
+              }
             }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'admin_messages' },
-        (payload) => {
-          if (!isMounted) return;
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as AdminMessage;
-            setMessages((prev) => {
-              const convMsgs = prev[newMsg.conversation_id] || [];
-              if (
-                convMsgs.some(
-                  (m) =>
-                    m.id === newMsg.id ||
-                    (newMsg.external_message_id &&
-                      m.external_message_id === newMsg.external_message_id)
-                )
-              ) {
-                return prev;
-              }
-              return {
-                ...prev,
-                [newMsg.conversation_id]: [...convMsgs, newMsg],
-              };
-            });
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'admin_messages' },
+          (payload) => {
+            if (!isMounted) return;
+            if (payload.eventType === 'INSERT') {
+              const newMsg = payload.new as AdminMessage;
+              setMessages((prev) => {
+                const convMsgs = prev[newMsg.conversation_id] || [];
+                if (
+                  convMsgs.some(
+                    (m) =>
+                      m.id === newMsg.id ||
+                      (newMsg.external_message_id &&
+                        m.external_message_id === newMsg.external_message_id)
+                  )
+                ) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  [newMsg.conversation_id]: [...convMsgs, newMsg],
+                };
+              });
 
-            // Immediately update the corresponding conversation's preview and timestamp
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === newMsg.conversation_id
-                  ? {
-                      ...c,
-                      last_message: newMsg.content || c.last_message,
-                      last_message_at: newMsg.created_at || new Date().toISOString(),
-                      unread_count:
-                        newMsg.sender_type === 'customer'
-                          ? (c.unread_count || 0) + 1
-                          : c.unread_count,
-                    }
-                  : c
-              )
-            );
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = payload.new as AdminMessage;
-            setMessages((prev) => {
-              const convMsgs = prev[updatedMsg.conversation_id] || [];
-              return {
-                ...prev,
-                [updatedMsg.conversation_id]: convMsgs.map((m) =>
-                  m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
-                ),
-              };
-            });
+              // Immediately update the corresponding conversation's preview and timestamp
+              setConversations((prev) => {
+                const exists = prev.some((c) => c.id === newMsg.conversation_id);
+                if (!exists) {
+                  // Fetch the brand new conversation immediately so it appears at top of list
+                  supabase
+                    .from('admin_conversations')
+                    .select('*, contact:admin_contacts(*)')
+                    .eq('id', newMsg.conversation_id)
+                    .maybeSingle()
+                    .then(({ data }) => {
+                      if (data && isMounted) {
+                        setConversations((current) => [
+                          data as unknown as AdminConversation,
+                          ...current.filter((c) => c.id !== data.id),
+                        ]);
+                      }
+                    });
+                  return prev;
+                }
+                return prev.map((c) =>
+                  c.id === newMsg.conversation_id
+                    ? {
+                        ...c,
+                        last_message: newMsg.content || c.last_message,
+                        last_message_at: newMsg.created_at || new Date().toISOString(),
+                        unread_count:
+                          newMsg.sender_type === 'customer'
+                            ? (c.unread_count || 0) + 1
+                            : c.unread_count,
+                      }
+                    : c
+                );
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedMsg = payload.new as AdminMessage;
+              setMessages((prev) => {
+                const convMsgs = prev[updatedMsg.conversation_id] || [];
+                return {
+                  ...prev,
+                  [updatedMsg.conversation_id]: convMsgs.map((m) =>
+                    m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
+                  ),
+                };
+              });
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'admin_contacts' },
-        (payload) => {
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'admin_contacts' },
+          (payload) => {
+            if (!isMounted) return;
+            if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+              const updatedContact = payload.new as AdminContact;
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.contact_id === updatedContact.id
+                    ? {
+                        ...c,
+                        contact: { ...c.contact, ...updatedContact },
+                      }
+                    : c
+                )
+              );
+            }
+          }
+        )
+        .subscribe((status, err) => {
           if (!isMounted) return;
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            const updatedContact = payload.new as AdminContact;
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.contact_id === updatedContact.id
-                  ? {
-                      ...c,
-                      contact: { ...c.contact, ...updatedContact },
-                    }
-                  : c
-              )
-            );
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('connected');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('Realtime channel status warning:', status, err);
+            setRealtimeStatus('fallback_polling');
           }
+        });
+    };
+
+    void setupRealtime();
+
+    // Listen for auth state changes (token refresh) to keep Realtime authenticated
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.access_token && isMounted) {
+        try {
+          await supabase.realtime.setAuth(session.access_token);
+        } catch {
+          // ignore
         }
-      )
-      .subscribe((status, err) => {
-        if (!isMounted) return;
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('Realtime channel warning:', status, err);
-          setRealtimeStatus('fallback_polling');
-        }
-      });
+      }
+    });
 
     // 10-second background polling fallback to ensure zero missed messages
     const pollTimer = setInterval(() => {
@@ -521,6 +581,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     const handleOnline = () => {
       setRealtimeStatus('connecting');
       void refreshData();
+      void setupRealtime();
     };
 
     const handleVisibility = () => {
@@ -535,9 +596,12 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     return () => {
       isMounted = false;
       clearInterval(pollTimer);
+      authSub.unsubscribe();
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibility);
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [refreshData, silentSync]);
 

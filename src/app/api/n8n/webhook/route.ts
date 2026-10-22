@@ -92,6 +92,8 @@ function resolveMessageContent(
   metadata?: any
 ): string {
   if (rawContent && rawContent.trim()) return rawContent.trim();
+  if (metadata?.interactive?.body?.text) return String(metadata.interactive.body.text).trim();
+  if (metadata?.text?.body) return String(metadata.text.body).trim();
 
   // If interactive button reply
   const btn = metadata?.interactive?.selected_button || metadata?.interactive?.button_reply;
