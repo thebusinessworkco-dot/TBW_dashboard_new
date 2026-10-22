@@ -51,12 +51,13 @@ export default function InstagramPage() {
   const [editKeyword, setEditKeyword] = useState('');
   const [editMessage, setEditMessage] = useState('');
 
-  // Filtered DMs
+  // Filtered DMs with complete null-safety
   const filteredDms = igConversations.filter((c) => {
+    const contactName = c.contact?.name || 'Instagram User';
+    const igUsername = c.contact?.instagram_username || '';
     return (
-      c.contact.name.toLowerCase().includes(dmSearchQuery.toLowerCase()) ||
-      (c.contact.instagram_username &&
-        c.contact.instagram_username.toLowerCase().includes(dmSearchQuery.toLowerCase()))
+      contactName.toLowerCase().includes(dmSearchQuery.toLowerCase()) ||
+      igUsername.toLowerCase().includes(dmSearchQuery.toLowerCase())
     );
   });
 

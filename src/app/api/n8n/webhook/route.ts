@@ -9,10 +9,13 @@ import { createAdminClient } from '@/lib/supabase/admin';
  *
  * Security & Reliability Guarantees:
  * 1. Mandatory Webhook Secret: Fails closed with 500 if N8N_WEBHOOK_SECRET is unset in environment.
- * 2. Mandatory Stable IGSID: Rejects requests missing sender_id with 400. Mutable username alone is disallowed.
+ * 2. Mandatory Stable Contact Identifiers:
+ *    - Instagram: sender_id (IGSID) is mandatory.
+ *    - WhatsApp: phone (Normalized digits) is mandatory. Mutable names alone are disallowed.
  * 3. Concurrency Protection: Catches unique constraint violations (23505) on contacts, conversations, and messages.
  * 4. Fail-Closed Takeover: Returns can_respond: false on errors, active takeover, or paused automation.
  * 5. Outbound AI Reply Verification: Verifies takeover has not been activated before saving AI replies.
+ * 6. Status Integrity: Incoming & outgoing messages saved with status = 'sent' (never fabricated 'delivered').
  */
 export async function POST(request: Request) {
   try {
@@ -176,17 +179,6 @@ export async function POST(request: Request) {
               contactId = retryContact.id;
               existingContact = retryContact;
             }
-          } else if (createContactErr.message?.includes('instagram_scoped_id')) {
-            // Fallback if migration not yet applied: insert without scoped id
-            delete insertPayload.instagram_scoped_id;
-            const { data: fallbackContact } = await adminSupabase
-              .from('admin_contacts')
-              .insert(insertPayload)
-              .select('id, name')
-              .single();
-            if (fallbackContact) {
-              contactId = fallbackContact.id;
-            }
           }
         } else if (newContact) {
           contactId = newContact.id;
@@ -320,7 +312,285 @@ export async function POST(request: Request) {
     }
 
     // ========================================================================
-    // 2. CHECK HUMAN TAKEOVER STATUS (Fail-Closed Pre-Execution Guard)
+    // 2. INCOMING WHATSAPP MESSAGE INGESTION & TAKEOVER CHECK
+    // ========================================================================
+    if (
+      eventType === 'incoming_whatsapp_message' ||
+      (eventType === 'incoming_message' && (payload.platform === 'whatsapp' || payload.phone || payload.wa_id || payload.from))
+    ) {
+      const rawPhone = String(
+        payload.phone ||
+        payload.phone_number ||
+        payload.whatsapp_id ||
+        payload.wa_id ||
+        payload.from ||
+        payload.sender_phone ||
+        ''
+      ).trim();
+      const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone ? '+' + cleanPhone : '';
+      const content = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
+      const externalMessageId =
+        payload.external_message_id ||
+        payload.wa_message_id ||
+        payload.wamid ||
+        payload.mid ||
+        payload.message_id ||
+        payload.id ||
+        null;
+      const customerName = String(
+        payload.customer_name ||
+        payload.contact_name ||
+        payload.name ||
+        payload.profile_name ||
+        payload.sender_name ||
+        ''
+      ).trim();
+
+      // STABLE IDENTIFIER ENFORCEMENT: phone (WhatsApp Phone / ID) is mandatory
+      if (!cleanPhone) {
+        return NextResponse.json(
+          {
+            success: false,
+            can_respond: false,
+            error: 'Missing required field: phone (WhatsApp User Phone / ID). Display names alone cannot be used to identify contacts.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!content) {
+        return NextResponse.json(
+          { success: false, can_respond: false, error: 'Message content is required' },
+          { status: 400 }
+        );
+      }
+
+      // A. Message Deduplication via Meta WhatsApp ID (wamid)
+      if (externalMessageId) {
+        const { data: existingMsg } = await adminSupabase
+          .from('admin_messages')
+          .select('id, conversation_id')
+          .eq('external_message_id', externalMessageId)
+          .maybeSingle();
+
+        if (existingMsg) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            can_respond: false,
+            conversation_id: existingMsg.conversation_id,
+            notice: 'Duplicate WhatsApp message ID (wamid) ignored.',
+          });
+        }
+      }
+
+      // B. Resolve Contact with Collision Safety (Normalized Phone)
+      let contactId: string | null = null;
+      let existingContact: { id: string; name: string; phone?: string } | null = null;
+
+      const { data: contactByPhone, error: phoneErr } = await adminSupabase
+        .from('admin_contacts')
+        .select('id, name, phone')
+        .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
+        .maybeSingle();
+
+      if (!phoneErr && contactByPhone) {
+        existingContact = contactByPhone;
+        contactId = contactByPhone.id;
+
+        // If contact had default name but real customer_name now provided, update name
+        if (customerName && (contactByPhone.name.startsWith('+') || contactByPhone.name.startsWith('WhatsApp Contact'))) {
+          await adminSupabase
+            .from('admin_contacts')
+            .update({ name: customerName, updated_at: nowIso })
+            .eq('id', contactId);
+        }
+      }
+
+      // Create contact if new (concurrency-safe with conflict retry)
+      if (!contactId) {
+        const insertPayload: Record<string, unknown> = {
+          name: customerName || formattedPhone,
+          phone: formattedPhone,
+          created_at: nowIso,
+          updated_at: nowIso,
+          is_demo: false,
+        };
+
+        const { data: newContact, error: createContactErr } = await adminSupabase
+          .from('admin_contacts')
+          .insert(insertPayload)
+          .select('id, name')
+          .single();
+
+        if (createContactErr) {
+          // If race condition: another request inserted concurrently with same phone
+          if (createContactErr.code === '23505' || createContactErr.message?.includes('duplicate key')) {
+            const { data: retryContact } = await adminSupabase
+              .from('admin_contacts')
+              .select('id, name, phone')
+              .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
+              .maybeSingle();
+            if (retryContact) {
+              contactId = retryContact.id;
+              existingContact = retryContact;
+            }
+          }
+        } else if (newContact) {
+          contactId = newContact.id;
+        }
+      }
+
+      if (!contactId) {
+        return NextResponse.json(
+          { success: false, can_respond: false, error: 'Failed to resolve or create WhatsApp contact' },
+          { status: 500 }
+        );
+      }
+
+      // C. Resolve or Create WhatsApp Conversation (Concurrency-safe)
+      let conversationId: string | null = null;
+      let manualTakeover = false;
+      let automationPaused = false;
+
+      const { data: existingConv } = await adminSupabase
+        .from('admin_conversations')
+        .select('id, unread_count, manual_takeover, automation_paused')
+        .eq('contact_id', contactId)
+        .eq('platform', 'whatsapp')
+        .maybeSingle();
+
+      // Parse message created_at timestamp if provided by n8n
+      let messageCreatedAt = nowIso;
+      if (payload.timestamp) {
+        const ts = payload.timestamp;
+        if (typeof ts === 'number' || /^\d+$/.test(String(ts))) {
+          const num = Number(ts);
+          const ms = num < 10000000000 ? num * 1000 : num;
+          const d = new Date(ms);
+          if (!isNaN(d.getTime())) messageCreatedAt = d.toISOString();
+        } else {
+          const d = new Date(ts);
+          if (!isNaN(d.getTime())) messageCreatedAt = d.toISOString();
+        }
+      }
+
+      if (existingConv) {
+        conversationId = existingConv.id;
+        manualTakeover = Boolean(existingConv.manual_takeover);
+        automationPaused = Boolean(existingConv.automation_paused);
+
+        await adminSupabase
+          .from('admin_conversations')
+          .update({
+            last_message: content,
+            last_message_at: messageCreatedAt,
+            unread_count: (existingConv.unread_count || 0) + 1,
+            status: 'open',
+            updated_at: nowIso,
+          })
+          .eq('id', conversationId);
+      } else {
+        const { data: newConv, error: createConvErr } = await adminSupabase
+          .from('admin_conversations')
+          .insert({
+            contact_id: contactId,
+            platform: 'whatsapp',
+            status: 'open',
+            last_message: content,
+            last_message_at: messageCreatedAt,
+            unread_count: 1,
+            manual_takeover: false,
+            automation_paused: false,
+            is_demo: false,
+            created_at: nowIso,
+            updated_at: nowIso,
+          })
+          .select('id, manual_takeover, automation_paused')
+          .single();
+
+        if (createConvErr) {
+          // If race condition: caught by unique index idx_admin_conversations_contact_platform
+          if (createConvErr.code === '23505' || createConvErr.message?.includes('duplicate key')) {
+            const { data: retryConv } = await adminSupabase
+              .from('admin_conversations')
+              .select('id, unread_count, manual_takeover, automation_paused')
+              .eq('contact_id', contactId)
+              .eq('platform', 'whatsapp')
+              .maybeSingle();
+            if (retryConv) {
+              conversationId = retryConv.id;
+              manualTakeover = Boolean(retryConv.manual_takeover);
+              automationPaused = Boolean(retryConv.automation_paused);
+            }
+          }
+        } else if (newConv) {
+          conversationId = newConv.id;
+          manualTakeover = Boolean(newConv.manual_takeover);
+          automationPaused = Boolean(newConv.automation_paused);
+        }
+      }
+
+      if (!conversationId) {
+        return NextResponse.json(
+          { success: false, can_respond: false, error: 'Failed to create or resolve WhatsApp conversation' },
+          { status: 500 }
+        );
+      }
+
+      // Check for media/message_type
+      const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
+      const mediaUrl = payload.media_url || null;
+
+      // D. Insert Incoming Message as sender_type: 'customer' (with concurrency-safe duplicate catch)
+      const { error: insertMsgErr } = await adminSupabase.from('admin_messages').insert({
+        conversation_id: conversationId,
+        sender_type: 'customer',
+        sender_name: customerName || existingContact?.name || formattedPhone,
+        content,
+        media_type: mediaType,
+        media_url: mediaUrl,
+        status: 'sent', // strictly sent, never fake delivered
+        external_message_id: externalMessageId,
+        is_demo: false,
+        created_at: messageCreatedAt,
+      });
+
+      if (insertMsgErr) {
+        if (insertMsgErr.code === '23505' || insertMsgErr.message?.includes('duplicate key')) {
+          return NextResponse.json({
+            success: true,
+            deduplicated: true,
+            can_respond: false,
+            conversation_id: conversationId,
+            notice: 'Duplicate WhatsApp message ID (wamid) caught by database unique constraint.',
+          });
+        }
+      }
+
+      // E. Touch integration telemetry
+      await touchIntegrationStatus('whatsapp');
+      await touchIntegrationStatus('n8n');
+
+      const isTakeover = Boolean(manualTakeover || automationPaused);
+
+      return NextResponse.json({
+        success: true,
+        conversation_id: conversationId,
+        contact_id: contactId,
+        can_respond: !isTakeover,
+        manual_takeover: manualTakeover,
+        automation_paused: automationPaused,
+        external_message_id: externalMessageId,
+        notice: isTakeover
+          ? 'Human takeover is active. Do not dispatch automated reply.'
+          : 'Automation permitted.',
+      });
+    }
+
+    // ========================================================================
+    // 3. CHECK HUMAN TAKEOVER STATUS (Fail-Closed Pre-Execution Guard)
     // ========================================================================
     if (eventType === 'check_takeover') {
       try {
@@ -370,12 +640,14 @@ export async function POST(request: Request) {
               can_respond: true,
             });
           }
-        } else if (phone) {
-          const cleanPhone = String(phone).replace(/[^0-9]/g, '');
+        } else if (phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from) {
+          const rawP = String(phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from);
+          const cleanPhone = rawP.replace(/[^0-9]/g, '');
+          const formattedPhone = '+' + cleanPhone;
           const { data: contact } = await adminSupabase
             .from('admin_contacts')
             .select('id')
-            .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+            .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
             .maybeSingle();
 
           if (contact) {
@@ -424,15 +696,131 @@ export async function POST(request: Request) {
     }
 
     // ========================================================================
-    // 3. LOG AUTOMATION AI REPLY (Sent by n8n workflow)
+    // 4. LOG WHATSAPP AUTOMATION REPLY (Sent by n8n workflow)
+    // ========================================================================
+    if (
+      eventType === 'log_whatsapp_reply' ||
+      (eventType === 'log_ai_reply' && (payload.platform === 'whatsapp' || payload.phone || payload.wa_id))
+    ) {
+      const {
+        content,
+        sender_type = 'automation_ai',
+        sender_name = 'TBW AI Assistant',
+      } = payload;
+      const externalMessageId =
+        payload.external_message_id ||
+        payload.wa_message_id ||
+        payload.wamid ||
+        payload.mid ||
+        payload.message_id ||
+        payload.id ||
+        null;
+
+      let conversationId = payload.conversation_id;
+
+      if (!conversationId && (payload.phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from)) {
+        const cleanPhone = String(
+          payload.phone || payload.phone_number || payload.whatsapp_id || payload.wa_id || payload.from
+        ).replace(/[^0-9]/g, '');
+        const { data: contact } = await adminSupabase
+          .from('admin_contacts')
+          .select('id')
+          .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+          .maybeSingle();
+
+        if (contact) {
+          const { data: conv } = await adminSupabase
+            .from('admin_conversations')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('platform', 'whatsapp')
+            .maybeSingle();
+
+          if (conv) {
+            conversationId = conv.id;
+          }
+        }
+      }
+
+      if (!conversationId || !content) {
+        return NextResponse.json(
+          { error: 'conversation_id (or phone) and content are required' },
+          { status: 400 }
+        );
+      }
+
+      // Deduplication check via wamid
+      if (externalMessageId) {
+        const { data: existing } = await adminSupabase
+          .from('admin_messages')
+          .select('id')
+          .eq('external_message_id', externalMessageId)
+          .maybeSingle();
+
+        if (existing) {
+          return NextResponse.json({ success: true, deduplicated: true });
+        }
+      }
+
+      // Re-verify takeover before writing reply
+      const { data: convCheck } = await adminSupabase
+        .from('admin_conversations')
+        .select('manual_takeover, automation_paused')
+        .eq('id', conversationId)
+        .maybeSingle();
+
+      if (convCheck?.manual_takeover || convCheck?.automation_paused) {
+        return NextResponse.json({
+          success: false,
+          rejected: true,
+          reason: 'Human takeover active - WhatsApp AI reply discarded to prevent race condition.',
+        }, { status: 409 });
+      }
+
+      const { error: insertErr } = await adminSupabase.from('admin_messages').insert({
+        conversation_id: conversationId,
+        sender_type: sender_type === 'human_agent' ? 'human_agent' : 'automation_ai',
+        sender_name,
+        content,
+        status: 'sent', // strictly sent, never fake delivered
+        external_message_id: externalMessageId,
+        is_demo: false,
+        created_at: nowIso,
+      });
+
+      if (insertErr && (insertErr.code === '23505' || insertErr.message?.includes('duplicate key'))) {
+        return NextResponse.json({ success: true, deduplicated: true });
+      }
+
+      await adminSupabase
+        .from('admin_conversations')
+        .update({
+          last_message: content,
+          last_message_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', conversationId);
+
+      await touchIntegrationStatus('whatsapp');
+      await touchIntegrationStatus('n8n');
+
+      return NextResponse.json({
+        success: true,
+        action: 'whatsapp_reply_logged',
+        conversation_id: conversationId,
+      });
+    }
+
+    // ========================================================================
+    // 5. LOG INSTAGRAM AUTOMATION AI REPLY (Sent by n8n workflow)
     // ========================================================================
     if (eventType === 'log_ai_reply') {
       const {
         content,
         sender_type = 'automation_ai',
         sender_name = 'TBW AI Assistant',
-        external_message_id,
       } = payload;
+      const externalMessageId = payload.external_message_id || payload.mid || payload.message_id || payload.id || null;
 
       let conversationId = payload.conversation_id;
 
@@ -466,11 +854,11 @@ export async function POST(request: Request) {
       }
 
       // Check for deduplication
-      if (external_message_id) {
+      if (externalMessageId) {
         const { data: existing } = await adminSupabase
           .from('admin_messages')
           .select('id')
-          .eq('external_message_id', external_message_id)
+          .eq('external_message_id', externalMessageId)
           .maybeSingle();
 
         if (existing) {
@@ -499,7 +887,7 @@ export async function POST(request: Request) {
         sender_name,
         content,
         status: 'sent',
-        external_message_id: external_message_id || null,
+        external_message_id: externalMessageId,
         is_demo: false,
         created_at: nowIso,
       });
@@ -528,7 +916,7 @@ export async function POST(request: Request) {
     }
 
     // ========================================================================
-    // 4. LOG WORKFLOW EXECUTION TELEMETRY
+    // 6. LOG WORKFLOW EXECUTION TELEMETRY
     // ========================================================================
     if (eventType === 'workflow_execution') {
       const {

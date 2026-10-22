@@ -235,8 +235,19 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         throw new Error(convsRes.error.message);
       }
 
-      // Empty database tables map to empty arrays (zero records displayed, no dummy fallback)
-      setConversations((convsRes.data || []) as unknown as AdminConversation[]);
+      // Empty database tables map to empty arrays. Ensure each conversation has a guaranteed contact object.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sanitizedConvs = ((convsRes.data || []) as any[]).map((c) => ({
+        ...c,
+        contact: c.contact || {
+          id: c.contact_id || 'unknown',
+          name: c.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+          phone: c.platform === 'whatsapp' ? 'No phone' : undefined,
+          created_at: c.created_at || new Date().toISOString(),
+          is_demo: false,
+        },
+      }));
+      setConversations(sanitizedConvs as unknown as AdminConversation[]);
 
       const grouped: Record<string, AdminMessage[]> = {};
       ((msgsRes.data || []) as AdminMessage[]).forEach((m) => {
@@ -315,12 +326,46 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         (payload) => {
           if (!isMounted) return;
           if (payload.eventType === 'INSERT') {
-            const newConv = payload.new as AdminConversation;
-            setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== newConv.id)]);
+            const rawNew = payload.new as AdminConversation;
+            // Fetch complete record with joined contact relation
+            supabase
+              .from('admin_conversations')
+              .select('*, contact:admin_contacts(*)')
+              .eq('id', rawNew.id)
+              .maybeSingle()
+              .then(({ data }) => {
+                if (!isMounted) return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const fresh = data as any;
+                const safeConv: AdminConversation = {
+                  ...(fresh || rawNew),
+                  contact: fresh?.contact || {
+                    id: rawNew.contact_id || 'unknown',
+                    name: rawNew.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+                    created_at: rawNew.created_at,
+                    is_demo: false,
+                  },
+                };
+                setConversations((prev) => [safeConv, ...prev.filter((c) => c.id !== safeConv.id)]);
+              });
           } else if (payload.eventType === 'UPDATE') {
             const updatedConv = payload.new as AdminConversation;
             setConversations((prev) =>
-              prev.map((c) => (c.id === updatedConv.id ? { ...c, ...updatedConv } : c))
+              prev.map((c) =>
+                c.id === updatedConv.id
+                  ? {
+                      ...c,
+                      ...updatedConv,
+                      // Preserve existing joined contact relation!
+                      contact: c.contact || {
+                        id: updatedConv.contact_id || 'unknown',
+                        name: updatedConv.platform === 'whatsapp' ? 'WhatsApp Contact' : 'Instagram User',
+                        created_at: updatedConv.created_at,
+                        is_demo: false,
+                      },
+                    }
+                  : c
+              )
             );
           } else if (payload.eventType === 'DELETE') {
             const oldId = (payload.old as { id?: string })?.id;

@@ -71,11 +71,16 @@ function WhatsAppPageContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Filter conversations
+  // Filter conversations with complete null-safety
   const filteredConversations = waConversations.filter((c) => {
+    const contactName = c.contact?.name || c.contact?.phone || 'WhatsApp Contact';
+    const phone = c.contact?.phone || '';
+    const company = c.contact?.company_name || '';
+
     const matchesSearch =
-      c.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.contact.phone && c.contact.phone.includes(searchQuery)) ||
-      (c.contact.company_name && c.contact.company_name.toLowerCase().includes(searchQuery.toLowerCase()));
+      contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      phone.includes(searchQuery) ||
+      company.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -184,7 +189,7 @@ function WhatsAppPageContent() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-xs text-[#141413] truncate">
-                        {conv.contact.name}
+                        {conv.contact?.name || conv.contact?.phone || 'WhatsApp Contact'}
                       </span>
                       <span className="text-[10px] text-[#7A756D] shrink-0">
                         {formatRelativeTime(conv.last_message_at)}
@@ -192,7 +197,7 @@ function WhatsAppPageContent() {
                     </div>
 
                     <div className="text-[11px] text-[#7A756D] font-mono mb-1 truncate">
-                      {conv.contact.phone || conv.contact.company_name}
+                      {conv.contact?.phone || conv.contact?.company_name || ''}
                     </div>
 
                     <p className="text-xs text-[#555047] line-clamp-1 mb-2">
@@ -236,14 +241,16 @@ function WhatsAppPageContent() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-bold text-[#141413]">
-                      {activeConversation.contact.name}
+                      {activeConversation.contact?.name || activeConversation.contact?.phone || 'WhatsApp Contact'}
                     </h2>
-                    <span className="text-xs font-mono text-[#7A756D]">
-                      {activeConversation.contact.phone}
-                    </span>
+                    {activeConversation.contact?.phone && (
+                      <span className="text-xs font-mono text-[#7A756D]">
+                        {activeConversation.contact.phone}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-[#7A756D]">
-                    <span>{activeConversation.contact.company_name || 'Individual Contact'}</span>
+                    <span>{activeConversation.contact?.company_name || 'Individual Contact'}</span>
                     <span>•</span>
                     <span className="capitalize font-medium text-[#141413]">
                       {activeConversation.status.replace(/_/g, ' ')}
@@ -481,19 +488,19 @@ function WhatsAppPageContent() {
 
               <div className="rounded-xl border border-[#E2DDD3] bg-[#FAF8F5] p-3.5 space-y-2">
                 <div className="font-bold text-sm text-[#141413]">
-                  {activeConversation.contact.name}
+                  {activeConversation.contact?.name || activeConversation.contact?.phone || 'WhatsApp Contact'}
                 </div>
                 <div className="text-xs text-[#555047] flex items-center gap-1.5">
                   <Phone className="h-3.5 w-3.5 text-[#7A756D]" />
-                  <span>{activeConversation.contact.phone || 'No phone'}</span>
+                  <span>{activeConversation.contact?.phone || 'No phone'}</span>
                 </div>
-                {activeConversation.contact.company_name && (
+                {activeConversation.contact?.company_name && (
                   <div className="text-xs text-[#555047]">
                     Company: <strong>{activeConversation.contact.company_name}</strong>
                   </div>
                 )}
                 <div className="text-[11px] text-[#7A756D]">
-                  First contact: {formatDateTime(activeConversation.contact.created_at)}
+                  First contact: {activeConversation.contact?.created_at ? formatDateTime(activeConversation.contact.created_at) : 'Recent'}
                 </div>
               </div>
             </div>
