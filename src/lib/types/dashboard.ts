@@ -330,6 +330,22 @@ export interface InstagramReelRule {
   updated_at?: string;
 }
 
+export interface InstagramSyncedReel {
+  media_id: string;
+  shortcode: string;
+  caption: string;
+  permalink: string;
+  thumbnail_url?: string;
+  media_url?: string;
+  timestamp: string;
+  media_type: 'VIDEO' | 'IMAGE' | 'CAROUSEL_ALBUM';
+  media_product_type?: string;
+  comments_count?: number;
+  like_count?: number;
+  rule_id?: string | null;
+  rule_enabled?: boolean;
+}
+
 export type PrivateReplyState = 'pending' | 'sent' | 'failed' | 'consumed';
 
 export interface InstagramCommentIntent {

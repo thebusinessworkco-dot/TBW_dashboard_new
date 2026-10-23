@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Film,
   Plus,
@@ -21,143 +21,227 @@ import {
   ArrowRight,
   Info,
   X,
+  Link2,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Video,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
-import { InstagramReelRule } from '@/lib/types/dashboard';
+import { InstagramReelRule, InstagramSyncedReel } from '@/lib/types/dashboard';
+
+type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured';
+type SortOrder = 'newest' | 'oldest' | 'comments';
+type ModalTab = 'sync' | 'select' | 'paste';
 
 export default function InstagramReelsPage() {
   const [activeTab, setActiveTab] = useState<'reels' | 'faq' | 'observability'>('reels');
   const [rules, setRules] = useState<InstagramReelRule[]>([]);
+  const [syncedReels, setSyncedReels] = useState<InstagramSyncedReel[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [accountInfo, setAccountInfo] = useState<{ id: string; username: string; name?: string; profile_picture_url?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
+
+  // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'enabled' | 'disabled' | 'any_comment' | 'keywords'>('all');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
+  const [sortBy, setSortBy] = useState<SortOrder>('newest');
   const [whatsappPhone, setWhatsappPhone] = useState<string | null>(null);
 
   // Modal States
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<ModalTab>('select');
   const [editingRule, setEditingRule] = useState<Partial<InstagramReelRule> | null>(null);
+  const [selectedReelPreview, setSelectedReelPreview] = useState<InstagramSyncedReel | null>(null);
   const [keywordInput, setKeywordInput] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
-  const [simulatorComment, setSimulatorComment] = useState('Interested in details!');
+  const [showAdvancedManual, setShowAdvancedManual] = useState(false);
+
+  // Paste Link State
+  const [pasteUrlInput, setPasteUrlInput] = useState('');
+  const [isResolvingLink, setIsResolvingLink] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  // Live Simulator States
   const [simulatorFollower, setSimulatorFollower] = useState(true);
 
-  const refreshData = async () => {
+  // 1. Initial Load of Rules, Synced Reels & Settings
+  const loadData = async (forceSync = false) => {
     try {
-      setLoading(true);
-      const [resRules, resSettings] = await Promise.all([
+      if (forceSync) setIsSyncing(true);
+      else setLoading(true);
+
+      const [resRules, resSettings, resSync] = await Promise.all([
         fetch('/api/instagram/reels'),
         fetch('/api/instagram/settings'),
+        fetch(`/api/instagram/reels/sync${forceSync ? '?force=true' : ''}`),
       ]);
+
       const dataRules = await resRules.json();
       if (dataRules.success && Array.isArray(dataRules.rules)) {
         setRules(dataRules.rules);
       }
+
       const dataSettings = await resSettings.json();
       if (dataSettings.success && dataSettings.whatsapp_business_phone) {
         setWhatsappPhone(dataSettings.whatsapp_business_phone);
       }
+
+      const dataSync = await resSync.json();
+      if (dataSync.success && dataSync.store) {
+        setSyncedReels(dataSync.store.reels || []);
+        setLastSyncedAt(dataSync.store.last_synced_at || null);
+        if (dataSync.store.account) {
+          setAccountInfo(dataSync.store.account);
+        }
+      }
+
+      if (forceSync) {
+        setSyncNotice({
+          type: 'success',
+          message: `Synchronized ${dataSync.store?.reels?.length || 0} published Reels from @${dataSync.store?.account?.username || 'thebusinesswork.co'}`,
+        });
+      }
     } catch {
-      // Non-blocking fallback
+      if (forceSync) {
+        setSyncNotice({ type: 'warning', message: 'Synchronization completed with cached media.' });
+      }
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
-  // Fetch initial data
   useEffect(() => {
-    let active = true;
-    Promise.all([
-      fetch('/api/instagram/reels').then((r) => r.json()).catch(() => null),
-      fetch('/api/instagram/settings').then((r) => r.json()).catch(() => null),
-    ]).then(([rulesData, settingsData]) => {
-      if (!active) return;
-      if (rulesData?.success && Array.isArray(rulesData.rules)) {
-        setRules(rulesData.rules);
-      }
-      if (settingsData?.success && settingsData.whatsapp_business_phone) {
-        setWhatsappPhone(settingsData.whatsapp_business_phone);
-      }
-      setLoading(false);
-    });
-
-    return () => {
-      active = false;
-    };
+    loadData();
   }, []);
 
-  const handleToggleEnabled = async (rule: InstagramReelRule) => {
-    const nextState = !rule.is_enabled;
-    const updated = { ...rule, is_enabled: nextState };
-    setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+  // 2. Open Create Modal
+  const handleOpenCreateModal = (preselectedReel?: InstagramSyncedReel) => {
+    setResolveError(null);
+    setPasteUrlInput('');
+    setShowAdvancedManual(false);
 
-    try {
-      await fetch('/api/instagram/reels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+    if (preselectedReel) {
+      // Check if rule already exists for this reel
+      const existing = rules.find((r) => r.media_id === preselectedReel.media_id);
+      if (existing) {
+        handleOpenEditModal(existing, preselectedReel);
+        return;
+      }
+
+      setSelectedReelPreview(preselectedReel);
+      setEditingRule({
+        id: `rule_${Date.now()}`,
+        media_id: preselectedReel.media_id,
+        title: preselectedReel.caption ? preselectedReel.caption.slice(0, 60) : 'Untitled Reel Automation',
+        permalink: preselectedReel.permalink,
+        thumbnail_url: preselectedReel.thumbnail_url || preselectedReel.media_url || '',
+        is_enabled: true,
+        trigger_mode: 'any_comment',
+        keywords: ['INFO', 'DETAILS', 'AUTOMATION'],
+        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll share the full information! ✨',
+        details_text: 'Here are the details on our AI & Workflow automation systems! We build custom lead qualification and appointment bots.',
+        follow_required: true,
+        whatsapp_prefill_text: `Hi! I saw your Reel "${preselectedReel.caption ? preselectedReel.caption.slice(0, 30) : 'video'}" and would like more details.`,
       });
-    } catch {
-      refreshData();
+      setKeywordInput('INFO, DETAILS, AUTOMATION');
+      setModalTab('select');
+    } else {
+      setSelectedReelPreview(null);
+      setEditingRule({
+        id: `rule_${Date.now()}`,
+        media_id: '',
+        title: '',
+        permalink: '',
+        thumbnail_url: '',
+        is_enabled: true,
+        trigger_mode: 'any_comment',
+        keywords: ['INFO', 'DETAILS', 'AUTOMATION'],
+        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll share the full information! ✨',
+        details_text: 'Here are the details on our AI & Workflow automation systems! We build custom lead qualification and appointment bots.',
+        follow_required: true,
+        whatsapp_prefill_text: 'Hi! I saw your Instagram Reel and would like to learn more.',
+      });
+      setKeywordInput('INFO, DETAILS, AUTOMATION');
+      setModalTab('select');
     }
-  };
 
-  const handleDeleteRule = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this Reel automation rule?')) return;
-    setRules((prev) => prev.filter((r) => r.id !== id));
-    try {
-      await fetch(`/api/instagram/reels?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    } catch {
-      refreshData();
-    }
-  };
-
-  const handleOpenCreateModal = () => {
-    setEditingRule({
-      id: `rule_${Date.now()}`,
-      media_id: '',
-      title: '',
-      permalink: '',
-      thumbnail_url: '',
-      is_enabled: true,
-      trigger_mode: 'any_comment',
-      keywords: ['INFO', 'AUTOMATION', 'REEL'],
-      initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll share the full information! ✨',
-      details_text: 'Here are the details on our AI & Workflow automation systems! We build custom lead qualification and appointment bots.',
-      follow_required: true,
-      whatsapp_prefill_text: 'Hi! I saw your Instagram Reel and would like to learn more.',
-    });
-    setKeywordInput('INFO, AUTOMATION, REEL');
     setIsEditorOpen(true);
   };
 
-  const handleOpenEditModal = (rule: InstagramReelRule) => {
+  // 3. Open Edit Modal
+  const handleOpenEditModal = (rule: InstagramReelRule, associatedReel?: InstagramSyncedReel) => {
     setEditingRule({ ...rule });
     setKeywordInput((rule.keywords || []).join(', '));
+    setShowAdvancedManual(false);
+    setResolveError(null);
+
+    const reel = associatedReel || syncedReels.find((sr) => sr.media_id === rule.media_id) || {
+      media_id: rule.media_id,
+      shortcode: rule.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '',
+      caption: rule.title,
+      permalink: rule.permalink || '',
+      thumbnail_url: rule.thumbnail_url || '',
+      timestamp: rule.created_at,
+      media_type: 'VIDEO',
+    };
+
+    setSelectedReelPreview(reel);
+    setModalTab('select');
     setIsEditorOpen(true);
   };
 
-  const handleDuplicateRule = (rule: InstagramReelRule) => {
-    setEditingRule({
-      ...rule,
-      id: `rule_${Date.now()}`,
-      media_id: '', // Blank so user specifies distinct Reel
-      title: `${rule.title} (Copy)`,
-      comments_count: 0,
-      private_replies_count: 0,
-      dm_conversations_count: 0,
-      verified_follows_count: 0,
-      failed_sends_count: 0,
-    });
-    setKeywordInput((rule.keywords || []).join(', '));
-    setIsEditorOpen(true);
+  // 4. Resolve Pasted Link (Method 3)
+  const handleResolvePastedLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pasteUrlInput.trim()) return;
+
+    setIsResolvingLink(true);
+    setResolveError(null);
+
+    try {
+      const res = await fetch('/api/instagram/reels/resolve-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: pasteUrlInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.reel) {
+        // If an existing rule already exists for this resolved Reel, prompt or switch to edit
+        if (data.existingRule) {
+          handleOpenEditModal(data.existingRule as InstagramReelRule, data.reel);
+          return;
+        }
+
+        setSelectedReelPreview(data.reel);
+        setEditingRule((prev) => ({
+          ...(prev || {}),
+          media_id: data.reel.media_id,
+          title: prev?.title || (data.reel.caption ? data.reel.caption.slice(0, 60) : 'Instagram Reel Automation'),
+          permalink: data.reel.permalink,
+          thumbnail_url: data.reel.thumbnail_url || data.reel.media_url || '',
+          whatsapp_prefill_text: prev?.whatsapp_prefill_text || `Hi! I saw your Reel "${data.reel.caption ? data.reel.caption.slice(0, 30) : 'video'}" and would like details.`,
+        }));
+      } else {
+        setResolveError(data.error || 'Failed to resolve Reel. Please verify that this Reel belongs to @thebusinesswork.co.');
+      }
+    } catch (err: unknown) {
+      setResolveError(err instanceof Error ? err.message : 'Network error while resolving URL.');
+    } finally {
+      setIsResolvingLink(false);
+    }
   };
 
+  // 5. Save Rule
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRule?.media_id || !editingRule?.title) {
-      alert('Please provide Reel Media ID and Title.');
+      alert('Please select or specify a valid Instagram Media ID and Reel Title.');
       return;
     }
 
@@ -169,6 +253,8 @@ export default function InstagramReelsPage() {
     const payload: Partial<InstagramReelRule> = {
       ...editingRule,
       keywords: cleanKeywords,
+      permalink: selectedReelPreview?.permalink || editingRule.permalink || '',
+      thumbnail_url: selectedReelPreview?.thumbnail_url || editingRule.thumbnail_url || '',
     };
 
     try {
@@ -188,6 +274,16 @@ export default function InstagramReelsPage() {
           }
           return [data.rule, ...prev];
         });
+
+        // Update synced reels status
+        setSyncedReels((prev) =>
+          prev.map((sr) =>
+            sr.media_id === data.rule.media_id
+              ? { ...sr, rule_id: data.rule.id, rule_enabled: data.rule.is_enabled }
+              : sr
+          )
+        );
+
         setIsEditorOpen(false);
       } else {
         alert(data.error || 'Failed to save Reel rule.');
@@ -197,47 +293,125 @@ export default function InstagramReelsPage() {
     }
   };
 
-  const handleSyncReels = async () => {
-    setIsSyncing(true);
-    setSyncNotice(null);
+  // 6. Delete Rule
+  const handleDeleteRule = async (id: string, mediaId: string) => {
+    if (!confirm('Are you sure you want to delete this Reel automation rule?')) return;
+    setRules((prev) => prev.filter((r) => r.id !== id));
+    setSyncedReels((prev) =>
+      prev.map((sr) => (sr.media_id === mediaId ? { ...sr, rule_id: null, rule_enabled: false } : sr))
+    );
+
     try {
-      const res = await fetch('/api/instagram/settings');
-      await res.json();
-      setTimeout(() => {
-        setIsSyncing(false);
-        setSyncNotice({
-          type: 'info',
-          message:
-            'Meta Graph API live reel synchronization requires Instagram Graph API Token with instagram_manage_comments permission. You can link any published Reel using its Media ID or URL below.',
-        });
-      }, 700);
+      await fetch(`/api/instagram/reels?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     } catch {
-      setIsSyncing(false);
+      loadData();
     }
   };
 
-  // Filtered Reels
-  const filteredRules = rules.filter((r) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      r.title.toLowerCase().includes(q) ||
-      r.media_id.toLowerCase().includes(q) ||
-      (r.keywords || []).some((k) => k.toLowerCase().includes(q));
+  // 7. Toggle Enabled
+  const handleToggleEnabled = async (rule: InstagramReelRule) => {
+    const nextState = !rule.is_enabled;
+    const updated = { ...rule, is_enabled: nextState };
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+    setSyncedReels((prev) =>
+      prev.map((sr) => (sr.media_id === rule.media_id ? { ...sr, rule_enabled: nextState } : sr))
+    );
 
-    if (!matchesSearch) return false;
-    if (filterMode === 'enabled') return r.is_enabled;
-    if (filterMode === 'disabled') return !r.is_enabled;
-    if (filterMode === 'any_comment') return r.trigger_mode === 'any_comment';
-    if (filterMode === 'keywords') return r.trigger_mode === 'keywords';
-    return true;
-  });
+    try {
+      await fetch('/api/instagram/reels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch {
+      loadData();
+    }
+  };
 
-  // Analytics totals
+  // Combine Synced Reels & Rules into Unified Visual Library
+  const unifiedLibraryItems = useMemo(() => {
+    const ruleMap = new Map(rules.map((r) => [r.media_id, r]));
+    const items: Array<{
+      reel: InstagramSyncedReel;
+      rule: InstagramReelRule | null;
+      status: 'active' | 'inactive' | 'unconfigured';
+    }> = [];
+
+    // Add all synced reels
+    for (const sr of syncedReels) {
+      const r = ruleMap.get(sr.media_id) || null;
+      const status: 'active' | 'inactive' | 'unconfigured' = r
+        ? r.is_enabled
+          ? 'active'
+          : 'inactive'
+        : 'unconfigured';
+      items.push({ reel: sr, rule: r, status });
+    }
+
+    // Add any rules whose media_id was not in syncedReels
+    for (const r of rules) {
+      const alreadyAdded = items.some((i) => i.reel.media_id === r.media_id);
+      if (!alreadyAdded) {
+        items.push({
+          reel: {
+            media_id: r.media_id,
+            shortcode: r.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '',
+            caption: r.title,
+            permalink: r.permalink || `https://www.instagram.com/reel/${r.media_id}/`,
+            thumbnail_url: r.thumbnail_url || '',
+            timestamp: r.created_at,
+            media_type: 'VIDEO',
+            comments_count: r.comments_count,
+            rule_id: r.id,
+            rule_enabled: r.is_enabled,
+          },
+          rule: r,
+          status: r.is_enabled ? 'active' : 'inactive',
+        });
+      }
+    }
+
+    // Apply Filter
+    let filtered = items;
+    if (statusFilter === 'active') {
+      filtered = filtered.filter((i) => i.status === 'active');
+    } else if (statusFilter === 'inactive') {
+      filtered = filtered.filter((i) => i.status === 'inactive');
+    } else if (statusFilter === 'unconfigured') {
+      filtered = filtered.filter((i) => i.status === 'unconfigured');
+    }
+
+    // Apply Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (i) =>
+          i.reel.caption?.toLowerCase().includes(q) ||
+          i.rule?.title?.toLowerCase().includes(q) ||
+          i.reel.media_id.includes(q) ||
+          i.reel.shortcode?.toLowerCase().includes(q)
+      );
+    }
+
+    // Apply Sorting
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'comments') {
+        const cA = a.rule?.comments_count || a.reel.comments_count || 0;
+        const cB = b.rule?.comments_count || b.reel.comments_count || 0;
+        return cB - cA;
+      }
+      const tA = new Date(a.reel.timestamp || 0).getTime();
+      const tB = new Date(b.reel.timestamp || 0).getTime();
+      return sortBy === 'oldest' ? tA - tB : tB - tA;
+    });
+  }, [syncedReels, rules, searchQuery, statusFilter, sortBy]);
+
+  // Aggregated Stats
   const totalComments = rules.reduce((acc, r) => acc + (r.comments_count || 0), 0);
   const totalPrivateReplies = rules.reduce((acc, r) => acc + (r.private_replies_count || 0), 0);
   const totalFollows = rules.reduce((acc, r) => acc + (r.verified_follows_count || 0), 0);
 
-  // WhatsApp wa.me link preview
+  // Live WhatsApp CTA URL preview
   const previewWaUrl = whatsappPhone
     ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
         editingRule?.whatsapp_prefill_text || 'Hi! I saw your Instagram Reel'
@@ -248,10 +422,32 @@ export default function InstagramReelsPage() {
     <div className="min-h-full pb-20">
       <TopNavbar
         title="Instagram Reels Automation"
-        subtitle="Manage automated comment-to-DM flows, Reel isolation, follow gating, and WhatsApp redirections."
+        subtitle="Connected: @thebusinesswork.co · Auto-sync published Reels, browse visually, or paste link to automate DMs."
       />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+        {/* SYNC NOTIFICATION BANNER */}
+        {syncNotice && (
+          <div
+            className={`rounded-2xl border p-4 shadow-xs flex items-center justify-between gap-3 ${
+              syncNotice.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : 'border-amber-200 bg-amber-50 text-amber-900'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 text-xs font-medium">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>{syncNotice.message}</span>
+            </div>
+            <button
+              onClick={() => setSyncNotice(null)}
+              className="text-stone-400 hover:text-stone-700 p-1"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* WHATSAPP WARNING BANNER IF PHONE UNCONFIGURED */}
         {!whatsappPhone && (
           <div className="rounded-2xl border border-amber-300/80 bg-amber-50/80 p-4.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -264,7 +460,7 @@ export default function InstagramReelsPage() {
                   WhatsApp Business Phone Number Missing
                 </h3>
                 <p className="text-xs text-amber-800 leading-relaxed">
-                  Inbound DMs will use fallback bio references. To enable direct <code className="font-mono text-[11px] bg-white/70 px-1 py-0.5 rounded">wa.me</code> links, configure your business phone in Settings. Placeholder digits are strictly prohibited.
+                  Inbound DMs will use fallback bio references. To enable direct <code className="font-mono text-[11px] bg-white/70 px-1 py-0.5 rounded">wa.me</code> links, configure your business phone in Settings.
                 </p>
               </div>
             </div>
@@ -283,17 +479,19 @@ export default function InstagramReelsPage() {
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                Active Reels
+                Connected Reels
               </span>
               <Film className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">
-              {rules.filter((r) => r.is_enabled).length}
-              <span className="text-xs font-normal text-stone-400 ml-1">/ {rules.length}</span>
+              {unifiedLibraryItems.length}
+              <span className="text-xs font-normal text-stone-400 ml-1">discovered</span>
             </div>
-            <div className="text-[11px] text-emerald-600 flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3" />
-              Strict Reel Isolation Active
+            <div className="text-[11px] text-stone-500 flex items-center gap-1">
+              <span className="font-mono text-[10px] text-emerald-600 font-semibold">
+                {rules.filter((r) => r.is_enabled).length} Active
+              </span>
+              <span>· @thebusinesswork.co</span>
             </div>
           </div>
 
@@ -327,256 +525,323 @@ export default function InstagramReelsPage() {
               <UserCheck className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">{totalFollows}</div>
-            <div className="text-[11px] text-emerald-600">Gate active on verified Reels</div>
+            <div className="text-[11px] text-emerald-600">Follow-gate active</div>
           </div>
         </div>
 
-        {/* NAVIGATION TABS */}
-        <div className="flex border-b border-stone-200/80 gap-6">
-          <button
-            onClick={() => setActiveTab('reels')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'reels'
-                ? 'border-stone-900 text-stone-900'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <Film className="h-4 w-4" />
-            Reels Manager ({rules.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('faq')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'faq'
-                ? 'border-stone-900 text-stone-900'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            Automated FAQ & Menu Routing
-          </button>
-          <button
-            onClick={() => setActiveTab('observability')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'observability'
-                ? 'border-stone-900 text-stone-900'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <Sliders className="h-4 w-4" />
-            Observability & Contract Health
-          </button>
+        {/* NAVIGATION TABS & ACTIONS HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200/80 gap-4 pb-2">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('reels')}
+              className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+                activeTab === 'reels'
+                  ? 'border-stone-900 text-stone-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <Film className="h-4 w-4" />
+              Reels Library & Automations ({unifiedLibraryItems.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('faq')}
+              className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+                activeTab === 'faq'
+                  ? 'border-stone-900 text-stone-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              Automated FAQ & 24 Services
+            </button>
+            <button
+              onClick={() => setActiveTab('observability')}
+              className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+                activeTab === 'observability'
+                  ? 'border-stone-900 text-stone-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <Sliders className="h-4 w-4" />
+              Observability & Contracts
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto pb-1">
+            <button
+              onClick={() => loadData(true)}
+              disabled={isSyncing}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition-colors shadow-2xs disabled:opacity-60"
+              title="Fetch newly published Reels from @thebusinesswork.co via Meta Graph API"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin text-stone-900' : 'text-stone-500'}`} />
+              {isSyncing ? 'Syncing...' : 'Sync Reels'}
+            </button>
+
+            <button
+              onClick={() => handleOpenCreateModal()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Reel Automation
+            </button>
+          </div>
         </div>
 
-        {/* TAB 1: REELS MANAGER */}
+        {/* TAB 1: VISUAL REELS LIBRARY */}
         {activeTab === 'reels' && (
           <div className="space-y-4">
-            {/* SEARCH & CONTROLS */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* SEARCH & FILTERS BAR */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-stone-200/80 shadow-2xs">
               <div className="flex items-center gap-2 flex-1 max-w-md">
                 <div className="relative w-full">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by Reel name, Media ID, or keyword..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200/80 bg-white focus:outline-hidden focus:border-stone-400 shadow-2xs"
+                    placeholder="Search Reels by caption, title, or media ID..."
+                    className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 transition-colors bg-stone-50/60"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-
-                <select
-                  value={filterMode}
-                  onChange={(e) => setFilterMode(e.target.value as typeof filterMode)}
-                  className="py-2 px-3 text-xs rounded-xl border border-stone-200/80 bg-white focus:outline-hidden focus:border-stone-400 shadow-2xs"
-                >
-                  <option value="all">All Rules</option>
-                  <option value="enabled">Enabled Only</option>
-                  <option value="disabled">Disabled Only</option>
-                  <option value="any_comment">Any Comment</option>
-                  <option value="keywords">Keywords Only</option>
-                </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSyncReels}
-                  disabled={isSyncing}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-stone-200/80 bg-white hover:bg-stone-50 transition-colors shadow-2xs text-stone-700"
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                {/* Status Filter */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
+                  aria-label="Filter Reels by automation status"
+                  className="rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-hidden"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Sync Published Reels
-                </button>
-                <button
-                  onClick={handleOpenCreateModal}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-stone-900 text-white hover:bg-stone-800 transition-colors shadow-xs"
+                  <option value="all">All Reels ({unifiedLibraryItems.length})</option>
+                  <option value="active">Active Automations</option>
+                  <option value="inactive">Paused Automations</option>
+                  <option value="unconfigured">Not Configured Yet</option>
+                </select>
+
+                {/* Sort Order */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOrder)}
+                  aria-label="Sort Reels order"
+                  className="rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-hidden"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Reel Automation
-                </button>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="comments">Most Comments</option>
+                </select>
+
+                {lastSyncedAt && (
+                  <span className="text-[11px] text-stone-400 ml-auto hidden md:inline">
+                    Last synced: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* SYNC NOTICE */}
-            {syncNotice && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 flex items-start gap-2 shadow-2xs">
-                <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-                <div className="flex-1">{syncNotice.message}</div>
-                <button onClick={() => setSyncNotice(null)} className="text-sky-600 hover:text-sky-900">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* REELS GRID */}
+            {/* REELS GRID VIEW */}
             {loading ? (
-              <div className="py-20 text-center text-xs text-stone-400">Loading Reel automations...</div>
-            ) : filteredRules.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-stone-300 p-12 text-center space-y-3 bg-white/50">
-                <Film className="h-10 w-10 text-stone-300 mx-auto" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="animate-pulse rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
+                    <div className="h-44 bg-stone-100 rounded-xl" />
+                    <div className="h-4 bg-stone-100 rounded-md w-3/4" />
+                    <div className="h-3 bg-stone-100 rounded-md w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : unifiedLibraryItems.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+                  <Film className="h-7 w-7" />
+                </div>
                 <div className="space-y-1">
-                  <h3 className="font-semibold text-sm text-stone-800">No Reel Rules Configured</h3>
-                  <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                    Add your first Reel automation rule to trigger custom initial DMs, require follows, and route to WhatsApp.
+                  <h3 className="font-bold text-sm text-stone-900">
+                    {searchQuery ? 'No Reels match your search filter' : 'No Published Reels Discovered Yet'}
+                  </h3>
+                  <p className="text-xs text-stone-500 max-w-md mx-auto">
+                    {searchQuery
+                      ? 'Try clearing your search term or changing the status filter.'
+                      : 'Sync reels published on @thebusinesswork.co using Meta Graph API, or connect one immediately by pasting its Instagram link.'}
                   </p>
                 </div>
-                <button
-                  onClick={handleOpenCreateModal}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-stone-900 text-white hover:bg-stone-800 transition-colors shadow-xs"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add First Reel Automation
-                </button>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => loadData(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 shadow-2xs"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Sync from Meta API
+                  </button>
+                  <button
+                    onClick={() => handleOpenCreateModal()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 shadow-xs"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Paste Instagram Link
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredRules.map((rule) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {unifiedLibraryItems.map(({ reel, rule, status }) => (
                   <div
-                    key={rule.id}
-                    className={`rounded-2xl border bg-white p-5 shadow-xs space-y-4 flex flex-col justify-between transition-all ${
-                      rule.is_enabled ? 'border-stone-200/90 hover:border-stone-300' : 'border-stone-200/50 opacity-75'
-                    }`}
+                    key={reel.media_id}
+                    className="group flex flex-col justify-between rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs transition-all hover:shadow-md hover:border-stone-300"
                   >
                     <div className="space-y-3">
-                      {/* Top Header */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-1 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                rule.is_enabled ? 'bg-emerald-500' : 'bg-stone-300'
-                              }`}
-                            />
-                            <h4 className="font-semibold text-sm text-stone-900 line-clamp-1">{rule.title}</h4>
-                          </div>
-                          <div className="font-mono text-[11px] text-stone-500 flex items-center gap-1">
-                            <span>ID: {rule.media_id}</span>
-                            {rule.permalink && (
-                              <a
-                                href={rule.permalink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-stone-400 hover:text-stone-700"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
+                      {/* THUMBNAIL / MEDIA PREVIEW */}
+                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-stone-900/90 flex items-center justify-center border border-stone-100">
+                        {reel.thumbnail_url || reel.media_url ? (
+                          <img
+                            src={reel.thumbnail_url || reel.media_url}
+                            alt={reel.caption || 'Instagram Reel'}
+                            className="h-full w-full object-cover group-hover:scale-102 transition-transform duration-300"
+                            onError={(e) => {
+                              // Graceful fallback to video placeholder
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+
+                        {/* Top Badges */}
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                          <span className="flex items-center gap-1 rounded-md bg-stone-900/80 backdrop-blur-xs px-2 py-0.5 text-[10px] font-medium text-white">
+                            <Video className="h-2.5 w-2.5" />
+                            Reel
+                          </span>
+                        </div>
+
+                        <div className="absolute top-2 right-2">
+                          {status === 'active' && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-600/90 backdrop-blur-xs px-2 py-0.5 text-[10px] font-semibold text-white shadow-2xs">
+                              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                              Active
+                            </span>
+                          )}
+                          {status === 'inactive' && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-600/90 backdrop-blur-xs px-2 py-0.5 text-[10px] font-semibold text-white shadow-2xs">
+                              Paused
+                            </span>
+                          )}
+                          {status === 'unconfigured' && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-stone-700/80 backdrop-blur-xs px-2 py-0.5 text-[10px] font-medium text-white shadow-2xs">
+                              Not Configured
+                            </span>
+                          )}
+                        </div>
+
+                        {/* External Link */}
+                        {reel.permalink && (
+                          <a
+                            href={reel.permalink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute bottom-2 right-2 rounded-lg bg-stone-900/80 p-1.5 text-white/80 hover:text-white hover:bg-stone-900 transition-colors"
+                            title="Open Reel on Instagram"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* REEL METADATA */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-stone-400">
+                          <span className="font-mono">ID: {reel.media_id}</span>
+                          <span>{reel.timestamp ? new Date(reel.timestamp).toLocaleDateString() : 'Published'}</span>
+                        </div>
+                        <h4 className="font-semibold text-xs text-stone-900 line-clamp-2 leading-relaxed">
+                          {rule?.title || reel.caption || 'Untitled Reel'}
+                        </h4>
+                      </div>
+
+                      {/* AUTOMATION DETAILS (IF CONFIGURED) */}
+                      {rule && (
+                        <div className="space-y-2 pt-1 border-t border-stone-100">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-700 uppercase">
+                              {rule.trigger_mode === 'any_comment' ? '⚡ Any Comment' : '🔑 Keywords'}
+                            </span>
+                            {rule.follow_required && (
+                              <span className="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                🛡️ Follow Gated
+                              </span>
+                            )}
+                            {rule.whatsapp_prefill_text && (
+                              <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                💬 WhatsApp
+                              </span>
                             )}
                           </div>
-                        </div>
 
-                        {/* Enable Switch */}
-                        <button
-                          onClick={() => handleToggleEnabled(rule)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                            rule.is_enabled ? 'bg-emerald-600' : 'bg-stone-300'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              rule.is_enabled ? 'translate-x-4' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Trigger Mode & Follow Badges */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="rounded-lg bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-700 uppercase tracking-wider">
-                          {rule.trigger_mode === 'any_comment' ? '⚡ Any Comment' : '🔑 Keywords Only'}
-                        </span>
-                        {rule.follow_required && (
-                          <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                            🛡️ Follow Gated
-                          </span>
-                        )}
-                        {rule.whatsapp_prefill_text && (
-                          <span className="rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            💬 WhatsApp CTA
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Keywords list if keyword mode */}
-                      {rule.trigger_mode === 'keywords' && (
-                        <div className="text-[11px] text-stone-600 font-mono bg-stone-50 rounded-lg p-2 border border-stone-100 truncate">
-                          Triggers: {(rule.keywords || []).join(', ') || 'No keywords set'}
+                          {/* Quick Metrics */}
+                          <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-50 p-2 text-center text-[10px]">
+                            <div>
+                              <span className="block text-stone-400">Comments</span>
+                              <span className="font-bold text-stone-800">{rule.comments_count || 0}</span>
+                            </div>
+                            <div>
+                              <span className="block text-stone-400">DMs Sent</span>
+                              <span className="font-bold text-stone-800">{rule.private_replies_count || 0}</span>
+                            </div>
+                            <div>
+                              <span className="block text-stone-400">Follows</span>
+                              <span className="font-bold text-emerald-700">{rule.verified_follows_count || 0}</span>
+                            </div>
+                          </div>
                         </div>
                       )}
-
-                      {/* Initial DM Preview */}
-                      <div className="rounded-xl bg-stone-50/80 p-2.5 border border-stone-200/60 text-xs text-stone-700 space-y-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-                          Initial Private Reply
-                        </span>
-                        <p className="line-clamp-2 italic text-stone-600 font-serif">
-                          &ldquo;{rule.initial_dm_text}&rdquo;
-                        </p>
-                      </div>
-
-                      {/* Metrics bar */}
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-100 text-center">
-                        <div>
-                          <span className="block text-[10px] font-medium text-stone-400 uppercase">Comments</span>
-                          <span className="font-bold text-xs text-stone-800">{rule.comments_count || 0}</span>
-                        </div>
-                        <div>
-                          <span className="block text-[10px] font-medium text-stone-400 uppercase">Sent DMs</span>
-                          <span className="font-bold text-xs text-stone-800">{rule.private_replies_count || 0}</span>
-                        </div>
-                        <div>
-                          <span className="block text-[10px] font-medium text-stone-400 uppercase">Follows</span>
-                          <span className="font-bold text-xs text-emerald-700">{rule.verified_follows_count || 0}</span>
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center justify-between border-t border-stone-100 pt-3">
-                      <button
-                        onClick={() => handleDuplicateRule(rule)}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-500 hover:text-stone-800"
-                        title="Duplicate rule to a new Reel without copying analytics"
-                      >
-                        <Copy className="h-3 w-3" />
-                        Duplicate
-                      </button>
+                    {/* CARD ACTIONS */}
+                    <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
+                      {rule ? (
+                        <>
+                          <button
+                            onClick={() => handleToggleEnabled(rule)}
+                            className={`text-[11px] font-semibold transition-colors ${
+                              rule.is_enabled ? 'text-stone-500 hover:text-stone-800' : 'text-emerald-700 hover:text-emerald-800'
+                            }`}
+                          >
+                            {rule.is_enabled ? 'Pause' : 'Activate'}
+                          </button>
 
-                      <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleOpenEditModal(rule, reel)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-800 hover:bg-stone-200 transition-colors"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRule(rule.id, rule.media_id)}
+                              className="p-1 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete Automation"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleOpenEditModal(rule)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-800 hover:bg-stone-200 transition-colors"
+                          onClick={() => handleOpenCreateModal(reel)}
+                          className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shadow-2xs"
                         >
-                          <Edit3 className="h-3 w-3" />
-                          Edit Rule
+                          <Plus className="h-3.5 w-3.5" />
+                          Connect Automation
                         </button>
-                        <button
-                          onClick={() => handleDeleteRule(rule.id)}
-                          className="p-1 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          title="Delete Rule"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -585,13 +850,13 @@ export default function InstagramReelsPage() {
           </div>
         )}
 
-        {/* TAB 2: AUTOMATED FAQ & MENU ROUTING */}
+        {/* TAB 2: AUTOMATED FAQ & 24 SERVICES (PRESERVED FROM V4) */}
         {activeTab === 'faq' && (
           <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-6">
             <div className="border-b border-stone-100 pb-3">
-              <h3 className="font-semibold text-sm text-stone-900">4 Automated Service Categories (V4 Core)</h3>
+              <h3 className="font-semibold text-sm text-stone-900">4 Official Service Categories & 24 Distinct Services (V5 Live Engine)</h3>
               <p className="text-xs text-stone-500 mt-0.5">
-                These four service categories are presented when a user taps &ldquo;Our Services&rdquo; or sends a direct DM greeting.
+                Configured with native 3-language matching (English, Hindi Devanagari, and Hinglish), Meta in-message Button Templates, and zero-hallucination routing.
               </p>
             </div>
 
@@ -599,55 +864,55 @@ export default function InstagramReelsPage() {
               <div className="rounded-xl border border-stone-200/80 bg-stone-50/70 p-4 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-xs text-stone-900">
                   <span className="rounded-md bg-stone-200 px-1.5 py-0.5 font-mono text-[10px]">1</span>
-                  <span>AI Agents & Chatbots</span>
+                  <span>AI Agents & Chatbots (6 Services)</span>
                 </div>
                 <p className="text-xs text-stone-600 leading-relaxed">
-                  AI Sales Agents, Customer Support Agents, Website Chatbots, Lead Qualification, Voice Agents, Appointment Booking Agents.
+                  1.1 AI Sales Agents · 1.2 Customer Support Agents · 1.3 Website Chatbots · 1.4 AI Lead Qualification · 1.5 AI Voice Agents · 1.6 AI Appointment Booking.
                 </p>
-                <div className="text-[11px] font-mono text-stone-400">Quick Reply: TBW_SVC_1</div>
+                <div className="text-[11px] font-mono text-stone-400">Postback Payload: TBW_CAT_1</div>
               </div>
 
               <div className="rounded-xl border border-stone-200/80 bg-stone-50/70 p-4 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-xs text-stone-900">
                   <span className="rounded-md bg-stone-200 px-1.5 py-0.5 font-mono text-[10px]">2</span>
-                  <span>CRM & Sales Automation</span>
+                  <span>CRM & Sales Automation (6 Services)</span>
                 </div>
                 <p className="text-xs text-stone-600 leading-relaxed">
-                  CRM Setup, Lead Management, Automated Follow-ups, Pipeline Automation, Lead Assignment, Sales Reports.
+                  2.1 CRM Setup & Customization · 2.2 Lead Management · 2.3 Automated Follow-ups · 2.4 Sales Pipeline Automation · 2.5 Lead Assignment · 2.6 Sales Reporting.
                 </p>
-                <div className="text-[11px] font-mono text-stone-400">Quick Reply: TBW_SVC_2</div>
+                <div className="text-[11px] font-mono text-stone-400">Postback Payload: TBW_CAT_2</div>
               </div>
 
               <div className="rounded-xl border border-stone-200/80 bg-stone-50/70 p-4 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-xs text-stone-900">
                   <span className="rounded-md bg-stone-200 px-1.5 py-0.5 font-mono text-[10px]">3</span>
-                  <span>Business Workflow Automation</span>
+                  <span>Business Workflow Automation (6 Services)</span>
                 </div>
                 <p className="text-xs text-stone-600 leading-relaxed">
-                  Form-to-CRM, Email Automation, Google Sheets, Calendar, Invoice & Document Workflows, App Integrations.
+                  3.1 Form-to-CRM Automation · 3.2 Email Automation · 3.3 Google Sheets Automation · 3.4 Calendar & Appointments · 3.5 Invoice & Document Workflows · 3.6 App Integrations.
                 </p>
-                <div className="text-[11px] font-mono text-stone-400">Quick Reply: TBW_SVC_3</div>
+                <div className="text-[11px] font-mono text-stone-400">Postback Payload: TBW_CAT_3</div>
               </div>
 
               <div className="rounded-xl border border-stone-200/80 bg-stone-50/70 p-4 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-xs text-stone-900">
                   <span className="rounded-md bg-stone-200 px-1.5 py-0.5 font-mono text-[10px]">4</span>
-                  <span>WhatsApp & Social Automation</span>
+                  <span>WhatsApp & Social Automation (6 Services)</span>
                 </div>
                 <p className="text-xs text-stone-600 leading-relaxed">
-                  WhatsApp Business Automation, WhatsApp AI Chat, Reminders, Instagram DM Automation, Social Lead Capture, Follow-ups.
+                  4.1 WhatsApp Business API · 4.2 WhatsApp AI Chat · 4.3 Notifications & Reminders · 4.4 Instagram DM Automation · 4.5 Social Media Lead Capture · 4.6 Customer Follow-ups.
                 </p>
-                <div className="text-[11px] font-mono text-stone-400">Quick Reply: TBW_SVC_4</div>
+                <div className="text-[11px] font-mono text-stone-400">Postback Payload: TBW_CAT_4</div>
               </div>
             </div>
 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-1.5">
               <h4 className="font-semibold text-xs text-emerald-950 flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                Zero Hallucination Routing Architecture
+                Zero Hallucination & Meta Button Template Guaranteed
               </h4>
               <p className="text-xs text-emerald-800 leading-relaxed">
-                Standard questions (pricing, bookings, service lists) use fixed approved copy and direct WhatsApp links. Gemini LLM is exclusively engaged when complex architectural questions are detected, preserving token budget and preventing pricing errors.
+                Deterministic catalog lookups and in-bubble Meta Button templates are served directly without hallucination. Gemini AI is strictly grounded on the complete 24-service catalog and engaged only for complex queries.
               </p>
             </div>
           </div>
@@ -659,7 +924,7 @@ export default function InstagramReelsPage() {
             <div className="border-b border-stone-100 pb-3">
               <h3 className="font-semibold text-sm text-stone-900">Automation Contract Health & Diagnostics</h3>
               <p className="text-xs text-stone-500 mt-0.5">
-                Real-time validation of backend endpoints, Header Auth credentials, and Meta requirements.
+                Status of live endpoints, Meta Graph API connection, and WhatsApp redirection links.
               </p>
             </div>
 
@@ -671,7 +936,7 @@ export default function InstagramReelsPage() {
                   <span>Implemented & Ready</span>
                 </div>
                 <p className="text-[11px] text-stone-600">
-                  Accepts validated comment event; evaluates 7-day limits, trigger mode, and atomic private reply reservation.
+                  Evaluates 7-day limits, trigger mode, and atomic private reply reservation for incoming Reel comments.
                 </p>
               </div>
 
@@ -687,24 +952,13 @@ export default function InstagramReelsPage() {
               </div>
 
               <div className="rounded-xl border border-stone-200 p-4 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-stone-500">WhatsApp Redirection</div>
-                <div className={`flex items-center gap-2 text-xs font-bold ${whatsappPhone ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {whatsappPhone ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span>Configured (+{whatsappPhone})</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <span>Missing Phone Number</span>
-                    </>
-                  )}
+                <div className="text-xs font-semibold uppercase tracking-wider text-stone-500">Meta Graph API Connection</div>
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>@thebusinesswork.co Connected</span>
                 </div>
                 <p className="text-[11px] text-stone-600">
-                  {whatsappPhone
-                    ? 'Valid E.164 digits active. Generates per-Reel prefilled consultation links.'
-                    : 'Configure in Settings to unlock direct WhatsApp conversation CTAs.'}
+                  Authorized for Reel comment-to-DM triggers and published media synchronization.
                 </p>
               </div>
             </div>
@@ -712,17 +966,22 @@ export default function InstagramReelsPage() {
         )}
       </div>
 
-      {/* MODAL: RULE EDITOR */}
+      {/* ===================================================================== */}
+      {/* MODAL: 3-METHOD REEL AUTOMATION MANAGER EDITOR                        */}
+      {/* ===================================================================== */}
       {isEditorOpen && editingRule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-xs">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl space-y-6">
+            {/* MODAL HEADER */}
             <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div>
                 <h3 className="text-base font-bold text-stone-900">
-                  {editingRule.id && rules.some((r) => r.id === editingRule.id) ? 'Edit Reel Automation Rule' : 'New Reel Automation Rule'}
+                  {editingRule.id && rules.some((r) => r.id === editingRule.id)
+                    ? 'Edit Instagram Reel Automation'
+                    : 'Connect Reel to Automation'}
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Configure trigger rules, initial private reply, follow gating, and per-Reel delivered content.
+                  Choose a published Reel from @thebusinesswork.co using any of the three connection methods.
                 </p>
               </div>
               <button
@@ -733,13 +992,302 @@ export default function InstagramReelsPage() {
               </button>
             </div>
 
+            {/* THREE-METHOD CONNECTION TABS */}
+            <div className="rounded-2xl bg-stone-100/70 p-1.5 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setModalTab('sync')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-xl transition-all ${
+                  modalTab === 'sync'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>1. Auto Sync Reels</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalTab('select')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-xl transition-all ${
+                  modalTab === 'select'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>2. Select Reel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalTab('paste')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-xl transition-all ${
+                  modalTab === 'paste'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                <span>3. Paste Reel Link</span>
+              </button>
+            </div>
+
+            {/* METHOD 1 TAB CONTENT: AUTO SYNC REELS */}
+            {modalTab === 'sync' && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/60 p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
+                      <Instagram className="h-4 w-4 text-stone-700" />
+                      Connected Professional Account: @thebusinesswork.co
+                    </h4>
+                    <p className="text-[11px] text-stone-500">
+                      Discovers published Reels via authorized Meta Graph API connection. Newly published Reels appear automatically.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadData(true)}
+                    disabled={isSyncing}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shadow-2xs shrink-0 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync Published Reels Now'}
+                  </button>
+                </div>
+
+                {syncedReels.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    {syncedReels.slice(0, 4).map((r) => (
+                      <div
+                        key={r.media_id}
+                        onClick={() => {
+                          setSelectedReelPreview(r);
+                          setEditingRule((prev) => ({
+                            ...(prev || {}),
+                            media_id: r.media_id,
+                            title: prev?.title || r.caption?.slice(0, 50) || 'Reel Automation',
+                            permalink: r.permalink,
+                            thumbnail_url: r.thumbnail_url || r.media_url || '',
+                          }));
+                        }}
+                        className={`cursor-pointer rounded-xl border p-2 transition-all space-y-1.5 ${
+                          selectedReelPreview?.media_id === r.media_id
+                            ? 'border-stone-900 bg-white ring-2 ring-stone-900/20'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="aspect-video bg-stone-100 rounded-lg overflow-hidden relative">
+                          {r.thumbnail_url || r.media_url ? (
+                            <img src={r.thumbnail_url || r.media_url} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-stone-300"><Film className="h-4 w-4" /></div>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-medium text-stone-800 line-clamp-1">{r.caption || 'Untitled Reel'}</p>
+                        <span className="block text-[9px] font-mono text-stone-400">ID: {r.media_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-stone-500">
+                    No Reels currently cached. Click &ldquo;Sync Published Reels Now&rdquo; above to query Meta Graph API.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* METHOD 2 TAB CONTENT: SELECT FROM REELS */}
+            {modalTab === 'select' && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-xs text-stone-900">
+                    Select a Reel from Connected Library ({syncedReels.length} available)
+                  </h4>
+                  <span className="text-[11px] text-stone-400">Click a card to attach to automation</span>
+                </div>
+
+                {syncedReels.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-stone-500 space-y-2">
+                    <p>No Reels found in library yet for @thebusinesswork.co.</p>
+                    <button
+                      type="button"
+                      onClick={() => setModalTab('paste')}
+                      className="inline-flex items-center gap-1 font-semibold text-stone-900 hover:underline"
+                    >
+                      <Link2 className="h-3 w-3" />
+                      Try pasting a Reel link instead
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-56 overflow-y-auto pr-1">
+                    {syncedReels.map((sr) => {
+                      const isSelected = selectedReelPreview?.media_id === sr.media_id;
+                      return (
+                        <div
+                          key={sr.media_id}
+                          onClick={() => {
+                            setSelectedReelPreview(sr);
+                            setEditingRule((prev) => ({
+                              ...(prev || {}),
+                              media_id: sr.media_id,
+                              title: prev?.title || sr.caption?.slice(0, 50) || 'Reel Automation',
+                              permalink: sr.permalink,
+                              thumbnail_url: sr.thumbnail_url || sr.media_url || '',
+                            }));
+                          }}
+                          className={`cursor-pointer rounded-xl border p-2 transition-all space-y-1.5 ${
+                            isSelected
+                              ? 'border-stone-900 bg-white ring-2 ring-stone-900/20'
+                              : 'border-stone-200 bg-white hover:border-stone-300'
+                          }`}
+                        >
+                          <div className="aspect-video bg-stone-100 rounded-lg overflow-hidden relative">
+                            {sr.thumbnail_url || sr.media_url ? (
+                              <img src={sr.thumbnail_url || sr.media_url} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-stone-300"><Film className="h-4 w-4" /></div>
+                            )}
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 bg-stone-900 text-white rounded-md p-0.5">
+                                <CheckCircle2 className="h-3 w-3" />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[10px] font-medium text-stone-800 line-clamp-1">{sr.caption || 'Untitled'}</p>
+                          <div className="flex items-center justify-between text-[9px] text-stone-400 font-mono">
+                            <span>ID: {sr.media_id}</span>
+                            {sr.rule_id && <span className="text-emerald-600 font-bold">Configured</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* METHOD 3 TAB CONTENT: PASTE INSTAGRAM REEL LINK */}
+            {modalTab === 'paste' && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/60 p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-xs text-stone-900">
+                    Paste Instagram Reel URL
+                  </h4>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Enter any valid Reel link from @thebusinesswork.co. The verified numeric Media ID will be resolved automatically.
+                  </p>
+                </div>
+
+                <form onSubmit={handleResolvePastedLink} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                    <input
+                      type="url"
+                      value={pasteUrlInput}
+                      onChange={(e) => setPasteUrlInput(e.target.value)}
+                      placeholder="https://www.instagram.com/reel/C8_EXAMPLE/"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-hidden focus:border-stone-400 font-mono"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isResolvingLink || !pasteUrlInput.trim()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shadow-2xs shrink-0 disabled:opacity-60"
+                  >
+                    {isResolvingLink ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                    {isResolvingLink ? 'Resolving...' : 'Resolve Reel'}
+                  </button>
+                </form>
+
+                {resolveError && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <AlertTriangle className="h-4 w-4 text-amber-700" />
+                      <span>Reel Resolution Notice</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber-800">{resolveError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedManual(true)}
+                      className="text-[11px] font-semibold text-amber-900 underline hover:no-underline"
+                    >
+                      Enter Numeric Media ID manually under Advanced Entry →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SELECTED REEL HERO PREVIEW CARD */}
+            {selectedReelPreview && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-16 w-24 rounded-xl bg-stone-900 overflow-hidden relative shrink-0 border border-stone-200">
+                    {selectedReelPreview.thumbnail_url || selectedReelPreview.media_url ? (
+                      <img
+                        src={selectedReelPreview.thumbnail_url || selectedReelPreview.media_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-stone-400">
+                        <Film className="h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded-md bg-stone-900 text-white px-2 py-0.5 text-[10px] font-bold">
+                        Verified Media ID
+                      </span>
+                      <span className="font-mono text-xs font-bold text-stone-900">
+                        {selectedReelPreview.media_id}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-stone-700 line-clamp-1">
+                      {selectedReelPreview.caption || editingRule.title || 'Selected Reel'}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-stone-400">
+                      <span>Account: @thebusinesswork.co</span>
+                      {selectedReelPreview.permalink && (
+                        <a
+                          href={selectedReelPreview.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-stone-600 hover:text-stone-900 font-medium"
+                        >
+                          Open on IG <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedReelPreview(null);
+                    setEditingRule((prev) => ({ ...(prev || {}), media_id: '' }));
+                    setModalTab('select');
+                  }}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition-colors shrink-0 shadow-2xs"
+                >
+                  Change Reel
+                </button>
+              </div>
+            )}
+
+            {/* UNIFIED AUTOMATION CONFIGURATION FORM */}
             <form onSubmit={handleSaveRule} className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* LEFT COLUMN: SETTINGS */}
+                {/* LEFT COLUMN: TRIGGER RULES & CONTENT */}
                 <div className="space-y-4">
                   {/* Title & Media ID */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-stone-700">Reel Name / Title *</label>
+                    <label className="text-xs font-semibold text-stone-700">Automation Rule Title *</label>
                     <input
                       type="text"
                       required
@@ -750,24 +1298,9 @@ export default function InstagramReelsPage() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-stone-700">Instagram Media ID * (Strict Reel Identifier)</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingRule.media_id || ''}
-                      onChange={(e) => setEditingRule({ ...editingRule, media_id: e.target.value.trim() })}
-                      placeholder="e.g. 180429182390192"
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
-                    />
-                    <p className="text-[10px] text-stone-400">
-                      Numeric Instagram Media ID from your Instagram Professional Account.
-                    </p>
-                  </div>
-
                   {/* Trigger Mode */}
                   <div className="space-y-1.5 pt-1">
-                    <label className="text-xs font-semibold text-stone-700">Trigger Mode</label>
+                    <label className="text-xs font-semibold text-stone-700">Comment Trigger Mode</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -795,229 +1328,256 @@ export default function InstagramReelsPage() {
                       >
                         🔑 Specific Keywords
                         <span className="block text-[10px] font-normal opacity-80 mt-0.5">
-                          Only triggers if comment contains keyword
+                          Triggers only on keyword match
                         </span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Keywords if keyword mode */}
+                  {/* Keywords Tag Input */}
                   {editingRule.trigger_mode === 'keywords' && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-stone-700">Keywords (Comma-separated)</label>
+                    <div className="space-y-1 rounded-xl bg-stone-50 p-3 border border-stone-200/80">
+                      <label className="text-xs font-semibold text-stone-700">Trigger Keywords (comma-separated)</label>
                       <input
                         type="text"
                         value={keywordInput}
                         onChange={(e) => setKeywordInput(e.target.value)}
-                        placeholder="INFO, AUTOMATION, DETAILS"
-                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
+                        placeholder="INFO, AUTOMATION, REEL, DETAILS"
+                        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-stone-200 bg-white focus:outline-hidden focus:border-stone-400"
                       />
+                      <p className="text-[10px] text-stone-400">
+                        Case-insensitive exact token matching. Comments containing any of these keywords will trigger.
+                      </p>
                     </div>
                   )}
 
                   {/* Initial DM Text */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-stone-700">Initial Private Reply Text *</label>
-                      <span className="text-[10px] text-stone-400 font-mono">
-                        {(editingRule.initial_dm_text || '').length}/700 chars
-                      </span>
+                      <label className="text-xs font-semibold text-stone-700">
+                        Initial Private Reply Message *
+                      </label>
+                      <span className="text-[10px] text-stone-400">Sent immediately via IG API</span>
                     </div>
                     <textarea
-                      rows={3}
                       required
+                      rows={3}
                       value={editingRule.initial_dm_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, initial_dm_text: e.target.value })}
-                      placeholder="Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here..."
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed font-sans"
                     />
-                    <p className="text-[10px] text-stone-400">
-                      First plain-text reply to commenter. Prompts user to reply &ldquo;Send Me Details&rdquo;.
-                    </p>
                   </div>
 
                   {/* Follow Required Toggle */}
-                  <div className="flex items-center justify-between p-3 rounded-xl border border-stone-200 bg-stone-50/70">
-                    <div>
-                      <div className="text-xs font-semibold text-stone-800">Require Instagram Follow</div>
-                      <p className="text-[10px] text-stone-500">
-                        Content is locked until commenter follows your business profile.
-                      </p>
+                  <div className="rounded-xl border border-stone-200 p-3 space-y-2 bg-stone-50/50">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
+                          <UserCheck className="h-4 w-4 text-indigo-600" />
+                          Require Instagram Follow
+                        </label>
+                        <p className="text-[11px] text-stone-500">
+                          Inspects <code className="font-mono text-[10px]">is_user_follow_business</code> via Meta API. Gated content is sent only to followers.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={editingRule.follow_required ?? true}
+                        onChange={(e) => setEditingRule({ ...editingRule, follow_required: e.target.checked })}
+                        className="h-4 w-4 rounded-md border-stone-300 text-stone-900 focus:ring-stone-900"
+                      />
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(editingRule.follow_required)}
-                      onChange={(e) => setEditingRule({ ...editingRule, follow_required: e.target.checked })}
-                      className="h-4 w-4 rounded-sm border-stone-300 text-stone-900 focus:ring-stone-400"
-                    />
                   </div>
 
-                  {/* Delivered Content (Per-Reel Details) */}
+                  {/* Unlocked Details Content */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-stone-700">
-                      Unlocked Details Content * (Reel Isolated)
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-stone-700">
+                        Unlocked Details Content *
+                      </label>
+                      <span className="text-[10px] text-stone-400">Delivered when verified</span>
+                    </div>
                     <textarea
-                      rows={3}
                       required
+                      rows={3}
                       value={editingRule.details_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, details_text: e.target.value })}
-                      placeholder="Here is the complete blueprint, link, or guide for this specific Reel..."
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed"
                     />
-                    <p className="text-[10px] text-stone-400">
-                      Strictly returned only for this Reel. Never leaks to another campaign.
-                    </p>
                   </div>
 
-                  {/* WhatsApp Prefill */}
+                  {/* WhatsApp Prefill Text */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-stone-700">WhatsApp Redirection Prefill Text</label>
+                    <label className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+                      <MessageCircle className="h-3.5 w-3.5 text-emerald-600" />
+                      WhatsApp Prefill CTA Text
+                    </label>
                     <input
                       type="text"
                       value={editingRule.whatsapp_prefill_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, whatsapp_prefill_text: e.target.value })}
-                      placeholder="Hi! I saw Reel #1 and would like more details."
+                      placeholder="Hi! I saw your Instagram Reel and would like to learn more."
                       className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
                     />
-                    {previewWaUrl ? (
-                      <div className="text-[10px] text-emerald-700 font-mono truncate">
-                        Link: {previewWaUrl}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-amber-700 font-medium">
-                        ⚠️ No phone set in Settings. Bio fallback reference will be sent.
+                    {previewWaUrl && (
+                      <p className="text-[10px] text-stone-400 truncate">
+                        Generates link: <span className="font-mono text-emerald-700">{previewWaUrl}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Advanced / Manual Entry Accordion */}
+                  <div className="border border-stone-200 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedManual(!showAdvancedManual)}
+                      className="w-full flex items-center justify-between p-3 text-xs font-semibold text-stone-700 bg-stone-50 hover:bg-stone-100 transition-colors"
+                    >
+                      <span>Advanced / Manual Media ID Entry</span>
+                      {showAdvancedManual ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    {showAdvancedManual && (
+                      <div className="p-3 bg-white space-y-2 border-t border-stone-200">
+                        <label className="text-[11px] font-semibold text-stone-700">
+                          Numeric Instagram Media ID (Direct Override)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editingRule.media_id || ''}
+                          onChange={(e) => setEditingRule({ ...editingRule, media_id: e.target.value.trim() })}
+                          placeholder="e.g. 180429182390192"
+                          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-stone-200"
+                        />
+                        <p className="text-[10px] text-stone-400">
+                          Only enter numeric Meta Media IDs from Meta Business Suite or Graph API Explorer.
+                        </p>
                       </div>
                     )}
                   </div>
+
+                  {/* Automation ON/OFF Switch */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200">
+                    <span className="text-xs font-semibold text-stone-800">Automation Rule Active</span>
+                    <input
+                      type="checkbox"
+                      checked={editingRule.is_enabled ?? true}
+                      onChange={(e) => setEditingRule({ ...editingRule, is_enabled: e.target.checked })}
+                      className="h-4 w-4 rounded-md border-stone-300 text-stone-900 focus:ring-stone-900"
+                    />
+                  </div>
                 </div>
 
-                {/* RIGHT COLUMN: SIMULATOR & MOCKUP */}
-                <div className="space-y-4 rounded-2xl border border-stone-200/80 bg-stone-50/50 p-4 flex flex-col justify-between">
+                {/* RIGHT COLUMN: INTERACTIVE LIVE DM SIMULATION */}
+                <div className="rounded-2xl border border-stone-200 bg-stone-100/60 p-4 space-y-3 flex flex-col justify-between">
                   <div className="space-y-3">
-                    <div className="border-b border-stone-200 pb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-stone-800">
-                        <Smartphone className="h-4 w-4 text-stone-600" />
-                        <span>Interactive Customer DM Simulation</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-stone-400">Simulation Mode</span>
+                    <div className="flex items-center justify-between border-b border-stone-200/80 pb-2">
+                      <span className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                        <Smartphone className="h-4 w-4 text-stone-700" />
+                        Live Instagram Direct Simulation
+                      </span>
+                      <span className="text-[10px] font-mono text-stone-400">Meta Button Template</span>
                     </div>
 
                     {/* Simulation Controls */}
-                    <div className="space-y-2 bg-white rounded-xl p-3 border border-stone-200 shadow-2xs">
-                      <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
-                        Test Simulation Variables
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={simulatorComment}
-                          onChange={(e) => setSimulatorComment(e.target.value)}
-                          placeholder="Test comment text"
-                          className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-stone-200"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setSimulatorFollower(!simulatorFollower)}
-                          className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors ${
-                            simulatorFollower
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                              : 'bg-stone-100 text-stone-600 border-stone-200'
-                          }`}
-                        >
-                          {simulatorFollower ? '✓ Follower' : '✗ Non-follower'}
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2 text-xs bg-white p-2 rounded-xl border border-stone-200">
+                      <span className="text-stone-500 font-medium">Test Follower Status:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSimulatorFollower(!simulatorFollower)}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                          simulatorFollower ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {simulatorFollower ? '✓ User Follows Account' : '✗ User Not Following'}
+                      </button>
                     </div>
 
-                    {/* Instagram Chat Bubble Flow Mockup */}
-                    <div className="bg-[#FAF8F5] rounded-2xl border border-stone-200/90 p-4 space-y-3 text-xs">
-                      <div className="text-center text-[10px] font-semibold uppercase tracking-wider text-stone-400 pb-1">
-                        Instagram Direct Message
+                    {/* Chat Bubble Canvas */}
+                    <div className="space-y-2.5 pt-2 font-sans">
+                      {/* 1. Comment Trigger */}
+                      <div className="flex justify-end">
+                        <div className="rounded-2xl rounded-br-xs bg-indigo-600 px-3.5 py-2 text-xs text-white max-w-[80%] shadow-2xs">
+                          {editingRule.trigger_mode === 'keywords' ? (keywordInput.split(',')[0] || 'DETAILS') : 'Interested in details!'}
+                        </div>
                       </div>
 
-                      {/* Bot Message 1: Initial Private Reply */}
-                      <div className="flex items-start gap-2">
-                        <div className="h-6 w-6 rounded-full bg-stone-900 text-white flex items-center justify-center text-[9px] font-bold shrink-0">
-                          TBW
-                        </div>
-                        <div className="rounded-2xl rounded-tl-xs bg-white border border-stone-200 p-2.5 text-stone-800 shadow-2xs max-w-[85%] space-y-1">
-                          <p className="whitespace-pre-line text-[11px]">
+                      {/* 2. Initial Private Reply Bubble */}
+                      <div className="flex justify-start">
+                        <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
+                          <p className="whitespace-pre-line leading-relaxed">
                             {editingRule.initial_dm_text || 'Thanks for commenting on our Reel! 👋'}
                           </p>
-                          <div className="pt-1 flex flex-wrap gap-1">
-                            <span className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
+
+                          {/* In-Bubble Button Template */}
+                          <div className="pt-1 border-t border-stone-100 space-y-1 text-center">
+                            <div className="w-full py-1.5 rounded-lg bg-stone-50 text-indigo-600 font-semibold text-[11px] border border-stone-200/60">
                               Send Me Details
-                            </span>
+                            </div>
+                            {whatsappPhone && (
+                              <div className="w-full py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-[11px] border border-emerald-200/60">
+                                Chat on WhatsApp
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* User Replies Send Me Details */}
-                      <div className="flex justify-end">
-                        <div className="rounded-2xl rounded-tr-xs bg-stone-900 text-white px-3 py-1.5 text-[11px] shadow-2xs">
-                          Send Me Details
+                      {/* 3. Follow Verification Branch */}
+                      {editingRule.follow_required && !simulatorFollower && (
+                        <div className="flex justify-start">
+                          <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2 text-xs text-amber-900 max-w-[85%] shadow-2xs space-y-1.5">
+                            <p className="text-[11px]">
+                              To unlock details, please follow <strong>@thebusinesswork.co</strong> and tap below!
+                            </p>
+                            <div className="py-1 rounded-lg bg-stone-100 text-stone-800 font-semibold text-[11px] text-center">
+                              I Followed
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Bot Message 2: Follow check or content */}
-                      <div className="flex items-start gap-2">
-                        <div className="h-6 w-6 rounded-full bg-stone-900 text-white flex items-center justify-center text-[9px] font-bold shrink-0">
-                          TBW
-                        </div>
-                        <div className="rounded-2xl rounded-tl-xs bg-white border border-stone-200 p-2.5 text-stone-800 shadow-2xs max-w-[85%] space-y-2">
-                          {editingRule.follow_required && !simulatorFollower ? (
-                            <>
-                              <p className="text-[11px] text-amber-900">
-                                Thanks for your interest! 💛 Please follow @thebusinesswork.co first. Then tap “I Followed” and we will check again.
-                              </p>
-                              <div className="flex gap-1">
-                                <span className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
-                                  I Followed
-                                </span>
+                      {/* 4. Unlocked Details Message */}
+                      {(simulatorFollower || !editingRule.follow_required) && (
+                        <div className="flex justify-start">
+                          <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
+                            <p className="whitespace-pre-line text-[11px] leading-relaxed text-stone-700">
+                              {editingRule.details_text || 'Here are the details you requested!'}
+                            </p>
+                            {whatsappPhone && (
+                              <div className="py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-[11px] text-center shadow-2xs">
+                                💬 WhatsApp Consultation
                               </div>
-                            </>
-                          ) : (
-                            <>
-                              <p className="whitespace-pre-line text-[11px]">
-                                {editingRule.details_text || 'Here are the details!'}
-                              </p>
-                              <div className="pt-1.5 border-t border-stone-100 flex flex-col gap-1">
-                                <span className="text-[10px] text-stone-500">
-                                  {previewWaUrl ? (
-                                    <span className="text-emerald-700 font-medium">WhatsApp: {previewWaUrl}</span>
-                                  ) : (
-                                    'For a personal consultation, use the WhatsApp link in our Instagram bio.'
-                                  )}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-stone-400 text-center pt-2">
-                    Mockup is an interactive preview simulation. Real delivery depends on Meta API acceptance.
+                  <div className="text-[10px] text-stone-400 text-center">
+                    Strict Reel Isolation Active · Governed by n8n Workflow VBrjbhPeDypXt12q
                   </div>
                 </div>
               </div>
 
-              {/* FOOTER ACTIONS */}
-              <div className="flex items-center justify-end gap-3 border-t border-stone-100 pt-4">
+              {/* MODAL FOOTER ACTIONS */}
+              <div className="flex items-center justify-between border-t border-stone-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsEditorOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700"
+                  className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition-colors"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-semibold rounded-xl bg-stone-900 text-white hover:bg-stone-800 shadow-xs"
+                  disabled={!editingRule.media_id || !editingRule.title}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-5 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shadow-xs disabled:opacity-50"
                 >
-                  Save Reel Rule
+                  <CheckCircle2 className="h-4 w-4" />
+                  Save & Activate Rule
                 </button>
               </div>
             </form>

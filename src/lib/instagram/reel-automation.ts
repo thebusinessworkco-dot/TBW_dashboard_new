@@ -581,8 +581,36 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
   // 5. Generate verified WhatsApp Link (never placeholder digits)
   const whatsappUrl = await generateWhatsAppUrl(ruleWhatsappPrefill);
 
-  // 6. Check if first DM from customer
-  const isFirstDm = event.is_first_dm === true || !memoryCustomerContext.has(igUserId);
+  // 6. Check if first DM from customer (durable across serverless lambdas)
+  let isFirstDm = event.is_first_dm === true;
+  if (event.is_first_dm === undefined) {
+    if (adminSupabase) {
+      try {
+        const { data: existingCtx } = await adminSupabase
+          .from('instagram_customer_context')
+          .select('id, first_dm_at')
+          .eq('ig_user_id', igUserId)
+          .maybeSingle();
+
+        if (existingCtx) {
+          isFirstDm = false;
+        } else {
+          isFirstDm = true;
+          await adminSupabase.from('instagram_customer_context').upsert({
+            ig_user_id: igUserId,
+            first_dm_at: new Date().toISOString(),
+            last_inbound_at: new Date().toISOString(),
+            last_event_at: new Date().toISOString(),
+            context_expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+          }, { onConflict: 'ig_user_id' });
+        }
+      } catch {
+        isFirstDm = !memoryCustomerContext.has(igUserId);
+      }
+    } else {
+      isFirstDm = !memoryCustomerContext.has(igUserId);
+    }
+  }
 
   return {
     approved: true,

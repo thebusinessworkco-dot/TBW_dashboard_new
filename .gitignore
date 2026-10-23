@@ -53,3 +53,17 @@ next-env.d.ts
 /scripts/apply_safe_live_patch.mjs
 /scripts/prepare_safe_n8n_patch.mjs
 /scripts/audit_database.mjs
+/scripts/audit_live_v4_workflow.mjs
+/scripts/check_5988.mjs
+/scripts/deploy_*.mjs
+/scripts/inspect_*.mjs
+/scripts/prepare_*.mjs
+/scripts/probe_*.mjs
+/scripts/test_24_services_*.mjs
+/scripts/test_live_*.mjs
+/scripts/test_n8n_*.mjs
+/scripts/test_node_*.mjs
+/scripts/test_second_*.mjs
+/scripts/test_v4_*.mjs
+/scripts/verify_*.mjs
+
