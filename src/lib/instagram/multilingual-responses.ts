@@ -1082,11 +1082,12 @@ export function evaluateMultilingualDmResponse(params: {
   const titles = getNavigationTitles(lang);
   const cta = formatWhatsAppCta(whatsappUrl, lang);
 
-  // 1. REEL CAMPAIGN "SEND ME DETAILS" OR FOLLOW RETRY
-  const wantsDetails = pl === 'TBW_DETAILS' || /^(send me details|details|send details|i want details|send me the details)$/i.test(raw);
-  const retryFollow = pl === 'TBW_FOLLOW_RECHECK' || /^(i followed|i've followed|i am following|following|done following|check follow)$/i.test(raw);
+  // 1. REEL CAMPAIGN CONTINUATION (Accepts ANY message or supported postback without requiring exact keywords)
+  const isCategoryNav = pl.startsWith('TBW_CAT_') || pl.startsWith('TBW_SVC_') || pl === 'TBW_MENU' || pl === 'TBW_LANG_SELECT';
+  const isReelPostback = pl === 'TBW_DETAILS' || pl === 'TBW_FOLLOW_CHECK' || pl === 'TBW_FOLLOW_RECHECK' || pl === 'TBW_REEL_DETAILS';
+  const wantsCampaignContinuation = campaign && !isCategoryNav && (isReelPostback || raw.length > 0 || pl.length > 0);
 
-  if (campaign && (wantsDetails || retryFollow || pl === 'TBW_REEL_DETAILS')) {
+  if (campaign && wantsCampaignContinuation) {
     if (campaign.follow_required === true) {
       return {
         action: 'follow_check',

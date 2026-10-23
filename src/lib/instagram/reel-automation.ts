@@ -203,6 +203,11 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
   const cleanMediaId = String(rule.media_id).trim();
   const nowIso = new Date().toISOString();
 
+  let cleanInitialDm = (rule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨").trim();
+  if (cleanInitialDm.includes('Send Me Details')) {
+    cleanInitialDm = "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨";
+  }
+
   const rulePayload: Record<string, unknown> = {
     media_id: cleanMediaId,
     permalink: rule.permalink || `https://www.instagram.com/reel/${cleanMediaId}/`,
@@ -213,7 +218,7 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     keywords: Array.isArray(rule.keywords)
       ? rule.keywords.map((k) => String(k).trim()).filter(Boolean)
       : [],
-    initial_dm_text: (rule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply with 'Hi' or anything here to unlock your details! ✨").trim(),
+    initial_dm_text: cleanInitialDm,
     details_text: (rule.details_text || 'Here are the details you requested! Explore our complete range of automation services or reach out for custom setup.').trim(),
     follow_required: rule.follow_required ?? true,
     whatsapp_prefill_text: (rule.whatsapp_prefill_text || 'Hi! I saw your Instagram Reel and would like more details.').trim(),
@@ -236,6 +241,13 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     follow_button_label: (rule.follow_button_label || "I've Followed").trim(),
     post_unlock_primary_action: (rule.post_unlock_primary_action || 'View Services').trim(),
     first_interactive_followup: (rule.first_interactive_followup || 'Tap below to get instant details or explore our services:').trim(),
+    auto_comment_reply_enabled: rule.auto_comment_reply_enabled ?? false,
+    auto_comment_reply_text: (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim(),
+    auto_comment_reply_variations: Array.isArray(rule.auto_comment_reply_variations) ? rule.auto_comment_reply_variations : [],
+    public_replies_count: rule.public_replies_count || 0,
+    is_available: rule.is_available ?? true,
+    availability_status: rule.availability_status || 'published',
+    rule_status_reason: rule.rule_status_reason || null,
   };
 
   const adminSupabase = createAdminClient();
@@ -320,7 +332,7 @@ export async function deleteReelRule(idOrMediaId: string): Promise<boolean> {
  * performs atomic one-time private reply reservation, and stores pending customer intent.
  */
 export async function evaluateCommentCheck(event: Record<string, unknown>): Promise<InstagramCommentCheckResponse> {
-  const eventType = String(event.event_type || '');
+  const eventType = String(event.event_type || 'comment');
   const commentId = String(event.comment_id || event.id || '').trim();
   const mediaId = String(event.media_id || event.reel_media_id || '').trim();
   const igUserId = String(event.ig_user_id || event.user_id || event.sender_id || '').trim();
@@ -345,9 +357,9 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     return baseResponse;
   }
 
-  // 2. Reject comments older than 7 days (Meta policy limit)
+  // 2. Reject comments older than 7 days (Meta policy limit, allow 60s clock skew)
   const commentTime = Date.parse(timestamp);
-  if (!Number.isFinite(commentTime) || Date.now() - commentTime >= 7 * 86400000 || Date.now() - commentTime < 0) {
+  if (!Number.isFinite(commentTime) || Date.now() - commentTime >= 7 * 86400000 || Date.now() - commentTime < -60000) {
     return baseResponse;
   }
 
@@ -474,7 +486,10 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
   }
 
   // 8. Fail-closed if initial_dm_text is empty or too long
-  const replyText = rule.initial_dm_text.trim();
+  let replyText = rule.initial_dm_text.trim();
+  if (replyText.includes('Send Me Details')) {
+    replyText = "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨";
+  }
   if (!replyText || replyText.length > 950) {
     return baseResponse;
   }
@@ -540,7 +555,29 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
 
   rule.comments_count = (rule.comments_count || 0) + 1;
 
-  // 11. Return approved contract
+  // 11. Format public reply if auto comment reply is enabled
+  let publicReplyPayload = {
+    enabled: false,
+    comment_id: commentId,
+    text: null as string | null,
+  };
+
+  if (rule.auto_comment_reply_enabled) {
+    let publicText = (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim();
+    if (Array.isArray(rule.auto_comment_reply_variations) && rule.auto_comment_reply_variations.length > 0) {
+      const validVars = rule.auto_comment_reply_variations.map((v) => String(v).trim()).filter(Boolean);
+      if (validVars.length > 0) {
+        publicText = validVars[Math.floor(Math.random() * validVars.length)];
+      }
+    }
+    publicReplyPayload = {
+      enabled: true,
+      comment_id: commentId,
+      text: publicText,
+    };
+  }
+
+  // 12. Return approved contract
   return {
     approved: true,
     event_type: 'comment',
@@ -553,6 +590,7 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     timestamp: timestamp,
     reply_text: replyText,
     rule_id: rule.id,
+    public_reply: publicReplyPayload,
   };
 }
 
@@ -623,39 +661,46 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
 
   // 3. Resolve Target Reel Rule (Strict Campaign Resolution)
   let resolvedMediaId: string | null = null;
+  let customerFollowStatus: 'follows' | 'not_following' | 'unknown' = 'unknown';
 
   // A. Check explicit referral media ID from incoming event
   if (referralMediaId && /^\d{5,80}$/.test(referralMediaId)) {
     resolvedMediaId = referralMediaId;
   }
 
-  // B. If not explicit in event, query durable customer context
-  if (!resolvedMediaId) {
-    const memoryCtx = memoryCustomerContext.get(igUserId);
-    if (memoryCtx && memoryCtx.pending_media_id) {
+  // B. Query durable customer context
+  const memoryCtx = memoryCustomerContext.get(igUserId);
+  if (memoryCtx) {
+    if (memoryCtx.follow_status) customerFollowStatus = memoryCtx.follow_status;
+    if (!resolvedMediaId && memoryCtx.pending_media_id) {
       const expiry = Date.parse(memoryCtx.context_expires_at);
       if (Number.isFinite(expiry) && Date.now() < expiry) {
         resolvedMediaId = memoryCtx.pending_media_id;
       }
     }
+  }
 
-    if (!resolvedMediaId && adminSupabase) {
-      try {
-        const { data: dbCtx } = await adminSupabase
-          .from('instagram_customer_context')
-          .select('pending_media_id, pending_rule_id, context_expires_at')
-          .eq('ig_user_id', igUserId)
-          .maybeSingle();
+  if (adminSupabase) {
+    try {
+      const { data: dbCtx } = await adminSupabase
+        .from('instagram_customer_context')
+        .select('pending_media_id, pending_rule_id, context_expires_at, follow_status')
+        .eq('ig_user_id', igUserId)
+        .maybeSingle();
 
-        if (dbCtx && dbCtx.pending_media_id) {
+      if (dbCtx) {
+        if (dbCtx.follow_status) {
+          customerFollowStatus = dbCtx.follow_status as 'follows' | 'not_following' | 'unknown';
+        }
+        if (!resolvedMediaId && dbCtx.pending_media_id) {
           const expiry = Date.parse(dbCtx.context_expires_at);
           if (Number.isFinite(expiry) && Date.now() < expiry) {
             resolvedMediaId = dbCtx.pending_media_id;
           }
         }
-      } catch {
-        // Fallback
       }
+    } catch {
+      // Fallback
     }
   }
 
@@ -666,11 +711,16 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
   if (resolvedMediaId) {
     const rule = await getReelRuleByMediaId(resolvedMediaId);
     if (rule && rule.is_enabled) {
+      let cleanInitial = (rule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨").trim();
+      if (cleanInitial.includes('Send Me Details')) {
+        cleanInitial = "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨";
+      }
+
       campaignPayload = {
         id: rule.id,
         media_id: rule.media_id,
         active: true,
-        initial_message: rule.initial_dm_text,
+        initial_message: cleanInitial,
         details_text: rule.details_text,
         follow_required: rule.follow_required,
         follow_instructions_text: rule.follow_instructions_text || 'Follow our Instagram page to unlock the details! 👋',
@@ -727,7 +777,341 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
     reply_allowed: true,
     is_first_dm: isFirstDm,
     whatsapp_url: whatsappUrl,
+    follow_status: customerFollowStatus,
+    already_verified: customerFollowStatus === 'follows',
     campaign: campaignPayload,
     clear_campaign: !campaignPayload,
   };
 }
+
+export interface InstagramAutomationEventInput {
+  event_type: 'private_reply_sent' | 'public_reply_sent' | 'follow_verified' | 'dm_interaction';
+  comment_id?: string | null;
+  media_id?: string | null;
+  ig_user_id?: string | null;
+  username?: string | null;
+  status?: string | null;
+  error?: string | null;
+}
+
+/**
+ * Records real-time Instagram automation events from n8n or direct webhook calls
+ */
+export async function recordInstagramAutomationEvent(input: InstagramAutomationEventInput): Promise<{ success: boolean; recorded: boolean }> {
+  const adminSupabase = createAdminClient();
+  const nowIso = new Date().toISOString();
+
+  if (input.event_type === 'private_reply_sent' && input.comment_id) {
+    if (adminSupabase) {
+      try {
+        await adminSupabase
+          .from('instagram_comment_intents')
+          .update({
+            private_reply_state: input.status === 'failed' ? 'failed' : 'sent',
+            error_message: input.error || null,
+            updated_at: nowIso,
+          })
+          .eq('comment_id', input.comment_id);
+
+        if (input.media_id) {
+          const col = input.status === 'failed' ? 'failed_sends_count' : 'private_replies_count';
+          const rule = await getReelRuleByMediaId(input.media_id);
+          if (rule) {
+            const count = (rule[col] || 0) + 1;
+            await adminSupabase.from('instagram_reel_rules').update({ [col]: count, updated_at: nowIso }).eq('media_id', input.media_id);
+          }
+        }
+      } catch (err) {
+        console.warn('Error recording private_reply_sent:', err);
+      }
+    }
+  }
+
+  if (input.event_type === 'public_reply_sent' && input.comment_id) {
+    if (adminSupabase) {
+      try {
+        await adminSupabase
+          .from('instagram_comment_intents')
+          .update({
+            public_reply_status: input.status === 'failed' ? 'failed' : 'sent',
+            updated_at: nowIso,
+          })
+          .eq('comment_id', input.comment_id);
+
+        if (input.media_id) {
+          const rule = await getReelRuleByMediaId(input.media_id);
+          if (rule) {
+            const count = (rule.public_replies_count || 0) + 1;
+            await adminSupabase.from('instagram_reel_rules').update({ public_replies_count: count, updated_at: nowIso }).eq('media_id', input.media_id);
+            await adminSupabase.from('admin_settings').upsert({
+              key: `reel_rule_meta_${input.media_id}`,
+              value: { public_replies_count: count, updated_at: nowIso },
+              updated_at: nowIso,
+            }, { onConflict: 'key' });
+          }
+        }
+      } catch (err) {
+        console.warn('Error recording public_reply_sent:', err);
+      }
+    }
+  }
+
+  if (input.event_type === 'follow_verified' && input.ig_user_id) {
+    if (adminSupabase) {
+      try {
+        const followStatus = input.status === 'follows' ? 'follows' : input.status === 'not_following' ? 'not_following' : 'unknown';
+        await adminSupabase
+          .from('instagram_customer_context')
+          .upsert({
+            ig_user_id: input.ig_user_id,
+            follow_status: followStatus,
+            last_event_at: nowIso,
+            updated_at: nowIso,
+          }, { onConflict: 'ig_user_id' });
+
+        if (input.status === 'follows' && input.media_id) {
+          const rule = await getReelRuleByMediaId(input.media_id);
+          if (rule) {
+            const count = (rule.verified_follows_count || 0) + 1;
+            await adminSupabase.from('instagram_reel_rules').update({ verified_follows_count: count, updated_at: nowIso }).eq('media_id', input.media_id);
+          }
+        }
+      } catch (err) {
+        console.warn('Error recording follow_verified:', err);
+      }
+    }
+  }
+
+  return { success: true, recorded: true };
+}
+
+/**
+ * Reconciles real database counts for dashboard analytics
+ */
+export async function getInstagramAutomationAnalytics(): Promise<{
+  connected_reels: number;
+  active_reels: number;
+  comments_ingested: number;
+  private_replies_sent: number;
+  public_replies_sent: number;
+  verified_follows: number;
+  per_reel: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }>;
+}> {
+  const adminSupabase = createAdminClient();
+  const rules = await getAllReelRules();
+
+  // Published active reels only
+  const publishedRules = rules.filter((r) => r.is_available !== false && r.availability_status !== 'deleted_or_unavailable');
+  const connectedReels = publishedRules.length;
+  const activeReels = publishedRules.filter((r) => r.is_enabled).length;
+
+  let commentsIngested = 0;
+  let privateRepliesSent = 0;
+  let publicRepliesSent = 0;
+  let verifiedFollows = 0;
+  const perReel: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }> = {};
+
+  for (const r of rules) {
+    perReel[r.media_id] = {
+      comments_count: r.comments_count || 0,
+      private_replies_count: r.private_replies_count || 0,
+      public_replies_count: r.public_replies_count || 0,
+      verified_follows_count: r.verified_follows_count || 0,
+    };
+  }
+
+  if (adminSupabase) {
+    try {
+      // 1. Total real comments and replies from instagram_comment_intents
+      const { data: intents } = await adminSupabase
+        .from('instagram_comment_intents')
+        .select('*');
+
+      if (intents && intents.length > 0) {
+        commentsIngested = intents.length;
+        // Count intents that were sent or approved
+        privateRepliesSent = intents.filter((i) => i.private_reply_state === 'sent' || i.private_reply_state === 'approved').length;
+        publicRepliesSent = intents.filter((i) => (i as Record<string, unknown>).public_reply_status === 'sent').length;
+
+        // Group by media_id
+        const mediaIntentCounts: Record<string, number> = {};
+        for (const intent of intents) {
+          if (intent.media_id) {
+            mediaIntentCounts[intent.media_id] = (mediaIntentCounts[intent.media_id] || 0) + 1;
+            if (perReel[intent.media_id]) {
+              perReel[intent.media_id].comments_count = Math.max(perReel[intent.media_id].comments_count, mediaIntentCounts[intent.media_id]);
+            }
+          }
+        }
+      }
+
+      // 2. Verified follows from instagram_customer_context
+      const { data: contexts } = await adminSupabase
+        .from('instagram_customer_context')
+        .select('id, ig_user_id, follow_status');
+
+      if (contexts && contexts.length > 0) {
+        verifiedFollows = contexts.filter((c) => c.follow_status === 'follows').length;
+      }
+    } catch {
+      // Fallback to rules reduction
+      commentsIngested = rules.reduce((acc, r) => acc + (r.comments_count || 0), 0);
+      privateRepliesSent = rules.reduce((acc, r) => acc + (r.private_replies_count || 0), 0);
+      verifiedFollows = rules.reduce((acc, r) => acc + (r.verified_follows_count || 0), 0);
+    }
+  }
+
+  return {
+    connected_reels: connectedReels,
+    active_reels: activeReels,
+    comments_ingested: Math.max(commentsIngested, rules.reduce((acc, r) => acc + (r.comments_count || 0), 0)),
+    private_replies_sent: privateRepliesSent,
+    public_replies_sent: publicRepliesSent,
+    verified_follows: verifiedFollows,
+    per_reel: perReel,
+  };
+}
+
+export interface SendPublicCommentReplyParams {
+  comment_id: string;
+  media_id?: string | null;
+  text?: string | null;
+  comment_author_id?: string | null;
+  comment_author_username?: string | null;
+  private_reply_confirmed?: boolean;
+}
+
+export interface SendPublicCommentReplyResult {
+  success: boolean;
+  skipped: boolean;
+  comment_id: string;
+  reply_id?: string | null;
+  message?: string;
+  error?: string | null;
+}
+
+/**
+ * Sends a real public comment reply via Meta Instagram Graph API with
+ * recursion guards, deduplication, and graceful error handling.
+ */
+export async function sendInstagramPublicCommentReply(
+  params: SendPublicCommentReplyParams
+): Promise<SendPublicCommentReplyResult> {
+  const commentId = String(params.comment_id || '').trim();
+  const mediaId = String(params.media_id || '').trim();
+  const authorId = String(params.comment_author_id || '').trim();
+  const authorUsername = String(params.comment_author_username || '').replace(/^@/, '').toLowerCase().trim();
+
+  if (!commentId || !/^\d{5,80}$/.test(commentId)) {
+    return { success: false, skipped: true, comment_id: commentId, error: 'Invalid or missing comment_id' };
+  }
+
+  // Self-reply & recursion guard: do not reply to our own business account
+  if (authorUsername === 'thebusinesswork.co' || authorId === '29081127174886627') {
+    return { success: false, skipped: true, comment_id: commentId, message: 'Ignored self-comment from @thebusinesswork.co' };
+  }
+
+  // Idempotency: prevent double public reply to the same comment
+  const adminSupabase = createAdminClient();
+
+  if (adminSupabase) {
+    try {
+      const { data: existingIntent } = await adminSupabase
+        .from('instagram_comment_intents')
+        .select('*')
+        .eq('comment_id', commentId)
+        .maybeSingle();
+
+      if (existingIntent) {
+        const publicStatus = (existingIntent as Record<string, unknown>).public_reply_status;
+        if (publicStatus === 'sent') {
+          return { success: true, skipped: true, comment_id: commentId, message: 'Public reply already sent for this comment' };
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  // Resolve rule if mediaId provided
+  let ruleText = params.text;
+  if (!ruleText && mediaId) {
+    const rule = await getReelRuleByMediaId(mediaId);
+    if (!rule || !rule.auto_comment_reply_enabled) {
+      return { success: false, skipped: true, comment_id: commentId, message: 'Auto public reply not enabled for this Reel' };
+    }
+    ruleText = rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.';
+    if (Array.isArray(rule.auto_comment_reply_variations) && rule.auto_comment_reply_variations.length > 0) {
+      const valid = rule.auto_comment_reply_variations.map((v) => String(v).trim()).filter(Boolean);
+      if (valid.length > 0) {
+        ruleText = valid[Math.floor(Math.random() * valid.length)];
+      }
+    }
+  }
+
+  if (!ruleText) {
+    ruleText = 'Thanks! 👋 Check your DM for the details.';
+  }
+
+  // Guard: if private reply was not confirmed and text claims "Check your DM", use neutral reply
+  if (params.private_reply_confirmed === false && ruleText.includes('DM')) {
+    ruleText = 'Thanks for your comment! Reach out if you need details or automation guidance.';
+  }
+
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.INSTAGRAM_PAGE_ACCESS_TOKEN || process.env.INSTAGRAM_GRAPH_API_ACCESS_TOKEN;
+  if (!token) {
+    return { success: false, skipped: true, comment_id: commentId, error: 'No Instagram access token configured' };
+  }
+
+  try {
+    const res = await fetch(`https://graph.instagram.com/v26.0/${commentId}/replies`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: ruleText }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      const errMsg = data.error?.message || `HTTP ${res.status}`;
+      // Record failure gracefully
+      await recordInstagramAutomationEvent({
+        event_type: 'public_reply_sent',
+        comment_id: commentId,
+        media_id: mediaId || null,
+        status: 'failed',
+        error: errMsg,
+      });
+      return { success: false, skipped: false, comment_id: commentId, error: errMsg };
+    }
+
+    // Record success
+    await recordInstagramAutomationEvent({
+      event_type: 'public_reply_sent',
+      comment_id: commentId,
+      media_id: mediaId || null,
+      status: 'sent',
+    });
+
+    return {
+      success: true,
+      skipped: false,
+      comment_id: commentId,
+      reply_id: data.id || null,
+      message: 'Public reply sent successfully',
+    };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Network error';
+    await recordInstagramAutomationEvent({
+      event_type: 'public_reply_sent',
+      comment_id: commentId,
+      media_id: mediaId || null,
+      status: 'failed',
+      error: errMsg,
+    });
+    return { success: false, skipped: false, comment_id: commentId, error: errMsg };
+  }
+}
+

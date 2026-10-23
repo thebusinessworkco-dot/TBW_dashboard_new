@@ -17,6 +17,9 @@ export interface SyncedReelItem {
   like_count?: number;
   rule_id?: string | null;
   rule_enabled?: boolean;
+  is_available?: boolean;
+  availability_status?: 'published' | 'deleted_or_unavailable';
+  rule_status_reason?: string | null;
 }
 
 export interface SyncedReelsStore {
@@ -28,6 +31,7 @@ export interface SyncedReelsStore {
   };
   last_synced_at: string;
   reels: SyncedReelItem[];
+  unavailable_rules?: SyncedReelItem[];
 }
 
 export interface MetaConfig {
@@ -90,6 +94,7 @@ export async function getMetaInstagramCredentials(): Promise<MetaConfig | null> 
 
 /**
  * Fetches published Reels from Meta Graph API with pagination support
+ * CRITICAL RULE: Never infer deletion unless account identity, permissions, and complete sync are verified!
  */
 export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Promise<{
   success: boolean;
@@ -98,7 +103,6 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
 }> {
   const metaConfig = await getMetaInstagramCredentials();
   if (!metaConfig) {
-    // Return cached reels if credentials unavailable
     const cached = await getCachedSyncedReels();
     return {
       success: false,
@@ -107,13 +111,59 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
     };
   }
 
+  // 1. Verify Account Identity & Access Token health first
+  let verifiedAccount = {
+    id: metaConfig.accountId,
+    username: metaConfig.username,
+    name: metaConfig.name,
+    profile_picture_url: metaConfig.profilePictureUrl,
+  };
+
+  try {
+    const accRes = await fetch('https://graph.instagram.com/v26.0/me?fields=id,username,name,profile_picture_url', {
+      headers: {
+        Authorization: `Bearer ${metaConfig.accessToken}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (accRes.ok) {
+      const accData = await accRes.json() as Record<string, unknown>;
+      verifiedAccount = {
+        id: String(accData.id || metaConfig.accountId),
+        username: String(accData.username || metaConfig.username),
+        name: String(accData.name || metaConfig.name || 'The Business Work'),
+        profile_picture_url: (accData.profile_picture_url || metaConfig.profilePictureUrl) as string | undefined,
+      };
+    } else {
+      const errJson = await accRes.json().catch(() => ({}));
+      console.warn('Account verification failed before media sync:', errJson);
+      const cached = await getCachedSyncedReels();
+      return {
+        success: false,
+        store: cached,
+        error: 'Instagram account authorization failed. Kept existing cache to protect data.',
+      };
+    }
+  } catch (accErr) {
+    console.warn('Network error during account verification:', accErr);
+    const cached = await getCachedSyncedReels();
+    return {
+      success: false,
+      store: cached,
+      error: 'Network timeout during account verification. Kept existing cache to protect data.',
+    };
+  }
+
+  // 2. Fetch all published media with pagination
   const maxPages = options.maxPages || 5;
   const fetchedReels: SyncedReelItem[] = [];
-
   let nextUrl: string | null =
     `https://graph.instagram.com/v26.0/me/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count,like_count&limit=50`;
 
   let pagesFetched = 0;
+  let syncFailed = false;
+  let syncErrorMessage: string | undefined;
 
   try {
     while (nextUrl && pagesFetched < maxPages) {
@@ -128,6 +178,8 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         console.warn(`Meta Graph API media fetch error (page ${pagesFetched}):`, errJson);
+        syncFailed = true;
+        syncErrorMessage = `Meta API returned HTTP ${res.status} on page ${pagesFetched}.`;
         break;
       }
 
@@ -159,6 +211,8 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
             media_product_type: mediaProductType || 'REELS',
             comments_count: Number(item.comments_count) || 0,
             like_count: Number(item.like_count) || 0,
+            is_available: true,
+            availability_status: 'published',
           });
         }
       }
@@ -167,27 +221,46 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
     }
   } catch (err: unknown) {
     console.warn('Network error during Meta media sync:', err);
+    syncFailed = true;
+    syncErrorMessage = err instanceof Error ? err.message : 'Network error during media sync';
   }
 
-  // Cross-reference with existing automation rules from Supabase
+  // 3. SAFETY GUARD: If API call failed or timed out, do NOT mark any reels as deleted!
+  if (syncFailed && pagesFetched === 1 && fetchedReels.length === 0) {
+    const cached = await getCachedSyncedReels();
+    return {
+      success: false,
+      store: cached,
+      error: `Sync aborted: ${syncErrorMessage || 'API failure'}. Existing Reel library preserved.`,
+    };
+  }
+
+  // 4. Verified Complete Sync: Cross-reference with existing automation rules from Supabase
   const existingRules = await getAllReelRules();
   const ruleMap = new Map(existingRules.map((r) => [r.media_id, r]));
+  const unavailableRules: SyncedReelItem[] = [];
 
-  // Attach rule status to fetched reels
+  const adminSupabase = createAdminClient();
+
+  // Attach rule status to confirmed published reels
   for (const reel of fetchedReels) {
     const r = ruleMap.get(reel.media_id);
     if (r) {
       reel.rule_id = r.id;
       reel.rule_enabled = r.is_enabled;
+      reel.is_available = true;
+      reel.availability_status = 'published';
     }
   }
 
-  // Also include any existing rules whose media_id was not returned by API
+  // Detect missing / deleted Reels: any existing rule NOT in fetchedReels
   for (const r of existingRules) {
-    const alreadyPresent = fetchedReels.some((fr) => fr.media_id === r.media_id);
-    if (!alreadyPresent && r.media_id) {
+    const isPublished = fetchedReels.some((fr) => fr.media_id === r.media_id);
+    if (!isPublished && r.media_id) {
       const shortcode = r.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '';
-      fetchedReels.push({
+      
+      // Auto-pause rule and record audit status
+      const unavailableItem: SyncedReelItem = {
         media_id: r.media_id,
         shortcode,
         caption: r.title,
@@ -199,24 +272,49 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
         media_product_type: 'REELS',
         comments_count: r.comments_count || 0,
         rule_id: r.id,
-        rule_enabled: r.is_enabled,
-      });
+        rule_enabled: false, // Auto-paused
+        is_available: false,
+        availability_status: 'deleted_or_unavailable',
+        rule_status_reason: 'Reel confirmed deleted from Instagram account',
+      };
+      unavailableRules.push(unavailableItem);
+
+      // Persist auto-paused status in Supabase so it does not falsely trigger
+      if (adminSupabase) {
+        try {
+          await adminSupabase
+            .from('instagram_reel_rules')
+            .update({
+              is_enabled: false,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('media_id', r.media_id);
+
+          await adminSupabase.from('admin_settings').upsert({
+            key: `reel_rule_meta_${r.media_id}`,
+            value: {
+              is_available: false,
+              availability_status: 'deleted_or_unavailable',
+              rule_status_reason: 'Reel confirmed deleted from Instagram account',
+              updated_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'key' });
+        } catch {
+          // Non-blocking
+        }
+      }
     }
   }
 
   const store: SyncedReelsStore = {
-    account: {
-      id: metaConfig.accountId,
-      username: metaConfig.username,
-      name: metaConfig.name,
-      profile_picture_url: metaConfig.profilePictureUrl,
-    },
+    account: verifiedAccount,
     last_synced_at: new Date().toISOString(),
     reels: fetchedReels,
+    unavailable_rules: unavailableRules,
   };
 
   // Persist synced reels cache into Supabase admin_settings
-  const adminSupabase = createAdminClient();
   if (adminSupabase) {
     try {
       await adminSupabase.from('admin_settings').upsert({
@@ -248,6 +346,7 @@ export async function getCachedSyncedReels(): Promise<SyncedReelsStore> {
   const ruleMap = new Map(existingRules.map((r) => [r.media_id, r]));
 
   let cachedReels: SyncedReelItem[] = [];
+  let unavailableRules: SyncedReelItem[] = [];
   let lastSyncedAt = new Date(0).toISOString();
 
   const adminSupabase = createAdminClient();
@@ -262,8 +361,12 @@ export async function getCachedSyncedReels(): Promise<SyncedReelsStore> {
       if (data?.value) {
         const val = data.value as SyncedReelsStore;
         if (Array.isArray(val.reels)) {
-          cachedReels = val.reels;
+          // Only include items confirmed available
+          cachedReels = val.reels.filter((r) => r.is_available !== false && r.availability_status !== 'deleted_or_unavailable');
           lastSyncedAt = val.last_synced_at || (data.updated_at as string);
+        }
+        if (Array.isArray(val.unavailable_rules)) {
+          unavailableRules = val.unavailable_rules;
         }
       }
     } catch {
@@ -277,31 +380,37 @@ export async function getCachedSyncedReels(): Promise<SyncedReelsStore> {
     if (r) {
       item.rule_id = r.id;
       item.rule_enabled = r.is_enabled;
+      item.is_available = r.is_available !== false;
+      item.availability_status = r.availability_status || 'published';
     } else {
       item.rule_id = null;
       item.rule_enabled = false;
     }
   }
 
-  // Also include any rules not in cachedReels
+  // Check if any rule in existingRules is marked unavailable
   for (const r of existingRules) {
-    const exists = cachedReels.some((c) => c.media_id === r.media_id);
-    if (!exists && r.media_id) {
-      const shortcode = r.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '';
-      cachedReels.push({
-        media_id: r.media_id,
-        shortcode,
-        caption: r.title,
-        permalink: r.permalink || (shortcode ? `https://www.instagram.com/reel/${shortcode}/` : ''),
-        thumbnail_url: r.thumbnail_url || '',
-        media_url: r.thumbnail_url || '',
-        timestamp: r.created_at || new Date().toISOString(),
-        media_type: 'VIDEO',
-        media_product_type: 'REELS',
-        comments_count: r.comments_count || 0,
-        rule_id: r.id,
-        rule_enabled: r.is_enabled,
-      });
+    if (r.is_available === false || r.availability_status === 'deleted_or_unavailable') {
+      const alreadyInUnavailable = unavailableRules.some((u) => u.media_id === r.media_id);
+      if (!alreadyInUnavailable) {
+        const shortcode = r.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '';
+        unavailableRules.push({
+          media_id: r.media_id,
+          shortcode,
+          caption: r.title,
+          permalink: r.permalink || (shortcode ? `https://www.instagram.com/reel/${shortcode}/` : ''),
+          thumbnail_url: r.thumbnail_url || '',
+          media_url: r.thumbnail_url || '',
+          timestamp: r.created_at || new Date().toISOString(),
+          media_type: 'VIDEO',
+          comments_count: r.comments_count || 0,
+          rule_id: r.id,
+          rule_enabled: false,
+          is_available: false,
+          availability_status: 'deleted_or_unavailable',
+          rule_status_reason: r.rule_status_reason || 'Reel confirmed deleted from Instagram account',
+        });
+      }
     }
   }
 
@@ -309,6 +418,7 @@ export async function getCachedSyncedReels(): Promise<SyncedReelsStore> {
     account: defaultAccount,
     last_synced_at: lastSyncedAt,
     reels: cachedReels,
+    unavailable_rules: unavailableRules,
   };
 }
 

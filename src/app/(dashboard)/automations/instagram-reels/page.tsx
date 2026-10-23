@@ -32,7 +32,7 @@ import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { InstagramReelRule, InstagramSyncedReel } from '@/lib/types/dashboard';
 
-type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured';
+type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured' | 'archived';
 type SortOrder = 'newest' | 'oldest' | 'comments';
 type ModalTab = 'sync' | 'select' | 'paste';
 
@@ -45,6 +45,15 @@ export default function InstagramReelsPage() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
+  const [analytics, setAnalytics] = useState<{
+    total_reels_discovered: number;
+    active_rules_count: number;
+    comments_ingested: number;
+    private_replies_sent: number;
+    public_replies_sent: number;
+    verified_follows: number;
+    verified_follow_rate: string;
+  } | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,10 +83,11 @@ export default function InstagramReelsPage() {
       if (forceSync) setIsSyncing(true);
       else setLoading(true);
 
-      const [resRules, resSettings, resSync] = await Promise.all([
+      const [resRules, resSettings, resSync, resAnalytics] = await Promise.all([
         fetch('/api/instagram/reels'),
         fetch('/api/instagram/settings'),
         fetch(`/api/instagram/reels/sync${forceSync ? '?force=true' : ''}`),
+        fetch('/api/instagram/analytics'),
       ]);
 
       const dataRules = await resRules.json();
@@ -99,10 +109,22 @@ export default function InstagramReelsPage() {
         }
       }
 
+      try {
+        const dataAnalytics = await resAnalytics.json();
+        if (dataAnalytics.success && dataAnalytics.analytics) {
+          setAnalytics(dataAnalytics.analytics);
+        }
+      } catch {
+        // Analytics non-blocking
+      }
+
       if (forceSync) {
+        const discovered = dataSync.store?.reels?.length || 0;
         setSyncNotice({
           type: 'success',
-          message: `Synchronized ${dataSync.store?.reels?.length || 0} published Reels from @${dataSync.store?.account?.username || 'thebusinesswork.co'}`,
+          message: discovered > 0
+            ? `Synchronized ${discovered} published Reels from @${dataSync.store?.account?.username || 'thebusinesswork.co'}`
+            : `Sync verified with @${dataSync.store?.account?.username || 'thebusinesswork.co'}: 0 published Reels on Instagram. Deleted Reels archived safely.`,
         });
       }
     } catch {
@@ -143,10 +165,17 @@ export default function InstagramReelsPage() {
         is_enabled: true,
         trigger_mode: 'any_comment',
         keywords: ['INFO', 'DETAILS', 'AUTOMATION'],
-        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll share the full information! ✨',
+        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨',
         details_text: 'Here are the details on our AI & Workflow automation systems! We build custom lead qualification and appointment bots.',
         follow_required: true,
         whatsapp_prefill_text: `Hi! I saw your Reel "${preselectedReel.caption ? preselectedReel.caption.slice(0, 30) : 'video'}" and would like more details.`,
+        auto_comment_reply_enabled: false,
+        auto_comment_reply_text: 'Thanks! 👋 Check your DM for the details.',
+        auto_comment_reply_variations: [
+          'Thanks! 👋 Check your DM for the details.',
+          'Thanks for reaching out! DM sent ✨',
+          'Got your comment! Check your direct messages 📩',
+        ],
       });
       setKeywordInput('INFO, DETAILS, AUTOMATION');
       setModalTab('select');
@@ -161,10 +190,17 @@ export default function InstagramReelsPage() {
         is_enabled: true,
         trigger_mode: 'any_comment',
         keywords: ['INFO', 'DETAILS', 'AUTOMATION'],
-        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll share the full information! ✨',
+        initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨',
         details_text: 'Here are the details on our AI & Workflow automation systems! We build custom lead qualification and appointment bots.',
         follow_required: true,
         whatsapp_prefill_text: 'Hi! I saw your Instagram Reel and would like to learn more.',
+        auto_comment_reply_enabled: false,
+        auto_comment_reply_text: 'Thanks! 👋 Check your DM for the details.',
+        auto_comment_reply_variations: [
+          'Thanks! 👋 Check your DM for the details.',
+          'Thanks for reaching out! DM sent ✨',
+          'Got your comment! Check your direct messages 📩',
+        ],
       });
       setKeywordInput('INFO, DETAILS, AUTOMATION');
       setModalTab('select');
@@ -329,30 +365,36 @@ export default function InstagramReelsPage() {
   };
 
   // Combine Synced Reels & Rules into Unified Visual Library
-  const unifiedLibraryItems = useMemo(() => {
+  const { publishedItems, archivedItems, unifiedLibraryItems } = useMemo(() => {
     const ruleMap = new Map(rules.map((r) => [r.media_id, r]));
-    const items: Array<{
+    const pub: Array<{
       reel: InstagramSyncedReel;
       rule: InstagramReelRule | null;
       status: 'active' | 'inactive' | 'unconfigured';
     }> = [];
 
-    // Add all synced reels
+    // Add active published reels from Meta
     for (const sr of syncedReels) {
       const r = ruleMap.get(sr.media_id) || null;
       const status: 'active' | 'inactive' | 'unconfigured' = r
-        ? r.is_enabled
+        ? r.is_enabled && r.is_available !== false
           ? 'active'
           : 'inactive'
         : 'unconfigured';
-      items.push({ reel: sr, rule: r, status });
+      pub.push({ reel: sr, rule: r, status });
     }
 
-    // Add any rules whose media_id was not in syncedReels
+    // Partition archived/unavailable rules
+    const arch: Array<{
+      reel: InstagramSyncedReel;
+      rule: InstagramReelRule | null;
+      status: 'active' | 'inactive' | 'unconfigured' | 'archived';
+    }> = [];
+
     for (const r of rules) {
-      const alreadyAdded = items.some((i) => i.reel.media_id === r.media_id);
-      if (!alreadyAdded) {
-        items.push({
+      const inSynced = syncedReels.some((sr) => sr.media_id === r.media_id);
+      if (!inSynced || r.is_available === false) {
+        arch.push({
           reel: {
             media_id: r.media_id,
             shortcode: r.permalink?.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '',
@@ -363,28 +405,31 @@ export default function InstagramReelsPage() {
             media_type: 'VIDEO',
             comments_count: r.comments_count,
             rule_id: r.id,
-            rule_enabled: r.is_enabled,
+            rule_enabled: false,
+            is_available: false,
+            availability_status: r.availability_status || 'deleted_or_unavailable',
           },
           rule: r,
-          status: r.is_enabled ? 'active' : 'inactive',
+          status: 'archived',
         });
       }
     }
 
-    // Apply Filter
-    let filtered = items;
+    // Determine target list based on filter
+    let target = statusFilter === 'archived' ? arch : pub;
+
     if (statusFilter === 'active') {
-      filtered = filtered.filter((i) => i.status === 'active');
+      target = target.filter((i) => i.status === 'active');
     } else if (statusFilter === 'inactive') {
-      filtered = filtered.filter((i) => i.status === 'inactive');
+      target = target.filter((i) => i.status === 'inactive');
     } else if (statusFilter === 'unconfigured') {
-      filtered = filtered.filter((i) => i.status === 'unconfigured');
+      target = target.filter((i) => i.status === 'unconfigured');
     }
 
     // Apply Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
+      target = target.filter(
         (i) =>
           i.reel.caption?.toLowerCase().includes(q) ||
           i.rule?.title?.toLowerCase().includes(q) ||
@@ -394,7 +439,7 @@ export default function InstagramReelsPage() {
     }
 
     // Apply Sorting
-    return [...filtered].sort((a, b) => {
+    const sorted = [...target].sort((a, b) => {
       if (sortBy === 'comments') {
         const cA = a.rule?.comments_count || a.reel.comments_count || 0;
         const cB = b.rule?.comments_count || b.reel.comments_count || 0;
@@ -404,6 +449,8 @@ export default function InstagramReelsPage() {
       const tB = new Date(b.reel.timestamp || 0).getTime();
       return sortBy === 'oldest' ? tA - tB : tB - tA;
     });
+
+    return { publishedItems: pub, archivedItems: arch, unifiedLibraryItems: sorted };
   }, [syncedReels, rules, searchQuery, statusFilter, sortBy]);
 
   // Aggregated Stats
@@ -484,12 +531,12 @@ export default function InstagramReelsPage() {
               <Film className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">
-              {unifiedLibraryItems.length}
-              <span className="text-xs font-normal text-stone-400 ml-1">discovered</span>
+              {analytics?.total_reels_discovered ?? publishedItems.length}
+              <span className="text-xs font-normal text-stone-400 ml-1">published</span>
             </div>
             <div className="text-[11px] text-stone-500 flex items-center gap-1">
               <span className="font-mono text-[10px] text-emerald-600 font-semibold">
-                {rules.filter((r) => r.is_enabled).length} Active
+                {analytics?.active_rules_count ?? rules.filter((r) => r.is_enabled && r.is_available !== false).length} Active
               </span>
               <span>· @thebusinesswork.co</span>
             </div>
@@ -502,7 +549,9 @@ export default function InstagramReelsPage() {
               </span>
               <MessageCircle className="h-4 w-4 text-stone-400" />
             </div>
-            <div className="text-2xl font-bold text-stone-900">{totalComments}</div>
+            <div className="text-2xl font-bold text-stone-900">
+              {analytics?.comments_ingested ?? totalComments}
+            </div>
             <div className="text-[11px] text-stone-500">Atomic idempotency enabled</div>
           </div>
 
@@ -513,8 +562,12 @@ export default function InstagramReelsPage() {
               </span>
               <Instagram className="h-4 w-4 text-stone-400" />
             </div>
-            <div className="text-2xl font-bold text-stone-900">{totalPrivateReplies}</div>
-            <div className="text-[11px] text-stone-500">1 reply per comment rule</div>
+            <div className="text-2xl font-bold text-stone-900">
+              {analytics?.private_replies_sent ?? totalPrivateReplies}
+            </div>
+            <div className="text-[11px] text-stone-500">
+              {analytics?.public_replies_sent ? `${analytics.public_replies_sent} public replies sent` : '1 reply per comment rule'}
+            </div>
           </div>
 
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
@@ -524,8 +577,12 @@ export default function InstagramReelsPage() {
               </span>
               <UserCheck className="h-4 w-4 text-stone-400" />
             </div>
-            <div className="text-2xl font-bold text-stone-900">{totalFollows}</div>
-            <div className="text-[11px] text-emerald-600">Follow-gate active</div>
+            <div className="text-2xl font-bold text-stone-900">
+              {analytics?.verified_follows ?? totalFollows}
+            </div>
+            <div className="text-[11px] text-emerald-600 font-medium">
+              {analytics?.verified_follow_rate ? `${analytics.verified_follow_rate} conversion` : 'Follow-gate active'}
+            </div>
           </div>
         </div>
 
@@ -541,7 +598,7 @@ export default function InstagramReelsPage() {
               }`}
             >
               <Film className="h-4 w-4" />
-              Reels Library & Automations ({unifiedLibraryItems.length})
+              Reels Library & Automations ({statusFilter === 'archived' ? archivedItems.length : publishedItems.length})
             </button>
             <button
               onClick={() => setActiveTab('faq')}
@@ -622,10 +679,11 @@ export default function InstagramReelsPage() {
                   aria-label="Filter Reels by automation status"
                   className="rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-hidden"
                 >
-                  <option value="all">All Reels ({unifiedLibraryItems.length})</option>
+                  <option value="all">Published Reels ({publishedItems.length})</option>
                   <option value="active">Active Automations</option>
                   <option value="inactive">Paused Automations</option>
                   <option value="unconfigured">Not Configured Yet</option>
+                  <option value="archived">Archived / Unavailable ({archivedItems.length})</option>
                 </select>
 
                 {/* Sort Order */}
@@ -731,6 +789,11 @@ export default function InstagramReelsPage() {
                           {status === 'inactive' && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-amber-600/90 backdrop-blur-xs px-2 py-0.5 text-[10px] font-semibold text-white shadow-2xs">
                               Paused
+                            </span>
+                          )}
+                          {status === 'archived' && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-stone-900/90 backdrop-blur-xs px-2 py-0.5 text-[10px] font-semibold text-amber-300 shadow-2xs">
+                              Deleted from IG
                             </span>
                           )}
                           {status === 'unconfigured' && (
@@ -1364,12 +1427,72 @@ export default function InstagramReelsPage() {
                       rows={2}
                       value={editingRule.initial_dm_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, initial_dm_text: e.target.value })}
-                      placeholder="Thanks for commenting on our Reel! 👋 Reply with 'Hi' or anything here to unlock your details! ✨"
+                      placeholder="Thanks for commenting on our Reel! 👋&#10;Reply Hi to get the details ✨"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed font-sans"
                     />
                     <p className="text-[10px] text-stone-400">
                       Sent directly to the commenter. Kept short so customer only needs to reply &ldquo;Hi&rdquo; or anything to open the 24h interactive window.
                     </p>
+                  </div>
+
+                  {/* Public Comment Auto-Reply Toggle & Settings */}
+                  <div className="rounded-xl border border-stone-200 p-3 space-y-3 bg-stone-50/50">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
+                          <MessageCircle className="h-4 w-4 text-emerald-600" />
+                          Auto Reply to Comments (Public)
+                        </label>
+                        <p className="text-[11px] text-stone-500">
+                          Automatically posts a public reply to qualifying comments via official Instagram Graph API.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={editingRule.auto_comment_reply_enabled ?? false}
+                        onChange={(e) => setEditingRule({ ...editingRule, auto_comment_reply_enabled: e.target.checked })}
+                        className="h-4 w-4 rounded-md border-stone-300 text-stone-900 focus:ring-stone-900"
+                      />
+                    </div>
+
+                    {editingRule.auto_comment_reply_enabled && (
+                      <div className="pt-2 border-t border-stone-200/80 space-y-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-stone-700">
+                            Primary Public Reply Text *
+                          </label>
+                          <input
+                            type="text"
+                            value={editingRule.auto_comment_reply_text || ''}
+                            onChange={(e) => setEditingRule({ ...editingRule, auto_comment_reply_text: e.target.value })}
+                            placeholder="Thanks! 👋 Check your DM for the details."
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white font-sans"
+                          />
+                          <p className="text-[10px] text-stone-400">
+                            Appears publicly under the commenter&apos;s comment on Instagram.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-stone-700">
+                            Approved Reply Variations (One per line, rotated dynamically)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={(editingRule.auto_comment_reply_variations || []).join('\n')}
+                            onChange={(e) => {
+                              const vars = e.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
+                              setEditingRule({ ...editingRule, auto_comment_reply_variations: vars });
+                            }}
+                            placeholder="Thanks! 👋 Check your DM for the details.&#10;Thanks for reaching out! DM sent ✨&#10;Got your comment! Check your direct messages 📩"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white leading-relaxed font-sans"
+                          />
+                          <p className="text-[10px] text-stone-400">
+                            Rotates among approved variations to reduce repetitive-looking responses.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* First Interactive Follow-Up Text */}
@@ -1599,7 +1722,7 @@ export default function InstagramReelsPage() {
                         <div className="flex justify-start">
                           <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs">
                             <p className="whitespace-pre-line leading-relaxed text-[11px]">
-                              {editingRule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply with 'Hi' or anything here to unlock your details! ✨"}
+                              {editingRule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨"}
                             </p>
                           </div>
                         </div>

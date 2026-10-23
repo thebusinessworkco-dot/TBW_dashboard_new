@@ -323,6 +323,13 @@ export interface InstagramReelRule {
   post_unlock_primary_action?: string | null;
   first_interactive_followup?: string | null;
   whatsapp_prefill_text?: string | null;
+  auto_comment_reply_enabled?: boolean;
+  auto_comment_reply_text?: string | null;
+  auto_comment_reply_variations?: string[];
+  public_replies_count?: number;
+  is_available?: boolean;
+  availability_status?: 'published' | 'deleted_or_unavailable';
+  rule_status_reason?: string | null;
   comments_count: number;
   private_replies_count: number;
   dm_conversations_count: number;
@@ -348,6 +355,8 @@ export interface InstagramSyncedReel {
   like_count?: number;
   rule_id?: string | null;
   rule_enabled?: boolean;
+  is_available?: boolean;
+  availability_status?: 'published' | 'deleted_or_unavailable';
 }
 
 export type PrivateReplyState = 'pending' | 'sent' | 'failed' | 'consumed';
@@ -363,6 +372,8 @@ export interface InstagramCommentIntent {
   private_reply_provider_id?: string | null;
   comment_text?: string | null;
   error_message?: string | null;
+  public_reply_status?: 'none' | 'pending' | 'sent' | 'failed';
+  public_reply_text?: string | null;
   expires_at: string;
   source_attribution: string;
   created_at: string;
@@ -422,6 +433,8 @@ export interface InstagramDmContextResponse {
   reply_allowed: boolean;
   is_first_dm: boolean;
   whatsapp_url: string;
+  follow_status?: 'follows' | 'not_following' | 'unknown';
+  already_verified?: boolean;
   campaign: InstagramCampaignPayload | null;
   clear_campaign?: boolean;
 }
@@ -438,5 +451,10 @@ export interface InstagramCommentCheckResponse {
   timestamp?: string;
   reply_text?: string;
   rule_id?: string;
+  public_reply?: {
+    enabled: boolean;
+    comment_id: string;
+    text: string | null;
+  };
 }
 
