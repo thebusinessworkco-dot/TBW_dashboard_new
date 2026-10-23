@@ -1357,27 +1357,48 @@ export default function InstagramReelsPage() {
                       <label className="text-xs font-semibold text-stone-700">
                         Initial Private Reply Message *
                       </label>
-                      <span className="text-[10px] text-stone-400">Sent immediately via IG API</span>
+                      <span className="text-[10px] text-stone-500 font-medium">Meta Private Reply · Text Only</span>
                     </div>
                     <textarea
                       required
-                      rows={3}
+                      rows={2}
                       value={editingRule.initial_dm_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, initial_dm_text: e.target.value })}
+                      placeholder="Thanks for commenting on our Reel! 👋 Reply with 'Hi' or anything here to unlock your details! ✨"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed font-sans"
                     />
+                    <p className="text-[10px] text-stone-400">
+                      Sent directly to the commenter. Kept short so customer only needs to reply &ldquo;Hi&rdquo; or anything to open the 24h interactive window.
+                    </p>
                   </div>
 
-                  {/* Follow Required Toggle */}
-                  <div className="rounded-xl border border-stone-200 p-3 space-y-2 bg-stone-50/50">
+                  {/* First Interactive Follow-Up Text */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-stone-700">
+                      First Supported Interactive Follow-Up
+                    </label>
+                    <input
+                      type="text"
+                      value={editingRule.first_interactive_followup || ''}
+                      onChange={(e) => setEditingRule({ ...editingRule, first_interactive_followup: e.target.value })}
+                      placeholder="Tap below to get instant details or explore our services:"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
+                    />
+                    <p className="text-[10px] text-stone-400">
+                      Intro text for the first in-bubble interactive message when the customer replies.
+                    </p>
+                  </div>
+
+                  {/* Follow Required Toggle & Settings */}
+                  <div className="rounded-xl border border-stone-200 p-3 space-y-3 bg-stone-50/50">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <label className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
                           <UserCheck className="h-4 w-4 text-indigo-600" />
-                          Require Instagram Follow
+                          Require Instagram Follow (Follow Gating)
                         </label>
                         <p className="text-[11px] text-stone-500">
-                          Inspects <code className="font-mono text-[10px]">is_user_follow_business</code> via Meta API. Gated content is sent only to followers.
+                          Inspects verified Meta API status (<code className="font-mono text-[10px]">is_user_follow_business</code>).
                         </p>
                       </div>
                       <input
@@ -1387,30 +1408,92 @@ export default function InstagramReelsPage() {
                         className="h-4 w-4 rounded-md border-stone-300 text-stone-900 focus:ring-stone-900"
                       />
                     </div>
+
+                    {editingRule.follow_required && (
+                      <div className="pt-2 border-t border-stone-200/80 space-y-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-stone-700">
+                            Follow Instructions Message (for non-followers)
+                          </label>
+                          <input
+                            type="text"
+                            value={editingRule.follow_instructions_text || ''}
+                            onChange={(e) => setEditingRule({ ...editingRule, follow_instructions_text: e.target.value })}
+                            placeholder="Follow our Instagram page to unlock the details! 👋"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-stone-600">
+                              Profile URL (opens in Instagram)
+                            </label>
+                            <input
+                              type="text"
+                              disabled
+                              value="https://www.instagram.com/thebusinesswork.co/"
+                              className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg border border-stone-200 bg-stone-100/70 text-stone-500"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-stone-600">
+                              Confirmation Action Label
+                            </label>
+                            <input
+                              type="text"
+                              value={editingRule.follow_button_label || ''}
+                              onChange={(e) => setEditingRule({ ...editingRule, follow_button_label: e.target.value })}
+                              placeholder="I've Followed"
+                              className="w-full px-2.5 py-1 text-xs rounded-lg border border-stone-200 bg-white font-medium"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Unlocked Details Content */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-stone-700">
-                        Unlocked Details Content *
+                        Unlocked Reel-Specific Details *
                       </label>
-                      <span className="text-[10px] text-stone-400">Delivered when verified</span>
+                      <span className="text-[10px] text-emerald-600 font-medium">Delivered upon verification</span>
                     </div>
                     <textarea
                       required
                       rows={3}
                       value={editingRule.details_text || ''}
                       onChange={(e) => setEditingRule({ ...editingRule, details_text: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed"
+                      placeholder="Here are the full details on our AI and workflow automation services!..."
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 leading-relaxed font-sans"
                     />
+                  </div>
+
+                  {/* Post-Unlock Quick Actions */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-stone-700">
+                      Post-Unlock Interactive Action Label
+                    </label>
+                    <input
+                      type="text"
+                      value={editingRule.post_unlock_primary_action || ''}
+                      onChange={(e) => setEditingRule({ ...editingRule, post_unlock_primary_action: e.target.value })}
+                      placeholder="View Services"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400"
+                    />
+                    <p className="text-[10px] text-stone-400">
+                      Routes user to the 24-service catalog where they can browse all categories using in-bubble buttons.
+                    </p>
                   </div>
 
                   {/* WhatsApp Prefill Text */}
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
                       <MessageCircle className="h-3.5 w-3.5 text-emerald-600" />
-                      WhatsApp Prefill CTA Text
+                      WhatsApp CTA Prefill Text
                     </label>
                     <input
                       type="text"
@@ -1421,7 +1504,7 @@ export default function InstagramReelsPage() {
                     />
                     {previewWaUrl && (
                       <p className="text-[10px] text-stone-400 truncate">
-                        Generates link: <span className="font-mono text-emerald-700">{previewWaUrl}</span>
+                        Verified WhatsApp link: <span className="font-mono text-emerald-700">{previewWaUrl}</span>
                       </p>
                     )}
                   </div>
@@ -1476,87 +1559,124 @@ export default function InstagramReelsPage() {
                         <Smartphone className="h-4 w-4 text-stone-700" />
                         Live Instagram Direct Simulation
                       </span>
-                      <span className="text-[10px] font-mono text-stone-400">Meta Button Template</span>
+                      <span className="text-[10px] font-semibold text-stone-500 bg-white border border-stone-200 px-2 py-0.5 rounded-full">
+                        Live Flow Preview
+                      </span>
                     </div>
 
                     {/* Simulation Controls */}
-                    <div className="flex items-center gap-2 text-xs bg-white p-2 rounded-xl border border-stone-200">
-                      <span className="text-stone-500 font-medium">Test Follower Status:</span>
+                    <div className="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-stone-200 shadow-2xs">
+                      <span className="text-stone-600 font-medium text-[11px]">Follower Status Simulation:</span>
                       <button
                         type="button"
                         onClick={() => setSimulatorFollower(!simulatorFollower)}
-                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
                           simulatorFollower ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                         }`}
                       >
-                        {simulatorFollower ? '✓ User Follows Account' : '✗ User Not Following'}
+                        {simulatorFollower ? '✓ Verified Following' : '✗ Not Following Yet'}
                       </button>
                     </div>
 
                     {/* Chat Bubble Canvas */}
-                    <div className="space-y-2.5 pt-2 font-sans">
-                      {/* 1. Comment Trigger */}
-                      <div className="flex justify-end">
-                        <div className="rounded-2xl rounded-br-xs bg-indigo-600 px-3.5 py-2 text-xs text-white max-w-[80%] shadow-2xs">
-                          {editingRule.trigger_mode === 'keywords' ? (keywordInput.split(',')[0] || 'DETAILS') : 'Interested in details!'}
-                        </div>
-                      </div>
-
-                      {/* 2. Initial Private Reply Bubble */}
-                      <div className="flex justify-start">
-                        <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
-                          <p className="whitespace-pre-line leading-relaxed">
-                            {editingRule.initial_dm_text || 'Thanks for commenting on our Reel! 👋'}
-                          </p>
-
-                          {/* In-Bubble Button Template */}
-                          <div className="pt-1 border-t border-stone-100 space-y-1 text-center">
-                            <div className="w-full py-1.5 rounded-lg bg-stone-50 text-indigo-600 font-semibold text-[11px] border border-stone-200/60">
-                              Send Me Details
-                            </div>
-                            {whatsappPhone && (
-                              <div className="w-full py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-[11px] border border-emerald-200/60">
-                                Chat on WhatsApp
-                              </div>
-                            )}
+                    <div className="space-y-2.5 pt-1 font-sans">
+                      {/* Step 1: User Comment Trigger */}
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block text-right pr-1">1. User Comments on Reel</span>
+                        <div className="flex justify-end">
+                          <div className="rounded-2xl rounded-br-xs bg-indigo-600 px-3.5 py-1.5 text-xs text-white max-w-[80%] shadow-2xs">
+                            {editingRule.trigger_mode === 'keywords' ? (keywordInput.split(',')[0] || 'DETAILS') : '🔥🔥 Awesome reel!'}
                           </div>
                         </div>
                       </div>
 
-                      {/* 3. Follow Verification Branch */}
-                      {editingRule.follow_required && !simulatorFollower && (
+                      {/* Step 2: Meta Initial Private Reply (Text Only) */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">2. Initial Private Reply</span>
+                          <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">Meta API · Text Only</span>
+                        </div>
                         <div className="flex justify-start">
-                          <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2 text-xs text-amber-900 max-w-[85%] shadow-2xs space-y-1.5">
-                            <p className="text-[11px]">
-                              To unlock details, please follow <strong>@thebusinesswork.co</strong> and tap below!
+                          <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs">
+                            <p className="whitespace-pre-line leading-relaxed text-[11px]">
+                              {editingRule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply with 'Hi' or anything here to unlock your details! ✨"}
                             </p>
-                            <div className="py-1 rounded-lg bg-stone-100 text-stone-800 font-semibold text-[11px] text-center">
-                              I Followed
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 3: User Replies in DM (Opens 24h Window) */}
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block text-right pr-1">3. Customer Inbound DM (Opens 24h Window)</span>
+                        <div className="flex justify-end">
+                          <div className="rounded-2xl rounded-br-xs bg-stone-700 px-3 py-1.5 text-xs text-white max-w-[70%] shadow-2xs">
+                            Hi 👋
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 4: Official Meta Button Template (In-Bubble Buttons) */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">4. Interactive Follow-Up</span>
+                          <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">In-Bubble Buttons</span>
+                        </div>
+
+                        {/* If Follow Gated & Not Following */}
+                        {editingRule.follow_required && !simulatorFollower ? (
+                          <div className="flex justify-start">
+                            <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
+                              <p className="text-[11px] font-medium leading-relaxed">
+                                {editingRule.follow_instructions_text || 'Follow our Instagram page to unlock the details! 👋'}
+                              </p>
+
+                              {/* Official In-Bubble Button Stack */}
+                              <div className="pt-1 border-t border-stone-100 space-y-1">
+                                <div className="w-full py-1.5 rounded-lg bg-stone-900 text-white font-semibold text-[11px] text-center shadow-2xs">
+                                  Follow Our Page ↗
+                                </div>
+                                <div className="w-full py-1.5 rounded-lg bg-stone-50 text-indigo-600 font-semibold text-[11px] text-center border border-stone-200/80">
+                                  {editingRule.follow_button_label || "I've Followed"}
+                                </div>
+                                {whatsappPhone && (
+                                  <div className="w-full py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-[11px] text-center border border-emerald-200/80">
+                                    Chat on WhatsApp
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        ) : (
+                          /* If Follower or Gating Disabled: Full Unlocked Content & Buttons */
+                          <div className="flex justify-start">
+                            <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
+                              <p className="whitespace-pre-line text-[11px] leading-relaxed text-stone-700">
+                                {editingRule.details_text || 'Here are the details on our AI and workflow automation services!'}
+                              </p>
 
-                      {/* 4. Unlocked Details Message */}
-                      {(simulatorFollower || !editingRule.follow_required) && (
-                        <div className="flex justify-start">
-                          <div className="rounded-2xl rounded-bl-xs bg-white border border-stone-200/80 px-3.5 py-2.5 text-xs text-stone-800 max-w-[85%] shadow-2xs space-y-2">
-                            <p className="whitespace-pre-line text-[11px] leading-relaxed text-stone-700">
-                              {editingRule.details_text || 'Here are the details you requested!'}
-                            </p>
-                            {whatsappPhone && (
-                              <div className="py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-[11px] text-center shadow-2xs">
-                                💬 WhatsApp Consultation
+                              {/* Official In-Bubble Button Stack */}
+                              <div className="pt-1 border-t border-stone-100 space-y-1">
+                                <div className="w-full py-1.5 rounded-lg bg-stone-900 text-white font-semibold text-[11px] text-center shadow-2xs">
+                                  {editingRule.post_unlock_primary_action || 'View Services'}
+                                </div>
+                                <div className="w-full py-1.5 rounded-lg bg-stone-50 text-indigo-600 font-semibold text-[11px] text-center border border-stone-200/80">
+                                  AI Agents (6 Services)
+                                </div>
+                                {whatsappPhone && (
+                                  <div className="w-full py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-[11px] text-center shadow-2xs">
+                                    💬 Chat on WhatsApp
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="text-[10px] text-stone-400 text-center">
-                    Strict Reel Isolation Active · Governed by n8n Workflow VBrjbhPeDypXt12q
+                  <div className="text-[10px] text-stone-400 text-center pt-2">
+                    Strict Reel Isolation Active · Live n8n Workflow VBrjbhPeDypXt12q
                   </div>
                 </div>
               </div>

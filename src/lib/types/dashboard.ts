@@ -318,6 +318,10 @@ export interface InstagramReelRule {
   initial_dm_text: string;
   details_text: string;
   follow_required: boolean;
+  follow_instructions_text?: string | null;
+  follow_button_label?: string | null;
+  post_unlock_primary_action?: string | null;
+  first_interactive_followup?: string | null;
   whatsapp_prefill_text?: string | null;
   comments_count: number;
   private_replies_count: number;
@@ -401,6 +405,9 @@ export interface InstagramCampaignPayload {
   initial_message: string;
   details_text: string;
   follow_required: boolean;
+  follow_instructions_text?: string | null;
+  follow_button_label?: string | null;
+  first_interactive_followup?: string | null;
 }
 
 export interface InstagramDmContextResponse {

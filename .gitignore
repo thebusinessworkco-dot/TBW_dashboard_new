@@ -66,4 +66,9 @@ next-env.d.ts
 /scripts/test_second_*.mjs
 /scripts/test_v4_*.mjs
 /scripts/verify_*.mjs
-
+/scripts/analyze_*.mjs
+/scripts/check_*.mjs
+/scripts/find_*.mjs
+/scripts/test_meta_*.mjs
+/scripts/test_rpc.mjs
+/scripts/trace_*.mjs

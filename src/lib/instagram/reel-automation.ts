@@ -125,7 +125,26 @@ export async function getAllReelRules(): Promise<InstagramReelRule[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        return data as InstagramReelRule[];
+        // Fetch all extended rule metadata from admin_settings
+        const { data: metaRows } = await adminSupabase
+          .from('admin_settings')
+          .select('key, value')
+          .like('key', 'reel_rule_meta_%');
+        
+        const metaMap = new Map<string, Record<string, unknown>>();
+        if (metaRows) {
+          for (const row of metaRows) {
+            const mId = row.key.replace('reel_rule_meta_', '');
+            if (row.value && typeof row.value === 'object') {
+              metaMap.set(mId, row.value as Record<string, unknown>);
+            }
+          }
+        }
+
+        return data.map((r) => {
+          const extra = metaMap.get(r.media_id) || {};
+          return { ...r, ...extra } as InstagramReelRule;
+        });
       }
     } catch {
       // Fallback to memory
@@ -152,7 +171,16 @@ export async function getReelRuleByMediaId(mediaId: string): Promise<InstagramRe
         .maybeSingle();
 
       if (!error && data) {
-        return data as InstagramReelRule;
+        let rule = data as InstagramReelRule;
+        const { data: metaRow } = await adminSupabase
+          .from('admin_settings')
+          .select('value')
+          .eq('key', `reel_rule_meta_${cleanMediaId}`)
+          .maybeSingle();
+        if (metaRow && metaRow.value && typeof metaRow.value === 'object') {
+          rule = { ...rule, ...(metaRow.value as Record<string, unknown>) };
+        }
+        return rule;
       }
     } catch {
       // Fallback to memory
@@ -185,7 +213,7 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     keywords: Array.isArray(rule.keywords)
       ? rule.keywords.map((k) => String(k).trim()).filter(Boolean)
       : [],
-    initial_dm_text: (rule.initial_dm_text || 'Thanks for commenting on our Reel! 👋\nReply “Send Me Details” here and I’ll help you get the information! ✨').trim(),
+    initial_dm_text: (rule.initial_dm_text || "Thanks for commenting on our Reel! 👋\nReply with 'Hi' or anything here to unlock your details! ✨").trim(),
     details_text: (rule.details_text || 'Here are the details you requested! Explore our complete range of automation services or reach out for custom setup.').trim(),
     follow_required: rule.follow_required ?? true,
     whatsapp_prefill_text: (rule.whatsapp_prefill_text || 'Hi! I saw your Instagram Reel and would like more details.').trim(),
@@ -203,6 +231,13 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     rulePayload.id = rule.id;
   }
 
+  const extendedMeta = {
+    follow_instructions_text: (rule.follow_instructions_text || 'Follow our Instagram page to unlock the details! 👋').trim(),
+    follow_button_label: (rule.follow_button_label || "I've Followed").trim(),
+    post_unlock_primary_action: (rule.post_unlock_primary_action || 'View Services').trim(),
+    first_interactive_followup: (rule.first_interactive_followup || 'Tap below to get instant details or explore our services:').trim(),
+  };
+
   const adminSupabase = createAdminClient();
   if (adminSupabase) {
     try {
@@ -216,12 +251,23 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
         throw new Error(`Durable persistence failed: ${error.message}. Please apply the migration in Supabase SQL editor.`);
       }
 
+      // Persist extended metadata in admin_settings
+      try {
+        await adminSupabase.from('admin_settings').upsert({
+          key: `reel_rule_meta_${cleanMediaId}`,
+          value: extendedMeta,
+          updated_at: nowIso
+        }, { onConflict: 'key' });
+      } catch {
+        // Non-blocking
+      }
+
       if (data) {
-        memoryRules.set(cleanMediaId, data as InstagramReelRule);
-        return data as InstagramReelRule;
+        const fullRule = { ...data, ...extendedMeta } as InstagramReelRule;
+        memoryRules.set(cleanMediaId, fullRule);
+        return fullRule;
       }
     } catch (err: unknown) {
-      // Re-throw database error to ensure caller does not assume persistence succeeded silently
       throw err;
     }
   }
@@ -229,6 +275,7 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
   const formattedRule: InstagramReelRule = {
     id: isUuid(rule.id) ? (rule.id as string) : `rule_${cleanMediaId}`,
     ...rulePayload,
+    ...extendedMeta,
     created_at: rule.created_at || nowIso,
   } as InstagramReelRule;
 
@@ -304,41 +351,95 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     return baseResponse;
   }
 
-  // 3. Atomically check if comment_id was already answered or reserved
-  const adminSupabase = createAdminClient();
-  let alreadyAnswered = false;
+  // 3. In-memory deduplication check
+  if (memoryIntents.has(commentId)) {
+    return baseResponse; // Exact comment duplicate
+  }
 
+  const adminSupabase = createAdminClient();
+
+  // 4. ATOMIC CLAIM: Deduplicate by comment_id in Supabase
   if (adminSupabase) {
     try {
-      const { data: intentRow } = await adminSupabase
+      const { error: claimErr } = await adminSupabase
         .from('instagram_comment_intents')
-        .select('id, private_reply_state')
-        .eq('comment_id', commentId)
-        .maybeSingle();
+        .insert({
+          comment_id: commentId,
+          media_id: mediaId || 'pending',
+          ig_user_id: igUserId || null,
+          username: username || null,
+          private_reply_state: 'pending',
+          comment_text: text,
+          source_attribution: 'instagram_reel',
+          expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+          created_at: new Date().toISOString()
+        });
 
-      if (intentRow) {
-        alreadyAnswered = true;
+      if (claimErr) {
+        // Postgres error code 23505 = unique_violation on comment_id
+        // Another worker or delivery already claimed this exact comment!
+        return baseResponse;
       }
     } catch {
-      // Check in-memory
+      // In-memory fallback
     }
   }
 
-  if (memoryIntents.has(commentId)) {
-    alreadyAnswered = true;
+  memoryIntents.set(commentId, {
+    id: `intent_${commentId}`,
+    comment_id: commentId,
+    media_id: mediaId,
+    private_reply_state: 'pending',
+  } as InstagramCommentIntent);
+
+  // 5. USER & REEL COOLDOWN CHECK: Prevent duplicate private replies if user commented multiple times on this Reel within 24h
+  if (adminSupabase && igUserId && mediaId && /^\d{5,80}$/.test(mediaId)) {
+    try {
+      const { data: recentComments } = await adminSupabase
+        .from('instagram_comment_intents')
+        .select('id, created_at')
+        .eq('ig_user_id', igUserId)
+        .eq('media_id', mediaId)
+        .neq('comment_id', commentId)
+        .gte('created_at', new Date(Date.now() - 24 * 3600000).toISOString())
+        .limit(1);
+
+      if (recentComments && recentComments.length > 0) {
+        // Customer already received a private reply for this Reel in the last 24h!
+        await adminSupabase
+          .from('instagram_comment_intents')
+          .update({
+            private_reply_state: 'skipped',
+            error_message: 'User already received private reply for this Reel within 24h'
+          })
+          .eq('comment_id', commentId);
+        return { ...baseResponse, approved: false };
+      }
+    } catch {
+      // Non-blocking
+    }
   }
 
-  if (alreadyAnswered) {
-    return baseResponse; // Already reserved/sent: Do not send duplicate private reply
-  }
-
-  // 4. Resolve exact Reel Rule for media_id (Strict Isolation)
+  // 6. Resolve exact Reel Rule for media_id (Strict Isolation)
   const rule = await getReelRuleByMediaId(mediaId);
   if (!rule || !rule.is_enabled) {
+    if (adminSupabase) {
+      try {
+        await adminSupabase
+          .from('instagram_comment_intents')
+          .update({
+            private_reply_state: 'skipped',
+            error_message: 'No active rule found for this reel'
+          })
+          .eq('comment_id', commentId);
+      } catch {
+        // Non-blocking
+      }
+    }
     return baseResponse; // No active rule for this specific Reel
   }
 
-  // 5. Evaluate Trigger Mode: any_comment vs keywords
+  // 7. Evaluate Trigger Mode: any_comment vs keywords
   let isTriggerMatched = false;
   if (rule.trigger_mode === 'any_comment') {
     isTriggerMatched = true; // Any comment qualifies!
@@ -356,39 +457,58 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
   }
 
   if (!isTriggerMatched) {
+    if (adminSupabase) {
+      try {
+        await adminSupabase
+          .from('instagram_comment_intents')
+          .update({
+            private_reply_state: 'skipped',
+            error_message: 'Comment keywords do not match rule'
+          })
+          .eq('comment_id', commentId);
+      } catch {
+        // Non-blocking
+      }
+    }
     return baseResponse;
   }
 
-  // 6. Fail-closed if initial_dm_text is empty or too long
+  // 8. Fail-closed if initial_dm_text is empty or too long
   const replyText = rule.initial_dm_text.trim();
   if (!replyText || replyText.length > 950) {
     return baseResponse;
   }
 
-  // 7. Atomic Reservation: Register comment intent
-  const intentDbRecord: Record<string, unknown> = {
-    comment_id: commentId,
-    media_id: mediaId,
-    ig_user_id: igUserId || null,
-    username: username || null,
-    rule_id: isUuid(rule.id) ? rule.id : null,
-    private_reply_state: 'pending',
-    private_reply_provider_id: null,
-    comment_text: text,
-    error_message: null,
-    expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
-    source_attribution: 'instagram_reel',
-    created_at: new Date().toISOString(),
-  };
+  // 9. Update intent record with rule_id and update customer context
+  if (adminSupabase) {
+    try {
+      await adminSupabase
+        .from('instagram_comment_intents')
+        .update({
+          rule_id: isUuid(rule.id) ? rule.id : null,
+          media_id: mediaId,
+          private_reply_state: 'pending'
+        })
+        .eq('comment_id', commentId);
 
-  const intentRecord: InstagramCommentIntent = {
-    id: `intent_${commentId}`,
-    ...intentDbRecord,
-  } as InstagramCommentIntent;
+      // Increment rule counter
+      const updateQuery = adminSupabase
+        .from('instagram_reel_rules')
+        .update({
+          comments_count: (rule.comments_count || 0) + 1,
+          updated_at: new Date().toISOString(),
+        });
+      if (isUuid(rule.id)) {
+        await updateQuery.eq('id', rule.id);
+      } else {
+        await updateQuery.eq('media_id', rule.media_id);
+      }
+    } catch {
+      // Memory is updated
+    }
+  }
 
-  memoryIntents.set(commentId, intentRecord);
-
-  // 8. Durable Customer Context (Store pending campaign for commenter)
+  // 10. Durable Customer Context (Store pending campaign for commenter)
   if (igUserId && /^\d{5,40}$/.test(igUserId)) {
     const custContextDb: Record<string, unknown> = {
       ig_user_id: igUserId,
@@ -418,29 +538,9 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     }
   }
 
-  if (adminSupabase) {
-    try {
-      await adminSupabase.from('instagram_comment_intents').insert(intentDbRecord);
-      // Increment rule counter
-      const updateQuery = adminSupabase
-        .from('instagram_reel_rules')
-        .update({
-          comments_count: (rule.comments_count || 0) + 1,
-          updated_at: new Date().toISOString(),
-        });
-      if (isUuid(rule.id)) {
-        await updateQuery.eq('id', rule.id);
-      } else {
-        await updateQuery.eq('media_id', rule.media_id);
-      }
-    } catch {
-      // Memory is updated
-    }
-  }
-
   rule.comments_count = (rule.comments_count || 0) + 1;
 
-  // 9. Return approved contract
+  // 11. Return approved contract
   return {
     approved: true,
     event_type: 'comment',
@@ -573,6 +673,9 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
         initial_message: rule.initial_dm_text,
         details_text: rule.details_text,
         follow_required: rule.follow_required,
+        follow_instructions_text: rule.follow_instructions_text || 'Follow our Instagram page to unlock the details! 👋',
+        follow_button_label: rule.follow_button_label || "I've Followed",
+        first_interactive_followup: rule.first_interactive_followup || 'Tap below to get instant details or explore our services:',
       };
       ruleWhatsappPrefill = rule.whatsapp_prefill_text || null;
     }
