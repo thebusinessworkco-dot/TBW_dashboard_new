@@ -27,6 +27,7 @@ import {
   ChevronUp,
   Clock,
   Video,
+  Archive,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
@@ -418,14 +419,14 @@ export default function InstagramReelsPage() {
     }
 
     // Determine target list based on filter
-    let target = statusFilter === 'archived' ? arch : pub;
+    let target = statusFilter === 'archived' ? arch : (pub.length > 0 ? pub : arch);
 
     if (statusFilter === 'active') {
       target = target.filter((i) => i.status === 'active');
     } else if (statusFilter === 'inactive') {
-      target = target.filter((i) => i.status === 'inactive');
+      target = target.filter((i) => i.status === 'inactive' || i.status === 'archived');
     } else if (statusFilter === 'unconfigured') {
-      target = target.filter((i) => i.status === 'unconfigured');
+      target = pub.filter((i) => i.status === 'unconfigured');
     }
 
     // Apply Search
@@ -600,7 +601,7 @@ export default function InstagramReelsPage() {
               }`}
             >
               <Film className="h-4 w-4" />
-              Reels Library & Automations ({statusFilter === 'archived' ? archivedItems.length : publishedItems.length})
+              Reels Library & Automations ({publishedItems.length > 0 ? publishedItems.length : archivedItems.length})
             </button>
             <button
               onClick={() => setActiveTab('faq')}
@@ -681,7 +682,11 @@ export default function InstagramReelsPage() {
                   aria-label="Filter Reels by automation status"
                   className="rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-hidden"
                 >
-                  <option value="all">Published Reels ({publishedItems.length})</option>
+                  <option value="all">
+                    {publishedItems.length > 0
+                      ? `Published Reels (${publishedItems.length})`
+                      : `Archived Automations (${archivedItems.length})`}
+                  </option>
                   <option value="active">Active Automations</option>
                   <option value="inactive">Paused Automations</option>
                   <option value="unconfigured">Not Configured Yet</option>
@@ -707,6 +712,24 @@ export default function InstagramReelsPage() {
                 )}
               </div>
             </div>
+
+            {/* ARCHIVED REELS NOTIFICATION BANNER */}
+            {publishedItems.length === 0 && archivedItems.length > 0 && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/90 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-stone-700 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <Archive className="h-4 w-4 text-stone-500 shrink-0" />
+                  <span>
+                    <strong>Instagram Catalog Sync:</strong> 0 published Reels currently on @thebusinesswork.co. Your {archivedItems.length} previous automations are safely paused and archived below with full comment and DM analytics preserved.
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleOpenCreateModal()}
+                  className="rounded-xl bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition-colors shrink-0 shadow-xs"
+                >
+                  + Connect New Reel
+                </button>
+              </div>
+            )}
 
             {/* REELS GRID VIEW */}
             {loading ? (
