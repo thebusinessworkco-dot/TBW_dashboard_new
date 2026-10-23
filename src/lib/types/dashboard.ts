@@ -303,3 +303,117 @@ export interface AdminIntegrationStatus {
   error_message?: string;
   details?: Record<string, unknown>;
 }
+
+export type ReelTriggerMode = 'any_comment' | 'keywords';
+
+export interface InstagramReelRule {
+  id: string;
+  media_id: string;
+  permalink?: string | null;
+  thumbnail_url?: string | null;
+  title: string;
+  is_enabled: boolean;
+  trigger_mode: ReelTriggerMode;
+  keywords: string[];
+  initial_dm_text: string;
+  details_text: string;
+  follow_required: boolean;
+  whatsapp_prefill_text?: string | null;
+  comments_count: number;
+  private_replies_count: number;
+  dm_conversations_count: number;
+  verified_follows_count: number;
+  failed_sends_count: number;
+  last_synced_at?: string | null;
+  is_demo?: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export type PrivateReplyState = 'pending' | 'sent' | 'failed' | 'consumed';
+
+export interface InstagramCommentIntent {
+  id: string;
+  comment_id: string;
+  media_id: string;
+  ig_user_id?: string | null;
+  username?: string | null;
+  rule_id?: string | null;
+  private_reply_state: PrivateReplyState;
+  private_reply_provider_id?: string | null;
+  comment_text?: string | null;
+  error_message?: string | null;
+  expires_at: string;
+  source_attribution: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface InstagramCustomerContext {
+  id: string;
+  ig_user_id: string;
+  pending_media_id?: string | null;
+  pending_rule_id?: string | null;
+  last_inbound_at: string;
+  first_dm_at: string;
+  last_event_at: string;
+  follow_status: 'follows' | 'not_following' | 'unknown';
+  context_expires_at: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface InstagramAutomationEvent {
+  id: string;
+  event_type: string;
+  media_id?: string | null;
+  rule_id?: string | null;
+  ig_user_id?: string | null;
+  username?: string | null;
+  comment_id?: string | null;
+  follow_status?: string | null;
+  provider_success: boolean;
+  error_message?: string | null;
+  payload?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface InstagramCampaignPayload {
+  id: string;
+  media_id: string;
+  active: boolean;
+  initial_message: string;
+  details_text: string;
+  follow_required: boolean;
+}
+
+export interface InstagramDmContextResponse {
+  approved: boolean;
+  event_type: 'dm';
+  event_id: string;
+  ig_user_id: string;
+  username: string;
+  text: string;
+  quick_reply_payload?: string;
+  mode: 'ai' | 'human';
+  reply_allowed: boolean;
+  is_first_dm: boolean;
+  whatsapp_url: string;
+  campaign: InstagramCampaignPayload | null;
+  clear_campaign?: boolean;
+}
+
+export interface InstagramCommentCheckResponse {
+  approved: boolean;
+  event_type: 'comment';
+  event_id?: string;
+  comment_id: string;
+  media_id: string;
+  ig_user_id?: string;
+  username?: string;
+  text?: string;
+  timestamp?: string;
+  reply_text?: string;
+  rule_id?: string;
+}
+

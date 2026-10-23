@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { evaluateCommentCheck, evaluateDmContext } from '@/lib/instagram/reel-automation';
 
 /**
  * SELF-HOSTED n8n INTEGRATION WEBHOOK ENDPOINT
@@ -514,6 +515,255 @@ export async function POST(request: Request) {
         notice: isTakeover
           ? 'Human takeover is active. Do not dispatch automated reply.'
           : 'Automation permitted.',
+      });
+    }
+
+    // ========================================================================
+    // 1A-1. INSTAGRAM REEL COMMENT CHECK (CONTRACT A)
+    // ========================================================================
+    if (eventType === 'comment_check') {
+      const result = await evaluateCommentCheck(payload);
+      return NextResponse.json(result, { status: 200 });
+    }
+
+    // ========================================================================
+    // 1A-2. INSTAGRAM RESOLVE DM CONTEXT (CONTRACT B)
+    // ========================================================================
+    if (eventType === 'dm_context' || eventType === 'resolve_dm_context') {
+      const result = await evaluateDmContext(payload);
+      return NextResponse.json(result, { status: 200 });
+    }
+
+    // ========================================================================
+    // 1B. INSTAGRAM COMMENT KEYWORD MATCHING & DEDUPLICATION (Reel/Post Automation)
+    // ========================================================================
+    if (eventType === 'check_comment_rule' || eventType === 'incoming_instagram_comment') {
+      const commentId = String(payload.comment_id || payload.id || '').trim();
+      const mediaId = String(payload.media_id || payload.reel_media_id || '').trim();
+      const senderId = String(payload.sender_id || payload.user_id || payload.from_id || '').trim();
+      const username = String(payload.username || payload.from_username || '').replace(/^@/, '').trim();
+      const commentText = String(payload.text || payload.comment_text || payload.content || '').trim();
+
+      if (!commentId || !commentText) {
+        return NextResponse.json(
+          { success: false, matched: false, error: 'comment_id and text are required' },
+          { status: 400 }
+        );
+      }
+
+      // A. Comment Deduplication: Check if this comment was already processed
+      const { data: existingCommentMsg } = await adminSupabase
+        .from('admin_messages')
+        .select('id')
+        .eq('external_message_id', `comment:${commentId}`)
+        .maybeSingle();
+
+      if (existingCommentMsg) {
+        return NextResponse.json({
+          success: true,
+          deduplicated: true,
+          matched: false,
+          notice: 'Comment already processed and deduplicated.',
+        });
+      }
+
+      // B. Query enabled comment automation rules from Supabase
+      const { data: rules } = await adminSupabase
+        .from('admin_comment_automations')
+        .select('*')
+        .eq('is_enabled', true);
+
+      if (!rules || rules.length === 0) {
+        return NextResponse.json({
+          success: true,
+          matched: false,
+          notice: 'No active comment automation rules found.',
+        });
+      }
+
+      // C. Match trigger keyword
+      const upperText = commentText.toUpperCase();
+      let matchedRule: (typeof rules)[0] | null = null;
+
+      for (const rule of rules) {
+        const matchesMedia =
+          rule.reel_media_id === '*' ||
+          rule.reel_media_id === 'all' ||
+          rule.reel_media_id === mediaId;
+
+        if (matchesMedia) {
+          const kw = rule.trigger_keyword.toUpperCase().trim();
+          const regex = new RegExp(`\\b${kw}\\b`, 'i');
+          if (regex.test(upperText)) {
+            matchedRule = rule;
+            break;
+          }
+        }
+      }
+
+      if (!matchedRule) {
+        return NextResponse.json({
+          success: true,
+          matched: false,
+          notice: 'Comment did not match any trigger keyword.',
+        });
+      }
+
+      // D. Increment matching comments counter
+      await adminSupabase
+        .from('admin_comment_automations')
+        .update({
+          matching_comments_count: (matchedRule.matching_comments_count || 0) + 1,
+          last_execution_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', matchedRule.id);
+
+      await touchIntegrationStatus('instagram');
+
+      return NextResponse.json({
+        success: true,
+        matched: true,
+        rule_id: matchedRule.id,
+        trigger_keyword: matchedRule.trigger_keyword,
+        reply_message: matchedRule.automatic_dm_message,
+        recipient_id: senderId,
+        username,
+        comment_id: commentId,
+        media_id: mediaId,
+      });
+    }
+
+    // ========================================================================
+    // 1C. LOG INSTAGRAM COMMENT PRIVATE REPLY
+    // ========================================================================
+    if (eventType === 'log_comment_reply') {
+      const {
+        rule_id,
+        comment_id,
+        sender_id,
+        username,
+        content,
+        external_message_id,
+        status = 'success',
+        error: errorDetail,
+      } = payload;
+
+      if (rule_id) {
+        const isSuccess = status === 'success';
+        const { data: rule } = await adminSupabase
+          .from('admin_comment_automations')
+          .select('successful_replies_count, failed_replies_count')
+          .eq('id', rule_id)
+          .maybeSingle();
+
+        if (rule) {
+          await adminSupabase
+            .from('admin_comment_automations')
+            .update({
+              successful_replies_count: isSuccess
+                ? (rule.successful_replies_count || 0) + 1
+                : rule.successful_replies_count || 0,
+              failed_replies_count: !isSuccess
+                ? (rule.failed_replies_count || 0) + 1
+                : rule.failed_replies_count || 0,
+              last_status: isSuccess ? 'success' : 'failed',
+              last_error: errorDetail || null,
+              last_execution_at: nowIso,
+              updated_at: nowIso,
+            })
+            .eq('id', rule_id);
+        }
+      }
+
+      // If reply was sent and sender_id exists, persist into admin_messages & admin_conversations
+      if (sender_id && content) {
+        // Resolve or create contact
+        let contactId: string | null = null;
+        const { data: contact } = await adminSupabase
+          .from('admin_contacts')
+          .select('id')
+          .eq('instagram_scoped_id', sender_id)
+          .maybeSingle();
+
+        if (contact) {
+          contactId = contact.id;
+        } else {
+          const { data: newC } = await adminSupabase
+            .from('admin_contacts')
+            .insert({
+              name: username ? `@${username}` : `IG User ${String(sender_id).slice(-4)}`,
+              instagram_scoped_id: sender_id,
+              instagram_username: username || null,
+              is_demo: false,
+              created_at: nowIso,
+            })
+            .select('id')
+            .maybeSingle();
+          contactId = newC?.id || null;
+        }
+
+        if (contactId) {
+          // Resolve or create conversation
+          let conversationId: string | null = null;
+          const { data: conv } = await adminSupabase
+            .from('admin_conversations')
+            .select('id')
+            .eq('contact_id', contactId)
+            .eq('platform', 'instagram')
+            .maybeSingle();
+
+          if (conv) {
+            conversationId = conv.id;
+          } else {
+            const { data: newCv } = await adminSupabase
+              .from('admin_conversations')
+              .insert({
+                contact_id: contactId,
+                platform: 'instagram',
+                status: 'open',
+                last_message: content,
+                last_message_at: nowIso,
+                manual_takeover: false,
+                automation_paused: false,
+                is_demo: false,
+                created_at: nowIso,
+              })
+              .select('id')
+              .maybeSingle();
+            conversationId = newCv?.id || null;
+          }
+
+          if (conversationId) {
+            await adminSupabase.from('admin_messages').insert({
+              conversation_id: conversationId,
+              sender_type: 'automation_rule',
+              sender_name: 'Comment Auto-Reply',
+              content,
+              status: 'sent',
+              external_message_id: external_message_id || (comment_id ? `comment:${comment_id}` : null),
+              is_demo: false,
+              created_at: nowIso,
+            });
+
+            await adminSupabase
+              .from('admin_conversations')
+              .update({
+                last_message: content,
+                last_message_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', conversationId);
+          }
+        }
+      }
+
+      await touchIntegrationStatus('instagram');
+
+      return NextResponse.json({
+        success: true,
+        action: 'comment_reply_logged',
+        status,
       });
     }
 

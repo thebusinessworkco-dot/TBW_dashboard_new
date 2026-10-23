@@ -9,6 +9,7 @@ import {
   Send,
   ShieldAlert,
   Film,
+  ArrowRight,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
@@ -153,6 +154,30 @@ export default function InstagramPage() {
       {activeTab === 'comment_dm' ? (
         /* TAB B: COMMENT TO DM MANAGER */
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* V4 Pro Reels Manager Switch Banner */}
+          <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/70 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-emerald-100 p-2 text-emerald-800 shrink-0">
+                <Film className="h-5 w-5 text-emerald-700" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
+                  Instagram Reels Comment-to-DM Manager (V4 Pro)
+                </h3>
+                <p className="text-xs text-emerald-800 mt-0.5">
+                  Full Reel isolation, Any Comment / Keyword triggers, Follow Verification Gating, and WhatsApp redirection links are active.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/automations/instagram-reels"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800 transition-colors shrink-0 shadow-2xs"
+            >
+              <span>Open V4 Reels Manager</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
+
           {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-stone-200/90 bg-white p-4 shadow-2xs">
             <div className="relative flex-1 max-w-md">

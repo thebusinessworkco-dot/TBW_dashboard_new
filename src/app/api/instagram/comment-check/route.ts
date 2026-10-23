@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server';
+import { evaluateCommentCheck } from '@/lib/instagram/reel-automation';
+
+/**
+ * CONTRACT A: POST /api/instagram/comment-check
+ * Evaluates incoming Instagram comments for Reel-to-DM automation.
+ * Supports Header Auth: 'X-TBW-Webhook-Secret' or 'Authorization: Bearer <secret>'.
+ */
+export async function POST(request: Request) {
+  try {
+    const authHeader = request.headers.get('authorization') || '';
+    const customSecret = request.headers.get('x-tbw-webhook-secret') || '';
+    const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    const expectedSecret = process.env.N8N_WEBHOOK_SECRET || process.env.N8N_API_KEY;
+    if (expectedSecret) {
+      if (bearer !== expectedSecret && customSecret !== expectedSecret) {
+        return NextResponse.json({ error: 'Unauthorized caller' }, { status: 401 });
+      }
+    }
+
+    const payload = await request.json();
+    const result = await evaluateCommentCheck(payload);
+
+    return NextResponse.json(result, { status: 200 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Internal error';
+    return NextResponse.json({ approved: false, error: msg }, { status: 500 });
+  }
+}

@@ -16,6 +16,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Sparkles,
+  Film,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -66,6 +67,13 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
           href: '/instagram',
           icon: Instagram,
         },
+        {
+          name: 'Instagram Reels',
+          href: '/automations/instagram-reels',
+          icon: Film,
+          badge: 'V4 Pro',
+          badgeVariant: 'emerald',
+        },
       ],
     },
     {
@@ -104,8 +112,22 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
           name: 'VPS Health',
           href: '/vps',
           icon: Server,
-          badge: vpsMetrics.status === 'healthy' ? 'OK' : 'Alert',
-          badgeVariant: vpsMetrics.status === 'healthy' ? 'emerald' : 'rose',
+          badge:
+            vpsMetrics.status === 'healthy'
+              ? 'OK'
+              : vpsMetrics.status === 'warning'
+              ? 'Warning'
+              : vpsMetrics.status === 'not_connected'
+              ? 'Offline'
+              : 'Alert',
+          badgeVariant:
+            vpsMetrics.status === 'healthy'
+              ? 'emerald'
+              : vpsMetrics.status === 'warning'
+              ? 'amber'
+              : vpsMetrics.status === 'not_connected'
+              ? 'neutral'
+              : 'rose',
         },
         {
           name: 'Settings & Status',

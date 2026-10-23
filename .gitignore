@@ -42,3 +42,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backups & local operational artifacts
+/supabase/backups/
+/scratch/
+/scripts/*.json
+/scripts/backup_*
+/scripts/patched_*
+/scripts/live_*
+/scripts/apply_safe_live_patch.mjs
+/scripts/prepare_safe_n8n_patch.mjs
+/scripts/audit_database.mjs
