@@ -162,6 +162,12 @@ export async function getReelRuleByMediaId(mediaId: string): Promise<InstagramRe
   return memoryRules.get(cleanMediaId) || null;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(val: unknown): boolean {
+  return typeof val === 'string' && UUID_REGEX.test(val);
+}
+
 /**
  * Save or Update a Reel Rule (Durable Persistence Enforced)
  */
@@ -169,8 +175,7 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
   const cleanMediaId = String(rule.media_id).trim();
   const nowIso = new Date().toISOString();
 
-  const formattedRule: InstagramReelRule = {
-    id: rule.id || `rule_${cleanMediaId}`,
+  const rulePayload: Record<string, unknown> = {
     media_id: cleanMediaId,
     permalink: rule.permalink || `https://www.instagram.com/reel/${cleanMediaId}/`,
     thumbnail_url: rule.thumbnail_url || null,
@@ -191,16 +196,19 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     failed_sends_count: rule.failed_sends_count || 0,
     last_synced_at: rule.last_synced_at || nowIso,
     is_demo: false,
-    created_at: rule.created_at || nowIso,
     updated_at: nowIso,
   };
+
+  if (isUuid(rule.id)) {
+    rulePayload.id = rule.id;
+  }
 
   const adminSupabase = createAdminClient();
   if (adminSupabase) {
     try {
       const { data, error } = await adminSupabase
         .from('instagram_reel_rules')
-        .upsert(formattedRule, { onConflict: 'media_id' })
+        .upsert(rulePayload, { onConflict: 'media_id' })
         .select()
         .single();
 
@@ -218,6 +226,12 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
     }
   }
 
+  const formattedRule: InstagramReelRule = {
+    id: isUuid(rule.id) ? (rule.id as string) : `rule_${cleanMediaId}`,
+    ...rulePayload,
+    created_at: rule.created_at || nowIso,
+  } as InstagramReelRule;
+
   memoryRules.set(cleanMediaId, formattedRule);
   return formattedRule;
 }
@@ -228,10 +242,13 @@ export async function saveReelRule(rule: Partial<InstagramReelRule> & { media_id
 export async function deleteReelRule(idOrMediaId: string): Promise<boolean> {
   const adminSupabase = createAdminClient();
   if (adminSupabase) {
-    const { error } = await adminSupabase
-      .from('instagram_reel_rules')
-      .delete()
-      .or(`id.eq.${idOrMediaId},media_id.eq.${idOrMediaId}`);
+    let query = adminSupabase.from('instagram_reel_rules').delete();
+    if (isUuid(idOrMediaId)) {
+      query = query.or(`id.eq.${idOrMediaId},media_id.eq.${idOrMediaId}`);
+    } else {
+      query = query.eq('media_id', idOrMediaId);
+    }
+    const { error } = await query;
 
     if (error) {
       throw new Error(`Durable deletion failed: ${error.message}`);
@@ -349,13 +366,12 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
   }
 
   // 7. Atomic Reservation: Register comment intent
-  const intentRecord: InstagramCommentIntent = {
-    id: `intent_${commentId}`,
+  const intentDbRecord: Record<string, unknown> = {
     comment_id: commentId,
     media_id: mediaId,
     ig_user_id: igUserId || null,
     username: username || null,
-    rule_id: rule.id,
+    rule_id: isUuid(rule.id) ? rule.id : null,
     private_reply_state: 'pending',
     private_reply_provider_id: null,
     comment_text: text,
@@ -365,15 +381,19 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     created_at: new Date().toISOString(),
   };
 
+  const intentRecord: InstagramCommentIntent = {
+    id: `intent_${commentId}`,
+    ...intentDbRecord,
+  } as InstagramCommentIntent;
+
   memoryIntents.set(commentId, intentRecord);
 
   // 8. Durable Customer Context (Store pending campaign for commenter)
   if (igUserId && /^\d{5,40}$/.test(igUserId)) {
-    const custContext: InstagramCustomerContext = {
-      id: `ctx_${igUserId}`,
+    const custContextDb: Record<string, unknown> = {
       ig_user_id: igUserId,
       pending_media_id: mediaId,
-      pending_rule_id: rule.id,
+      pending_rule_id: isUuid(rule.id) ? rule.id : null,
       last_inbound_at: new Date().toISOString(),
       first_dm_at: new Date().toISOString(),
       last_event_at: new Date().toISOString(),
@@ -381,11 +401,17 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
       context_expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
       created_at: new Date().toISOString(),
     };
+
+    const custContext: InstagramCustomerContext = {
+      id: `ctx_${igUserId}`,
+      ...custContextDb,
+    } as InstagramCustomerContext;
+
     memoryCustomerContext.set(igUserId, custContext);
 
     if (adminSupabase) {
       try {
-        await adminSupabase.from('instagram_customer_context').upsert(custContext, { onConflict: 'ig_user_id' });
+        await adminSupabase.from('instagram_customer_context').upsert(custContextDb, { onConflict: 'ig_user_id' });
       } catch {
         // Fallback
       }
@@ -394,15 +420,19 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
 
   if (adminSupabase) {
     try {
-      await adminSupabase.from('instagram_comment_intents').insert(intentRecord);
+      await adminSupabase.from('instagram_comment_intents').insert(intentDbRecord);
       // Increment rule counter
-      await adminSupabase
+      const updateQuery = adminSupabase
         .from('instagram_reel_rules')
         .update({
           comments_count: (rule.comments_count || 0) + 1,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', rule.id);
+        });
+      if (isUuid(rule.id)) {
+        await updateQuery.eq('id', rule.id);
+      } else {
+        await updateQuery.eq('media_id', rule.media_id);
+      }
     } catch {
       // Memory is updated
     }
