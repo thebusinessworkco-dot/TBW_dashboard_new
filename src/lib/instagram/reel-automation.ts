@@ -891,6 +891,8 @@ export async function recordInstagramAutomationEvent(input: InstagramAutomationE
 export async function getInstagramAutomationAnalytics(): Promise<{
   connected_reels: number;
   active_reels: number;
+  total_reels_discovered: number;
+  active_rules_count: number;
   comments_ingested: number;
   private_replies_sent: number;
   public_replies_sent: number;
@@ -964,6 +966,8 @@ export async function getInstagramAutomationAnalytics(): Promise<{
   return {
     connected_reels: connectedReels,
     active_reels: activeReels,
+    total_reels_discovered: connectedReels,
+    active_rules_count: activeReels,
     comments_ingested: Math.max(commentsIngested, rules.reduce((acc, r) => acc + (r.comments_count || 0), 0)),
     private_replies_sent: privateRepliesSent,
     public_replies_sent: publicRepliesSent,

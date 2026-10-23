@@ -227,6 +227,28 @@ async function runSuite() {
     console.log(`     Reconciled Verified Follows: ${stats.verified_follows}`);
   });
 
+  // TEARDOWN: Ensure confirmed deleted reel rules are safely disabled in DB
+  const { createClient } = await import('@supabase/supabase-js');
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    for (const mId of ['18395317168163106', '18999999999000000', '18352671520267494']) {
+      await adminClient.from('instagram_reel_rules').update({ is_enabled: false }).eq('media_id', mId);
+      await adminClient.from('admin_settings').upsert({
+        key: `reel_rule_meta_${mId}`,
+        value: {
+          is_available: false,
+          availability_status: 'deleted_or_unavailable',
+          rule_status_reason: 'Reel confirmed deleted from Instagram account',
+          updated_at: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    }
+  }
+
   console.log('\n================================================================');
   console.log(`RESULTS: ${passed} PASSED, ${failed} FAILED`);
   console.log('================================================================');

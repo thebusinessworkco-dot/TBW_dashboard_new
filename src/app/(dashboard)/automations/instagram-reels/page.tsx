@@ -46,13 +46,15 @@ export default function InstagramReelsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
   const [analytics, setAnalytics] = useState<{
-    total_reels_discovered: number;
-    active_rules_count: number;
+    total_reels_discovered?: number;
+    active_rules_count?: number;
+    connected_reels?: number;
+    active_reels?: number;
     comments_ingested: number;
     private_replies_sent: number;
     public_replies_sent: number;
     verified_follows: number;
-    verified_follow_rate: string;
+    verified_follow_rate?: string;
   } | null>(null);
 
   // Filters & Search
@@ -531,12 +533,12 @@ export default function InstagramReelsPage() {
               <Film className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">
-              {analytics?.total_reels_discovered ?? publishedItems.length}
+              {analytics?.connected_reels ?? analytics?.total_reels_discovered ?? publishedItems.length}
               <span className="text-xs font-normal text-stone-400 ml-1">published</span>
             </div>
             <div className="text-[11px] text-stone-500 flex items-center gap-1">
               <span className="font-mono text-[10px] text-emerald-600 font-semibold">
-                {analytics?.active_rules_count ?? rules.filter((r) => r.is_enabled && r.is_available !== false).length} Active
+                {analytics?.active_reels ?? analytics?.active_rules_count ?? publishedItems.filter((p) => p.status === 'active').length} Active
               </span>
               <span>· @thebusinesswork.co</span>
             </div>
