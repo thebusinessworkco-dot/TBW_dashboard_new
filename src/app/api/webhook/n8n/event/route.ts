@@ -17,9 +17,14 @@ export async function POST(request: Request) {
       payload.event_type = 'workflow_execution';
     }
 
+    const headers = new Headers(request.headers);
+    if (expectedSecret) {
+      headers.set('x-n8n-api-key', expectedSecret);
+    }
+
     const modifiedReq = new Request(request.url, {
       method: 'POST',
-      headers: request.headers,
+      headers,
       body: JSON.stringify(payload),
     });
 
