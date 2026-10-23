@@ -81,7 +81,7 @@ async function runSuite() {
       comment_id: String(Date.now() + '101'),
       media_id: dummyMediaId,
       text: 'tell me more',
-      ig_user_id: '998877665544',
+      ig_user_id: 'user_' + Date.now(),
       username: 'client_clean_test',
       timestamp: new Date().toISOString(),
     });
