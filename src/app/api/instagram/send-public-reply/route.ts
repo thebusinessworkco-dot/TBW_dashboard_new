@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const result = await sendInstagramPublicCommentReply(payload);
 
-    return NextResponse.json(result, { status: result.success ? 200 : 400 });
+    return NextResponse.json(result, { status: result.success || result.skipped ? 200 : 400 });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Public comment reply execution failed';
     return NextResponse.json({ success: false, error: msg }, { status: 500 });

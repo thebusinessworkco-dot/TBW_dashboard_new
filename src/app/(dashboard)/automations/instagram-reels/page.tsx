@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
-import { InstagramReelRule, InstagramSyncedReel } from '@/lib/types/dashboard';
+import { InstagramReelRule, InstagramSyncedReel, InstagramAutomationAnalytics } from '@/lib/types/dashboard';
 
 type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured' | 'archived';
 type SortOrder = 'newest' | 'oldest' | 'comments';
@@ -46,17 +46,8 @@ export default function InstagramReelsPage() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
-  const [analytics, setAnalytics] = useState<{
-    total_reels_discovered?: number;
-    active_rules_count?: number;
-    connected_reels?: number;
-    active_reels?: number;
-    comments_ingested: number;
-    private_replies_sent: number;
-    public_replies_sent: number;
-    verified_follows: number;
-    verified_follow_rate?: string;
-  } | null>(null);
+  const [timeRange, setTimeRange] = useState<'all' | 'today' | '7d' | '30d'>('all');
+  const [analytics, setAnalytics] = useState<InstagramAutomationAnalytics | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,7 +72,7 @@ export default function InstagramReelsPage() {
   const [simulatorFollower, setSimulatorFollower] = useState(true);
 
   // 1. Initial Load of Rules, Synced Reels & Settings
-  const loadData = async (forceSync = false) => {
+  const loadData = async (forceSync = false, selectedRange = timeRange) => {
     try {
       if (forceSync) setIsSyncing(true);
       else setLoading(true);
@@ -90,7 +81,7 @@ export default function InstagramReelsPage() {
         fetch('/api/instagram/reels'),
         fetch('/api/instagram/settings'),
         fetch(`/api/instagram/reels/sync${forceSync ? '?force=true' : ''}`),
-        fetch('/api/instagram/analytics'),
+        fetch(`/api/instagram/analytics?timeRange=${selectedRange}`),
       ]);
 
       const dataRules = await resRules.json();
@@ -524,6 +515,37 @@ export default function InstagramReelsPage() {
           </div>
         )}
 
+        {/* TIME RANGE FILTER & PRODUCTION ISOLATION BANNER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl border border-stone-200/80 text-xs self-start">
+            <span className="text-[11px] font-semibold text-stone-500 px-2 flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" /> Time Range:
+            </span>
+            {(['all', 'today', '7d', '30d'] as const).map((range) => (
+              <button
+                key={range}
+                onClick={() => {
+                  setTimeRange(range);
+                  loadData(false, range);
+                }}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  timeRange === range
+                    ? 'bg-white text-stone-900 shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                {range === 'all' ? 'All Time' : range === 'today' ? 'Today' : range === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+              </button>
+            ))}
+          </div>
+          {analytics?.test_events_count !== undefined && analytics.test_events_count > 0 && (
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-stone-600 bg-stone-50 border border-stone-200 px-3 py-1.5 rounded-xl shadow-2xs">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Production / Test Isolation: <strong className="text-stone-900">{analytics.test_events_count}</strong> synthetic test runs isolated from customer metrics</span>
+            </div>
+          )}
+        </div>
+
         {/* TOP STATS CARDS */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
@@ -541,21 +563,25 @@ export default function InstagramReelsPage() {
               <span className="font-mono text-[10px] text-emerald-600 font-semibold">
                 {analytics?.active_reels ?? analytics?.active_rules_count ?? publishedItems.filter((p) => p.status === 'active').length} Active
               </span>
-              <span>· @thebusinesswork.co</span>
+              <span>· {analytics?.archived_reels ?? archivedItems.length} Archived</span>
             </div>
           </div>
 
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                Comments Ingested
+                Real Comments
               </span>
               <MessageCircle className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">
-              {analytics?.comments_ingested ?? totalComments}
+              {analytics?.real_comments_received ?? analytics?.comments_ingested ?? totalComments}
             </div>
-            <div className="text-[11px] text-stone-500">Atomic idempotency enabled</div>
+            <div className="text-[11px] text-stone-500 flex items-center gap-1">
+              <span>{analytics?.eligible_comments ?? 0} eligible</span>
+              <span>·</span>
+              <span>{analytics?.comments_skipped ?? 0} skipped</span>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
@@ -581,7 +607,7 @@ export default function InstagramReelsPage() {
               <UserCheck className="h-4 w-4 text-stone-400" />
             </div>
             <div className="text-2xl font-bold text-stone-900">
-              {analytics?.verified_follows ?? totalFollows}
+              {analytics?.total_historical_verified_follows ?? analytics?.verified_follows ?? totalFollows}
             </div>
             <div className="text-[11px] text-emerald-600 font-medium">
               {analytics?.verified_follow_rate ? `${analytics.verified_follow_rate} conversion` : 'Follow-gate active'}
@@ -1046,9 +1072,84 @@ export default function InstagramReelsPage() {
                   <span>@thebusinesswork.co Connected</span>
                 </div>
                 <p className="text-[11px] text-stone-600">
-                  Authorized for Reel comment-to-DM triggers and published media synchronization.
+                  Authorized for Reel comment-to-DM triggers, public comment replies, and published media sync.
                 </p>
               </div>
+            </div>
+
+            {/* PHASE 2: AUDITABLE PROCESSING STATUS BREAKDOWN */}
+            <div className="rounded-xl border border-stone-200/90 bg-stone-50/60 p-5 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-xs text-stone-900 uppercase tracking-wider">
+                    Auditable Comment Processing Statuses & Test Isolation
+                  </h4>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Deterministic processing lifecycle for all incoming Instagram Reel comments.
+                  </p>
+                </div>
+                <span className="text-[11px] font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2.5 py-1 rounded-md">
+                  Active Filter: {timeRange.toUpperCase()}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+                <div className="rounded-lg bg-white p-3 border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-stone-500">Real Received</span>
+                  <div className="text-lg font-bold text-stone-900">
+                    {analytics?.real_comments_received ?? 0}
+                  </div>
+                  <span className="text-[10px] text-emerald-600">Organic customers</span>
+                </div>
+
+                <div className="rounded-lg bg-white p-3 border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-stone-500">Eligible Comments</span>
+                  <div className="text-lg font-bold text-stone-900">
+                    {analytics?.eligible_comments ?? 0}
+                  </div>
+                  <span className="text-[10px] text-stone-500">Active rule matched</span>
+                </div>
+
+                <div className="rounded-lg bg-white p-3 border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-stone-500">Private Replies</span>
+                  <div className="text-lg font-bold text-stone-900">
+                    {analytics?.private_replies_sent ?? 0}
+                  </div>
+                  <span className="text-[10px] text-stone-500">Delivered via Meta</span>
+                </div>
+
+                <div className="rounded-lg bg-white p-3 border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-stone-500">Skipped / Duplicates</span>
+                  <div className="text-lg font-bold text-stone-900">
+                    {(analytics?.comments_skipped ?? 0) + (analytics?.duplicate_comments_ignored ?? 0)}
+                  </div>
+                  <span className="text-[10px] text-stone-500">Cooldown or inactive</span>
+                </div>
+
+                <div className="rounded-lg bg-white p-3 border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-stone-500">Test Events Isolated</span>
+                  <div className="text-lg font-bold text-stone-900">
+                    {analytics?.test_events_count ?? 0}
+                  </div>
+                  <span className="text-[10px] text-amber-600 font-medium">Excluded from metrics</span>
+                </div>
+              </div>
+            </div>
+
+            {/* META COMPLIANCE & SAFETY POLICIES */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                <h4 className="font-semibold text-xs text-emerald-950">Meta Policy & Anti-Spam Compliance Status</h4>
+              </div>
+              <ul className="text-[11px] text-emerald-900/90 space-y-1.5 list-disc list-inside">
+                <li><strong>1 Private Reply per Comment:</strong> Strictly enforced by atomic database claim on comment_id.</li>
+                <li><strong>7-Day Window:</strong> Meta requires comment private replies within 7 days; older comments fail-closed.</li>
+                <li><strong>24-Hour Messaging Window:</strong> Full interactive button templates unlock only after customer sends an inbound DM.</li>
+                <li><strong>First-DM Quick Reply:</strong> Plain text &quot;Send Me Details&quot; quick reply supported on initial comment reply.</li>
+                <li><strong>Self-Comment Recursion Guard:</strong> Automatic comment replies to @thebusinesswork.co are blocked to avoid loops.</li>
+                <li><strong>Auto Public Reply:</strong> OFF by default on all Reels; utilizes official Meta moderation API when enabled.</li>
+              </ul>
             </div>
           </div>
         )}

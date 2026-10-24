@@ -1,7 +1,7 @@
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getAllReelRules } from '@/lib/instagram/reel-automation';
-import { parseAndNormalizeInstagramReelUrl } from '@/lib/instagram/reel-url-resolver';
-import { InstagramReelRule } from '@/lib/types/dashboard';
+import { createAdminClient } from '../supabase/admin';
+import { getAllReelRules } from './reel-automation';
+import { parseAndNormalizeInstagramReelUrl } from './reel-url-resolver';
+import { InstagramReelRule } from '../types/dashboard';
 
 export interface SyncedReelItem {
   media_id: string; // The real numeric Meta Media ID e.g. "180429182390192"

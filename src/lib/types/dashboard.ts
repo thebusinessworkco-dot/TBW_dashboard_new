@@ -457,4 +457,23 @@ export interface InstagramCommentCheckResponse {
     text: string | null;
   };
 }
-
+export interface InstagramAutomationAnalytics {
+  connected_reels: number;
+  active_reels: number;
+  archived_reels: number;
+  total_reels_discovered: number;
+  active_rules_count: number;
+  comments_ingested: number;
+  real_comments_received: number;
+  eligible_comments: number;
+  private_replies_sent: number;
+  private_replies_failed: number;
+  duplicate_comments_ignored: number;
+  comments_skipped: number;
+  public_replies_sent: number;
+  verified_follows: number;
+  total_historical_verified_follows: number;
+  test_events_count: number;
+  verified_follow_rate?: string;
+  per_reel?: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }>;
+}
