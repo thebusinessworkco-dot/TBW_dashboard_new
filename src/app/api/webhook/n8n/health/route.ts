@@ -19,8 +19,8 @@ export async function POST(request: Request) {
           {
             service_name: 'n8n',
             status: 'connected',
-            last_checked_at: nowIso,
-            response_time_ms: 45,
+            last_sync_at: nowIso,
+            details: { note: 'Automation engine online', response_time_ms: 45 },
             error_message: null,
             updated_at: nowIso,
           },
