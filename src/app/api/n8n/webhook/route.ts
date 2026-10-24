@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { evaluateCommentCheck, evaluateDmContext } from '@/lib/instagram/reel-automation';
+import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
 
 /**
  * SELF-HOSTED n8n INTEGRATION WEBHOOK ENDPOINT
@@ -226,25 +227,10 @@ function resolveMessageContent(
 
 export async function POST(request: Request) {
   try {
-    // 1. Mandatory n8n Webhook Authentication (Fails closed if secret is missing)
-    const expectedSecret = process.env.N8N_API_KEY || process.env.N8N_WEBHOOK_SECRET;
-    if (!expectedSecret) {
-      return NextResponse.json(
-        {
-          success: false,
-          can_respond: false,
-          error: 'Server misconfiguration: N8N_WEBHOOK_SECRET is not configured on the server. Webhook requests are rejected.',
-        },
-        { status: 500 }
-      );
-    }
-
-    const authHeader = request.headers.get('authorization') || '';
-    const customKey = request.headers.get('x-n8n-api-key') || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    if (token !== expectedSecret && customKey !== expectedSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized n8n caller' }, { status: 401 });
+    // 1. Mandatory n8n Webhook Authentication (N8N_WEBHOOK_SECRET exclusively)
+    const auth = verifyIncomingN8nWebhook(request);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.reason || 'Unauthorized n8n caller' }, { status: 401 });
     }
 
     const payload = await request.json();

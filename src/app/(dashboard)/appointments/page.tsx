@@ -56,8 +56,8 @@ export default function AppointmentsPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTodayStr(today);
     setDate((prev) => prev || today);
   }, []);

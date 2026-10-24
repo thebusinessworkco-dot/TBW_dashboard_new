@@ -1,33 +1,19 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ phone: string }> }
 ) {
   try {
-    // 1. Mandatory Header Authentication (Fails closed if secret is missing or mismatched)
-    const expectedSecret = process.env.N8N_API_KEY || process.env.N8N_WEBHOOK_SECRET;
-    if (!expectedSecret) {
+    // 1. Mandatory Header Authentication (N8N_WEBHOOK_SECRET exclusively)
+    const auth = verifyIncomingN8nWebhook(request);
+    if (!auth.authorized) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Server misconfiguration: N8N_WEBHOOK_SECRET is not configured on the server.',
-          data: { mode: 'human', can_respond: false },
-        },
-        { status: 500 }
-      );
-    }
-
-    const authHeader = request.headers.get('authorization') || '';
-    const customKey = request.headers.get('x-n8n-api-key') || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    if (token !== expectedSecret && customKey !== expectedSecret) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Unauthorized n8n caller',
+          error: auth.reason || 'Unauthorized n8n caller',
           data: { mode: 'human', can_respond: false },
         },
         { status: 401 }

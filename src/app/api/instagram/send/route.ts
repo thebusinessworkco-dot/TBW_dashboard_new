@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     if (!authUser) {
       const authHeader = request.headers.get('authorization') || '';
       const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-      const n8nSecret = process.env.N8N_API_KEY || process.env.N8N_WEBHOOK_SECRET;
+      const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
 
       if (token && n8nSecret && token === n8nSecret) {
         // Authenticated via internal secure secret

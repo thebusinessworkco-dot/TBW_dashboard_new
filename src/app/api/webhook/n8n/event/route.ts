@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
 import { POST as handleN8nWebhook } from '@/app/api/n8n/webhook/route';
+import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization') || '';
-    const customSecret = request.headers.get('x-tbw-webhook-secret') || request.headers.get('x-n8n-api-key') || '';
-    const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    const expectedSecret = process.env.N8N_WEBHOOK_SECRET || process.env.N8N_API_KEY;
-    if (expectedSecret && bearer !== expectedSecret && customSecret !== expectedSecret) {
-      return NextResponse.json({ error: 'Unauthorized caller' }, { status: 401 });
+    const auth = verifyIncomingN8nWebhook(request);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.reason || 'Unauthorized caller' }, { status: 401 });
     }
 
     const payload = await request.json().catch(() => ({}));
@@ -18,8 +15,8 @@ export async function POST(request: Request) {
     }
 
     const headers = new Headers(request.headers);
-    if (expectedSecret) {
-      headers.set('x-n8n-api-key', expectedSecret);
+    if (process.env.N8N_WEBHOOK_SECRET) {
+      headers.set('x-n8n-api-key', process.env.N8N_WEBHOOK_SECRET);
     }
 
     const modifiedReq = new Request(request.url, {

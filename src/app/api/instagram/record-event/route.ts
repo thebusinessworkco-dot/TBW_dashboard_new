@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { recordInstagramAutomationEvent } from '@/lib/instagram/reel-automation';
+import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
 
 /**
  * CONTRACT: POST /api/instagram/record-event
@@ -11,21 +12,9 @@ import { recordInstagramAutomationEvent } from '@/lib/instagram/reel-automation'
  */
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization') || '';
-    const customSecret = request.headers.get('x-tbw-webhook-secret') || request.headers.get('x-n8n-api-key') || request.headers.get('x-internal-secret') || '';
-    const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    const expectedSecrets = [
-      process.env.N8N_WEBHOOK_SECRET,
-      process.env.N8N_API_KEY,
-      process.env.INTERNAL_API_SECRET,
-    ].filter(Boolean);
-
-    if (expectedSecrets.length > 0) {
-      const isAuthorized = expectedSecrets.some((s) => bearer === s || customSecret === s);
-      if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized caller' }, { status: 401 });
-      }
+    const auth = verifyIncomingN8nWebhook(request, true);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.reason || 'Unauthorized caller' }, { status: 401 });
     }
 
     const payload = await request.json();
