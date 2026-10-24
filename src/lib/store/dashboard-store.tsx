@@ -54,6 +54,11 @@ interface DashboardStoreContextType {
   updateLeadStatus: (id: string, status: LeadStatus) => void;
   addLead: (lead: Omit<AdminLead, 'id' | 'created_at' | 'updated_at'>) => void;
 
+  // Google Sheets Sync
+  syncGoogleSheets: () => Promise<boolean>;
+  isSyncingSheets: boolean;
+  lastSheetsSyncAt: string | null;
+
   // Appointments
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
   addAppointment: (appointment: Omit<AdminAppointment, 'id' | 'created_at'>) => void;
@@ -225,6 +230,37 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'fallback_polling' | 'disconnected'>('connecting');
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
 
+  // Google Sheets synchronization states and trigger
+  const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
+  const [lastSheetsSyncAt, setLastSheetsSyncAt] = useState<string | null>(null);
+
+  const syncGoogleSheets = useCallback(async (): Promise<boolean> => {
+    setIsSyncingSheets(true);
+    try {
+      const res = await fetch('/api/sync/google-sheets', { method: 'POST', cache: 'no-store' });
+      const data = await res.json();
+      if (data.success) {
+        setLastSheetsSyncAt(data.syncedAt || new Date().toISOString());
+        const supabase = createClient();
+        if (supabase) {
+          const [freshLeadsRes, freshApptsRes] = await Promise.all([
+            supabase.from('admin_leads').select('*').order('created_at', { ascending: false }),
+            supabase.from('admin_appointments').select('*').order('appointment_date', { ascending: true }),
+          ]);
+          if (freshLeadsRes.data) setLeads(freshLeadsRes.data as AdminLead[]);
+          if (freshApptsRes.data) setAppointments(freshApptsRes.data as AdminAppointment[]);
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Google Sheets sync error:', err);
+      return false;
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  }, []);
+
   // Purge any legacy demo keys from localStorage and sessionStorage on mount
   useEffect(() => {
     const LEGACY_KEYS = [
@@ -354,6 +390,32 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       setCommentAutomations((autosRes.data || []) as AdminCommentAutomation[]);
       setQuotations((quotsRes.data || []) as unknown as AdminQuotation[]);
 
+      // If database contains 0 leads, immediately trigger automatic initial synchronization from Google Sheets
+      if (!leadsRes.data || leadsRes.data.length === 0) {
+        void fetch('/api/sync/google-sheets', { method: 'POST', cache: 'no-store' })
+          .then((res) => res.json())
+          .then((resData) => {
+            if (resData.success) {
+              setLastSheetsSyncAt(resData.syncedAt || new Date().toISOString());
+              supabase
+                .from('admin_leads')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .then(({ data: freshLeads }) => {
+                  if (freshLeads) setLeads(freshLeads as AdminLead[]);
+                });
+              supabase
+                .from('admin_appointments')
+                .select('*')
+                .order('appointment_date', { ascending: true })
+                .then(({ data: freshAppts }) => {
+                  if (freshAppts) setAppointments(freshAppts as AdminAppointment[]);
+                });
+            }
+          })
+          .catch(() => {});
+      }
+
       if (wfsRes.data && wfsRes.data.length > 0) {
         const wfMap = new Map<string, AdminWorkflow>();
         wfsRes.data.forEach((exec) => {
@@ -407,7 +469,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [convsRes, msgsRes] = await Promise.all([
+      const [convsRes, msgsRes, leadsRes, apptsRes] = await Promise.all([
         supabase
           .from('admin_conversations')
           .select('*, contact:admin_contacts(*)')
@@ -416,7 +478,18 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           .from('admin_messages')
           .select('*')
           .order('created_at', { ascending: true }),
+        supabase
+          .from('admin_leads')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('admin_appointments')
+          .select('*')
+          .order('appointment_date', { ascending: true }),
       ]);
+
+      if (leadsRes.data) setLeads(leadsRes.data as AdminLead[]);
+      if (apptsRes.data) setAppointments(apptsRes.data as AdminAppointment[]);
 
       if (convsRes.data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -680,6 +753,34 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
                 )
               );
             }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'admin_leads' },
+          () => {
+            if (!isMounted) return;
+            supabase
+              .from('admin_leads')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .then(({ data }) => {
+                if (data && isMounted) setLeads(data as AdminLead[]);
+              });
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'admin_appointments' },
+          () => {
+            if (!isMounted) return;
+            supabase
+              .from('admin_appointments')
+              .select('*')
+              .order('appointment_date', { ascending: true })
+              .then(({ data }) => {
+                if (data && isMounted) setAppointments(data as AdminAppointment[]);
+              });
           }
         )
         .subscribe((status, err) => {
@@ -1240,6 +1341,9 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         sendMessage,
         updateLeadStatus,
         addLead,
+        syncGoogleSheets,
+        isSyncingSheets,
+        lastSheetsSyncAt,
         updateAppointmentStatus,
         addAppointment,
         saveQuotation,

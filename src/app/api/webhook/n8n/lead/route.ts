@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { estimateLeadValue } from '@/lib/sheets/google-sheets-sync';
 
 export async function POST(request: Request) {
   try {
@@ -16,21 +17,76 @@ export async function POST(request: Request) {
     const adminSupabase = createAdminClient();
     const nowIso = new Date().toISOString();
 
-    if (adminSupabase && (payload.phone || payload.name || payload.contact_id)) {
+    const rawPhone = String(payload.phone_number || payload.phone || payload.wa_id || '').replace(/\D/g, '');
+    const phone = rawPhone.length >= 10 ? (rawPhone.length === 10 ? `+91${rawPhone}` : `+${rawPhone}`) : null;
+    const name = String(payload.name || payload.contact_name || (phone ? `Lead +${phone.slice(-10)}` : 'Inbound Lead')).slice(0, 100);
+    const rawSource = String(payload.source || payload.channel || 'whatsapp').toLowerCase();
+    const source = rawSource.includes('insta') ? 'instagram' : (rawSource.includes('web') ? 'website' : 'whatsapp');
+    const service = String(payload.service || (payload.purpose ? payload.purpose.split(':')[0] : 'AI Agents & Chatbots')).trim();
+    const estVal = estimateLeadValue(service);
+
+    const notesParts: string[] = [];
+    if (payload.business) notesParts.push(`Business: ${payload.business}`);
+    if (payload.purpose) notesParts.push(`Purpose: ${payload.purpose}`);
+    if (payload.notes) notesParts.push(payload.notes);
+    const notes = notesParts.length > 0 ? notesParts.join(' | ') : undefined;
+
+    if (adminSupabase && (phone || payload.name || payload.instagram_username)) {
       try {
-        const phone = String(payload.phone || payload.wa_id || '').replace(/\D/g, '');
-        if (phone.length >= 10) {
-          await adminSupabase.from('admin_contacts').upsert(
+        let contactId: string | undefined = undefined;
+
+        if (phone) {
+          const { data: contact } = await adminSupabase.from('admin_contacts').upsert(
             {
-              name: payload.name ? String(payload.name).slice(0, 100) : `Lead +${phone.slice(-10)}`,
-              phone: '+' + phone,
-              platform: payload.platform || 'whatsapp',
-              tags: ['v4_lead', 'automated_capture'],
-              last_active_at: nowIso,
+              name,
+              phone,
+              instagram_username: payload.instagram_username || undefined,
+              company_name: payload.business || undefined,
+              is_demo: false,
               updated_at: nowIso,
             },
             { onConflict: 'phone' }
-          );
+          ).select('id').maybeSingle();
+
+          if (contact) contactId = contact.id;
+        }
+
+        // Insert or update admin_leads
+        const sheetRowId = payload.google_sheet_row_id || payload.row_id || `LIVE_${source.toUpperCase()}_${phone ? phone.slice(-10) : Date.now().toString().slice(-6)}`;
+
+        const { data: existingLead } = await adminSupabase
+          .from('admin_leads')
+          .select('id')
+          .eq('google_sheet_row_id', sheetRowId)
+          .maybeSingle();
+
+        if (existingLead) {
+          await adminSupabase.from('admin_leads').update({
+            contact_name: name,
+            contact_phone: phone,
+            service_interest: service,
+            estimated_value: estVal,
+            notes,
+            contact_id: contactId,
+            updated_at: nowIso,
+          }).eq('id', existingLead.id);
+        } else {
+          await adminSupabase.from('admin_leads').insert({
+            contact_name: name,
+            contact_phone: phone,
+            contact_email: payload.email || undefined,
+            instagram_username: payload.instagram_username || undefined,
+            source,
+            service_interest: service,
+            status: 'new',
+            estimated_value: estVal,
+            notes,
+            google_sheet_row_id: sheetRowId,
+            contact_id: contactId,
+            created_at: nowIso,
+            updated_at: nowIso,
+            is_demo: false,
+          });
         }
       } catch {
         // Non-blocking lead upsert

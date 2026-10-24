@@ -37,6 +37,7 @@ type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured' | 'archived';
 type SortOrder = 'newest' | 'oldest' | 'comments';
 type ModalTab = 'sync' | 'select' | 'paste';
 
+
 export default function InstagramReelsPage() {
   const [activeTab, setActiveTab] = useState<'reels' | 'faq' | 'observability'>('reels');
   const [rules, setRules] = useState<InstagramReelRule[]>([]);
@@ -132,7 +133,9 @@ export default function InstagramReelsPage() {
   };
 
   useEffect(() => {
-    loadData();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Open Create Modal
@@ -150,8 +153,10 @@ export default function InstagramReelsPage() {
       }
 
       setSelectedReelPreview(preselectedReel);
+      // eslint-disable-next-line react-hooks/purity
+      const newRuleId = `rule_${Date.now()}`;
       setEditingRule({
-        id: `rule_${Date.now()}`,
+        id: newRuleId,
         media_id: preselectedReel.media_id,
         title: preselectedReel.caption ? preselectedReel.caption.slice(0, 60) : 'Untitled Reel Automation',
         permalink: preselectedReel.permalink,
@@ -175,8 +180,10 @@ export default function InstagramReelsPage() {
       setModalTab('select');
     } else {
       setSelectedReelPreview(null);
+      // eslint-disable-next-line react-hooks/purity
+      const newRuleId = `rule_${Date.now()}`;
       setEditingRule({
-        id: `rule_${Date.now()}`,
+        id: newRuleId,
         media_id: '',
         title: '',
         permalink: '',
