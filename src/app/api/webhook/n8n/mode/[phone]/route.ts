@@ -53,7 +53,7 @@ export async function GET(
     // 2. Query contact by normalized phone
     const { data: contacts } = await adminSupabase
       .from('admin_contacts')
-      .select('id')
+      .select('id, name, company_name')
       .or(
         `phone.eq.${cleanPhone},phone.eq.${formattedPhone},phone.eq.${with91},phone.eq.${formattedWith91},phone.ilike.%${tenDigit}`
       )
@@ -78,10 +78,10 @@ export async function GET(
       });
     }
 
-    // 3. Query conversation for takeover or paused state
+    // 3. Query conversation for takeover or paused state and state persistence
     const { data: conv, error: convErr } = await adminSupabase
       .from('admin_conversations')
-      .select('id, manual_takeover, automation_paused, status')
+      .select('id, manual_takeover, automation_paused, status, internal_notes')
       .eq('contact_id', contact.id)
       .eq('platform', 'whatsapp')
       .order('created_at', { ascending: true })
@@ -102,6 +102,15 @@ export async function GET(
 
     const isTakeover = Boolean(conv?.manual_takeover || conv?.automation_paused);
 
+    let parsedState: Record<string, unknown> | null = null;
+    try {
+      if (conv?.internal_notes && conv.internal_notes.startsWith('{')) {
+        parsedState = JSON.parse(conv.internal_notes);
+      }
+    } catch {
+      // Non-blocking
+    }
+
     return NextResponse.json({
       success: true,
       phone: formattedPhone,
@@ -111,6 +120,11 @@ export async function GET(
         can_respond: !isTakeover,
         manual_takeover: Boolean(conv?.manual_takeover),
         automation_paused: Boolean(conv?.automation_paused),
+        contact: {
+          name: contact?.name || null,
+          company_name: contact?.company_name || null,
+        },
+        state: parsedState,
       },
       notice: isTakeover
         ? 'Human takeover or paused state active. Automated replies suppressed.'

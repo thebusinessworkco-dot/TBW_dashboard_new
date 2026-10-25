@@ -1616,6 +1616,117 @@ export async function POST(request: Request) {
     }
 
     // ========================================================================
+    // 5.5 LOG & PERSIST CONVERSATION STATE (WhatsApp / Instagram)
+    // ========================================================================
+    if (eventType === 'conversation_state') {
+      const rawPhone = String(
+        payload.phone_number ||
+        payload.phone ||
+        payload.whatsapp_id ||
+        payload.wa_id ||
+        payload.from ||
+        ''
+      ).trim();
+      const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone ? '+' + cleanPhone : '';
+      const platform = String(payload.channel || payload.platform || 'whatsapp').toLowerCase().includes('insta')
+        ? 'instagram'
+        : 'whatsapp';
+
+      if (cleanPhone) {
+        // Upsert or update contact
+        const { data: contacts } = await adminSupabase
+          .from('admin_contacts')
+          .select('id, name, company_name')
+          .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        let contactId: string | null = contacts?.[0]?.id || null;
+        const customerName = String(payload.name || payload.contact_name || '').trim();
+        const businessName = String(payload.business || payload.company || '').trim();
+
+        if (contactId) {
+          const updateFields: Record<string, unknown> = { updated_at: nowIso };
+          if (customerName && !customerName.startsWith('+') && !customerName.startsWith('WhatsApp')) {
+            updateFields.name = customerName;
+          }
+          if (businessName) {
+            updateFields.company_name = businessName;
+          }
+          await adminSupabase.from('admin_contacts').update(updateFields).eq('id', contactId);
+        } else {
+          const { data: newContact } = await adminSupabase
+            .from('admin_contacts')
+            .insert({
+              name: customerName || formattedPhone,
+              phone: formattedPhone,
+              company_name: businessName || null,
+              created_at: nowIso,
+              updated_at: nowIso,
+              is_demo: false,
+            })
+            .select('id')
+            .maybeSingle();
+          if (newContact) contactId = newContact.id;
+        }
+
+        // Upsert or update conversation state in internal_notes
+        if (contactId) {
+          const { data: convs } = await adminSupabase
+            .from('admin_conversations')
+            .select('id')
+            .eq('contact_id', contactId)
+            .eq('platform', platform)
+            .limit(1);
+
+          const statePayload = {
+            stage: payload.stage || 'idle',
+            service: payload.service || '',
+            business: businessName || '',
+            name: customerName || '',
+            status: payload.status || 'open',
+            updated_at: nowIso,
+          };
+
+          if (convs?.[0]) {
+            await adminSupabase
+              .from('admin_conversations')
+              .update({
+                internal_notes: JSON.stringify(statePayload),
+                updated_at: nowIso,
+              })
+              .eq('id', convs[0].id);
+          } else {
+            await adminSupabase
+              .from('admin_conversations')
+              .insert({
+                contact_id: contactId,
+                platform,
+                status: 'open',
+                internal_notes: JSON.stringify(statePayload),
+                manual_takeover: false,
+                automation_paused: false,
+                is_demo: false,
+                created_at: nowIso,
+                updated_at: nowIso,
+              });
+          }
+        }
+      }
+
+      await touchIntegrationStatus('whatsapp');
+      await touchIntegrationStatus('n8n');
+
+      return NextResponse.json({
+        success: true,
+        action: 'conversation_state_persisted',
+        phone: formattedPhone,
+        stage: payload.stage,
+      });
+    }
+
+    // ========================================================================
     // 6. LOG WORKFLOW EXECUTION TELEMETRY
     // ========================================================================
     if (eventType === 'workflow_execution') {
