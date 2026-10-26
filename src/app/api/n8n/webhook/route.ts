@@ -1071,9 +1071,8 @@ export async function POST(request: Request) {
         }
       }
 
-      // E. Touch integration telemetry
-      await touchIntegrationStatus('whatsapp');
-      await touchIntegrationStatus('n8n');
+      // E. Touch integration telemetry (concurrent)
+      await Promise.all([touchIntegrationStatus('whatsapp'), touchIntegrationStatus('n8n')]);
 
       const isTakeover = Boolean(manualTakeover || automationPaused);
 

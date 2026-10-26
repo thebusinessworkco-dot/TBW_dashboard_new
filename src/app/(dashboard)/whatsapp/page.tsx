@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   MessageSquare,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { useDashboardStore, deduplicateAndSortMessages } from '@/lib/store/dashboard-store';
@@ -526,6 +527,9 @@ function WhatsAppPageContent() {
   const [notesSaved, setNotesSaved] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'inbox' | 'activity' | 'contacts'>('inbox');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeletingContact, setIsDeletingContact] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Derived active conversation ID: guarantees instant valid selection without cascading renders
   const effectiveConvId =
@@ -551,6 +555,16 @@ function WhatsAppPageContent() {
     return () => clearInterval(interval);
   }, [effectiveConvId, fetchConversationMessages]);
 
+  // Real-time conversation list auto-refresh (4s) so new customer messages immediately appear
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void refreshData();
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [refreshData]);
+
   const handleManualSync = async () => {
     if (isManualSyncing) return;
     setIsManualSyncing(true);
@@ -561,6 +575,39 @@ function WhatsAppPageContent() {
       ]);
     } finally {
       setTimeout(() => setIsManualSyncing(false), 500);
+    }
+  };
+
+  const handleDeleteActiveContact = async () => {
+    if (!activeConversation) return;
+    const phone = activeConversation.contact?.phone || activeConversation.contact_id;
+    if (!phone) return;
+
+    setIsDeletingContact(true);
+    setDeleteError(null);
+    try {
+      const cleanPhone = phone.replace(/\D/g, '');
+      const res = await fetch(`/api/whatsapp/contacts/${encodeURIComponent(cleanPhone)}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          admin_email: 'thebusinesswork.co@gmail.com',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setIsDeleteModalOpen(false);
+        setSelectedConvId('');
+        await refreshData();
+      } else {
+        setDeleteError(data.error || 'Failed to delete contact');
+      }
+    } catch {
+      setDeleteError('Network error while deleting contact');
+    } finally {
+      setIsDeletingContact(false);
     }
   };
 
@@ -962,6 +1009,16 @@ function WhatsAppPageContent() {
                 >
                   <Info className="h-4 w-4" />
                 </button>
+
+                {/* Delete Contact & Reset Chat */}
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-rose-200 bg-rose-50/50 p-2 text-rose-600 hover:bg-rose-100 hover:text-rose-800 transition shrink-0 cursor-pointer"
+                  title="Delete contact and reset customer session"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -1284,9 +1341,88 @@ function WhatsAppPageContent() {
                 <span>Save Notes</span>
               </button>
             </div>
+
+            {/* Delete Contact & Reset Chat Session */}
+            <div className="pt-2 border-t border-stone-200">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition shadow-2xs cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                <span>Delete Contact & Reset Chat</span>
+              </button>
+              <p className="mt-1 text-[10px] text-stone-400 text-center">
+                Next message from this number will be treated strictly as a new customer.
+              </p>
+            </div>
           </div>
         )}
       </div>
+      )}
+
+      {/* Delete Contact Confirmation Modal */}
+      {isDeleteModalOpen && activeConversation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-stone-900">Delete Contact & Reset Chat</h3>
+                <p className="text-xs text-stone-500">
+                  {activeConversation.contact?.name || activeConversation.contact?.phone}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Are you sure you want to delete this contact?
+              <br /><br />
+              • All messages and conversation records will be completely removed from the dashboard.
+              <br />
+              • In-memory session and customer state in n8n will be instantly cleared.
+              <br />
+              • When this customer messages your WhatsApp again, they will be treated strictly as a <strong>brand new customer</strong> (language prompt, collecting name/business/purpose, new customer alert).
+            </p>
+
+            {deleteError && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeletingContact}
+                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteActiveContact}
+                disabled={isDeletingContact}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 transition disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                {isDeletingContact ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Yes, Delete & Reset</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

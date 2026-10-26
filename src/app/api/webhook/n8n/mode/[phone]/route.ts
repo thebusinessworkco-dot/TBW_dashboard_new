@@ -55,9 +55,8 @@ export async function GET(
       .from('admin_contacts')
       .select('id, name, company_name')
       .or(
-        `phone.eq.${cleanPhone},phone.eq.${formattedPhone},phone.eq.${with91},phone.eq.${formattedWith91},phone.ilike.%${tenDigit}`
+        `phone.eq.${cleanPhone},phone.eq.${formattedPhone},phone.eq.${with91},phone.eq.${formattedWith91}`
       )
-      .order('created_at', { ascending: true })
       .limit(1);
 
     const contact = contacts?.[0] || null;

@@ -541,7 +541,7 @@ export async function recordBotMessage(
  */
 export async function deleteContactSafely(
   phoneOrId: string,
-  adminUserEmail: string = 'thebusinesswork.co@gmail.com'
+  _adminUserEmail: string = 'thebusinesswork.co@gmail.com'
 ): Promise<{
   success: boolean;
   contactId: string;
@@ -567,95 +567,93 @@ export async function deleteContactSafely(
     }
   }
 
-  // 2. Mark contact deleted in memory
-  let contactRecord = inMemoryContacts.get(normalized);
-  if (contactRecord) {
-    contactRecord.deleted_at = nowIso;
-  } else {
-    contactRecord = {
-      id: crypto.randomUUID?.() || `c_${Date.now()}`,
-      normalized_phone: normalized,
-      customer_name: null,
-      first_seen_at: nowIso,
-      last_seen_at: nowIso,
-      created_at: nowIso,
-      updated_at: nowIso,
-      deleted_at: nowIso,
-    };
-    inMemoryContacts.set(normalized, contactRecord);
-  }
-
-  // 3. Invalidate active session in memory
+  // 2. Clear contact and active session in memory
+  inMemoryContacts.delete(normalized);
   const activeSession = inMemorySessions.get(normalized);
   if (activeSession) {
     activeSession.status = 'CLOSED';
     activeSession.closed_at = nowIso;
     activeSession.close_reason = 'contact_deleted';
-    activeSession.awaiting_customer = false;
-    activeSession.follow_up_due_at = null;
-    await logSessionEvent(activeSession.session_id, 'contact_deleted', {
-      phone: normalized,
-      deleted_by: adminUserEmail,
-      preserved_appointments_count: apptCount,
-    });
     inMemorySessions.delete(normalized);
   }
 
-  // 4. Update Database
+  // 3. Clean Database Records (Messages, Conversations, Contact)
+  let deletedContactId = '';
   if (adminSupabase) {
-    // A. Update wa_contacts if exists
     try {
-      await adminSupabase
-        .from('wa_contacts')
-        .update({ deleted_at: nowIso, updated_at: nowIso })
-        .eq('normalized_phone', normalized);
-    } catch {
-      // Ignore
-    }
+      const tenDigit = normalized.slice(-10);
+      const with91 = '91' + tenDigit;
+      const formattedWith91 = '+91' + tenDigit;
 
-    // B. Soft-delete admin_contacts by tagging notes and updating updated_at
-    try {
-      const { data: contacts } = await adminSupabase
-        .from('admin_contacts')
-        .select('id, notes')
-        .or(`phone.eq.${normalized},phone.eq.+${normalized}`);
-
-      for (const c of contacts || []) {
-        const updatedNotes = (c.notes || '') + `\n[DELETED_CONTACT] by ${adminUserEmail} at ${nowIso}`;
-        await adminSupabase
-          .from('admin_contacts')
-          .update({ notes: updatedNotes.trim(), updated_at: nowIso })
-          .eq('id', c.id);
-      }
-    } catch {
-      // Ignore
-    }
-
-    // C. Close conversation in admin_conversations
-    try {
+      // Find all matching contact rows
       const { data: contacts } = await adminSupabase
         .from('admin_contacts')
         .select('id')
-        .or(`phone.eq.${normalized},phone.eq.+${normalized}`);
+        .or(`phone.eq.${normalized},phone.eq.+${normalized},phone.eq.${with91},phone.eq.${formattedWith91}`);
 
       const contactIds = (contacts || []).map((c) => c.id);
       if (contactIds.length > 0) {
-        await adminSupabase
+        deletedContactId = contactIds[0];
+
+        // Find all conversation IDs for these contacts
+        const { data: convs } = await adminSupabase
           .from('admin_conversations')
-          .update({
-            status: 'closed',
-            updated_at: nowIso,
-          })
+          .select('id')
           .in('contact_id', contactIds);
+
+        const convIds = (convs || []).map((c) => c.id);
+
+        // Delete messages belonging to these conversations
+        if (convIds.length > 0) {
+          await adminSupabase
+            .from('admin_messages')
+            .delete()
+            .in('conversation_id', convIds);
+
+          // Delete conversations
+          await adminSupabase
+            .from('admin_conversations')
+            .delete()
+            .in('id', convIds);
+        }
+
+        // Delete contacts from admin_contacts so phone is completely freed
+        await adminSupabase
+          .from('admin_contacts')
+          .delete()
+          .in('id', contactIds);
       }
-    } catch {
-      // Ignore
+
+      // Also clean wa_contacts & wa_sessions
+      await adminSupabase
+        .from('wa_contacts')
+        .delete()
+        .or(`normalized_phone.eq.${normalized},normalized_phone.eq.${with91}`);
+
+      await adminSupabase
+        .from('wa_sessions')
+        .delete()
+        .or(`contact_id.eq.${normalized},contact_id.eq.${with91}`);
+    } catch (dbErr) {
+      console.warn('[deleteContactSafely] Database cleanup error:', dbErr);
     }
+  }
+
+  // 4. Reset n8n workflow in-memory state via webhook
+  try {
+    const n8nBase = process.env.N8N_API_BASE_URL || 'https://n8n.thebusinesswork.com';
+    await fetch(`${n8nBase}/webhook/tbw-reset-customer-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalized }),
+    }).catch(() => null);
+  } catch {
+    // Non-blocking n8n webhook notification
   }
 
   return {
     success: true,
-    contactId: contactRecord.id,
+    contactId: deletedContactId || normalized,
     normalizedPhone: normalized,
     confirmedAppointmentsCount: apptCount,
   };
