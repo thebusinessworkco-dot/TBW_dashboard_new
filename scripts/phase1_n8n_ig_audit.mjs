@@ -4,7 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const N8N_API_BASE = 'https://n8n.thebusinesswork.com';
-const N8N_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYTU2YzhhMy04ODQ4LTRmMDQtYjUxZC1lYjBmMGYzNGE1ZjkiLCJpc3MiOiJuOG4iLCJqdGkiOiI5NDc5YzNlMC0wMDcwLTQ1YmItOTVkNC0zNjRiYTY0YmIxYjIiLCJpYXQiOjE3OTI3NjkwMTgsImF1ZCI6InB1YmxpYy1hcGkifQ.mRpbUE_EyBBDcJf7EP-5e4J1usyCXxE5xapr9D6To3U';
+const N8N_API_KEY = process.env.N8N_API_KEY || '';
 
 const IG_TOKEN = 'IGABABARr4cZAdBZAFpnajh1NnhkZAmI3bzhiS0JrQ3JnU2NCd1p3blI0VXdmdEtfRHcyM21SSzVSTkpCN1pZAZAEkxZAzNoYk5fSklmRUJsUEo3WUNha3RjTExrZAUpzc25TTnlRbmU5ZA2oySmVIMmlxb3Q3TmRJdUJvVW9aU2o0MHVzOAZDZD';
 

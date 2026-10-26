@@ -177,6 +177,60 @@ export async function resolveSessionForInbound(params: {
   const nowIso = now.toISOString();
   const adminSupabase = createAdminClient();
 
+  // 1. Database-First Persistent Atomic Session Resolution
+  if (adminSupabase) {
+    try {
+      const { data: dbRows, error: dbErr } = await adminSupabase.rpc('register_inbound_customer_message', {
+        p_phone: normalized,
+        p_customer_name: params.customerName || null,
+        p_message_text: params.messageText || null,
+        p_wamid: params.messageId || null,
+      });
+
+      if (!dbErr && Array.isArray(dbRows) && dbRows.length > 0) {
+        const row = dbRows[0];
+        const expiresAt = new Date(now.getTime() + INACTIVITY_TIMEOUT_MS).toISOString();
+
+        const dbSession: WaSessionRecord = {
+          id: row.session_id,
+          contact_id: normalized,
+          session_id: row.session_id,
+          status: row.human_takeover_active
+            ? 'HUMAN_TAKEOVER'
+            : row.requires_language_selection
+            ? 'AWAITING_LANGUAGE'
+            : 'ACTIVE',
+          customer_classification: row.customer_classification as CustomerClassification,
+          selected_language: row.selected_language,
+          started_at: nowIso,
+          last_customer_message_at: nowIso,
+          last_bot_message_at: null,
+          expires_at: expiresAt,
+          follow_up_due_at: null,
+          follow_up_sent_at: null,
+          awaiting_customer: false,
+          human_takeover_active: Boolean(row.human_takeover_active),
+          closed_at: null,
+          close_reason: null,
+          version: 1,
+          initial_question: params.messageText || null,
+        };
+
+        inMemorySessions.set(normalized, dbSession);
+
+        return {
+          session: dbSession,
+          isNewSession: Boolean(row.is_new_session),
+          classification: row.customer_classification as CustomerClassification,
+          requiresLanguageSelection: Boolean(row.requires_language_selection),
+          adminNotificationRequired: Boolean(row.is_new_session && row.customer_classification === 'NEW_CUSTOMER'),
+        };
+      }
+    } catch (dbErr) {
+      console.error('[Session Manager DB Error in register_inbound]:', dbErr);
+    }
+  }
+
   // 1. Check if contact is deleted
   const deleted = await isContactDeleted(normalized);
 
@@ -454,20 +508,28 @@ export async function recordBotMessage(
   session.version += 1;
 
   const adminSupabase = createAdminClient();
-  if (adminSupabase) {
+  if (adminSupabase && session?.session_id) {
     try {
-      await adminSupabase
-        .from('wa_sessions')
-        .update({
-          last_bot_message_at: session.last_bot_message_at,
-          awaiting_customer: session.awaiting_customer,
-          follow_up_due_at: session.follow_up_due_at,
-          status: session.status,
-          version: session.version,
-        })
-        .eq('session_id', session.session_id);
+      await adminSupabase.rpc('record_bot_outgoing_dispatch', {
+        p_session_id: session.session_id,
+        p_awaiting_reply: awaitingReply,
+        p_idempotency_key: `out_bot_${session.session_id}_${Date.now()}`
+      });
     } catch {
-      // Ignore
+      try {
+        await adminSupabase
+          .from('wa_sessions')
+          .update({
+            last_bot_message_at: session.last_bot_message_at,
+            awaiting_customer: session.awaiting_customer,
+            follow_up_due_at: session.follow_up_due_at,
+            status: session.status,
+            version: session.version,
+          })
+          .eq('session_id', session.session_id);
+      } catch {
+        // Ignore
+      }
     }
   }
 }
