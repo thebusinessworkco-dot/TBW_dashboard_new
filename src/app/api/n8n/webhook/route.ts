@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { evaluateCommentCheck, evaluateDmContext } from '@/lib/instagram/reel-automation';
 import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
+import { resolveSessionForInbound, recordBotMessage } from '@/lib/whatsapp/session-manager';
+import { sendAdminWhatsAppNotification } from '@/lib/whatsapp/admin-alert';
 
 /**
  * SELF-HOSTED n8n INTEGRATION WEBHOOK ENDPOINT
@@ -839,12 +841,14 @@ export async function POST(request: Request) {
 
       const { data: contactsByPhone } = await adminSupabase
         .from('admin_contacts')
-        .select('id, name, phone')
+        .select('id, name, phone, notes')
         .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`)
         .order('created_at', { ascending: true })
         .limit(1);
 
-      if (contactsByPhone && contactsByPhone.length > 0) {
+      const isContactSoftDeleted = Boolean(contactsByPhone?.[0]?.notes?.includes('[DELETED_CONTACT]'));
+
+      if (contactsByPhone && contactsByPhone.length > 0 && !isContactSoftDeleted) {
         existingContact = contactsByPhone[0];
         contactId = existingContact.id;
 
@@ -1073,6 +1077,52 @@ export async function POST(request: Request) {
 
       const isTakeover = Boolean(manualTakeover || automationPaused);
 
+      // F. WhatsApp V6 Session Management & Personal Admin Notification
+      let sessionData: Record<string, unknown> = {};
+      try {
+        const sessionRes = await resolveSessionForInbound({
+          phone: cleanPhone,
+          customerName: customerName || existingContact?.name,
+          messageText: content,
+          messageId: externalMessageId,
+        });
+
+        if (sessionRes.adminNotificationRequired) {
+          let hasAppt = false;
+          try {
+            const { data: apptRow } = await adminSupabase
+              .from('admin_appointments')
+              .select('id')
+              .or(`contact_info.eq.${cleanPhone},contact_info.eq.+${cleanPhone}`)
+              .eq('status', 'confirmed')
+              .limit(1)
+              .maybeSingle();
+            hasAppt = Boolean(apptRow);
+          } catch {
+            // Non-blocking
+          }
+
+          await sendAdminWhatsAppNotification({
+            sessionId: sessionRes.session.session_id,
+            classification: sessionRes.classification,
+            customerName: customerName || existingContact?.name,
+            customerPhone: cleanPhone,
+            messagePreview: content,
+            hasUpcomingAppointment: hasAppt,
+          });
+        }
+
+        sessionData = {
+          session_id: sessionRes.session.session_id,
+          customer_classification: sessionRes.classification,
+          requires_language_selection: sessionRes.requiresLanguageSelection,
+          is_new_session: sessionRes.isNewSession,
+          selected_language: sessionRes.session.selected_language,
+        };
+      } catch (sessErr) {
+        console.error('[WhatsApp V6 Session Resolution Error]:', sessErr);
+      }
+
       return NextResponse.json({
         success: true,
         conversation_id: conversationId,
@@ -1081,6 +1131,7 @@ export async function POST(request: Request) {
         manual_takeover: manualTakeover,
         automation_paused: automationPaused,
         external_message_id: externalMessageId,
+        ...sessionData,
         notice: isTakeover
           ? 'Human takeover is active. Do not dispatch automated reply.'
           : 'Automation permitted.',
@@ -1443,6 +1494,13 @@ export async function POST(request: Request) {
 
       await touchIntegrationStatus('whatsapp');
       await touchIntegrationStatus('n8n');
+
+      // Schedule 3-minute inactivity follow-up on bot outgoing response
+      try {
+        await recordBotMessage(cleanPhone, true);
+      } catch {
+        // Non-blocking
+      }
 
       return NextResponse.json({
         success: true,

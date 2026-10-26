@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { useDashboardStore, deduplicateAndSortMessages } from '@/lib/store/dashboard-store';
+import { WhatsAppActivityView } from '@/components/whatsapp/whatsapp-activity-view';
+import { WhatsAppContactsView } from '@/components/whatsapp/whatsapp-contacts-view';
 import {
   formatDateTime,
   formatRelativeTime,
@@ -523,6 +525,7 @@ function WhatsAppPageContent() {
   const [notesDraft, setNotesDraft] = useState(waConversations[0]?.internal_notes || '');
   const [notesSaved, setNotesSaved] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'inbox' | 'activity' | 'contacts'>('inbox');
 
   // Derived active conversation ID: guarantees instant valid selection without cascading renders
   const effectiveConvId =
@@ -653,15 +656,77 @@ function WhatsAppPageContent() {
     setTimeout(() => setNotesSaved(false), 2000);
   };
 
+  const handleOpenChatByPhone = (phone: string) => {
+    const clean = phone.replace(/\D/g, '');
+    const matched = waConversations.find(
+      (c) => (c.contact?.phone || '').replace(/\D/g, '') === clean
+    );
+    if (matched) {
+      setSelectedConvId(matched.id);
+    }
+    setActiveTab('inbox');
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAF8F5]">
       <TopNavbar
-        title="WhatsApp Automation Inbox"
-        subtitle="Review what your bot says, take over conversations manually, and monitor message delivery."
+        title="WhatsApp Automation Master Dashboard"
+        subtitle="Review bot conversations, monitor live real-time sessions, and manage customer contacts."
       />
 
-      {/* 3-Panel Master-Detail Layout */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* WhatsApp V6 Top Navigation Tabs */}
+      <div className="flex items-center justify-between border-b border-[#E6E1D7] bg-[#FAF8F5] px-4 py-2 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setActiveTab('inbox')}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'inbox'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>Live Inbox</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'activity'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <span>Live Activity & Sessions</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('contacts')}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'contacts'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Contact Management & CRM</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 border border-emerald-200/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live Supabase Connected
+          </span>
+        </div>
+      </div>
+
+      {/* Tab Content Display */}
+      {activeTab === 'activity' && <WhatsAppActivityView onSelectCustomer={handleOpenChatByPhone} />}
+      {activeTab === 'contacts' && <WhatsAppContactsView onOpenChat={handleOpenChatByPhone} />}
+      {activeTab === 'inbox' && (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* PANEL 1: CONVERSATION LIST */}
         <div className="flex w-full flex-col border-r border-[#E6E1D7] bg-white sm:w-72 lg:w-80 shrink-0">
           {/* Search & Filter Header */}
@@ -1222,6 +1287,7 @@ function WhatsAppPageContent() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
