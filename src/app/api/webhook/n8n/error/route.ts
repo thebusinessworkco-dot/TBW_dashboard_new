@@ -16,12 +16,12 @@ export async function POST(request: Request) {
     if (adminSupabase) {
       try {
         await adminSupabase.from('admin_workflow_executions').insert({
-          workflow_id: String(payload.workflow_id || 'v4_error_monitor'),
-          workflow_name: String(payload.workflow_name || 'V4 Error Alert'),
+          workflow_id: String(payload.workflow_id || 'n8n_error_monitor'),
+          workflow_name: String(payload.workflow_name || 'n8n Error Alert'),
           execution_id: String(payload.execution_id || Date.now()),
           status: 'error',
-          error_message: String(payload.error || payload.error_message || payload.message || 'Unknown error'),
-          failed_node_name: payload.failed_node_name ? String(payload.failed_node_name) : null,
+          error_message: String(payload.error_message || payload.error || payload.message || 'Unknown error'),
+          failed_node_name: (payload.error_node || payload.failed_node_name) ? String(payload.error_node || payload.failed_node_name) : null,
           duration_ms: Number(payload.duration_ms) || null,
           is_demo: false,
           started_at: nowIso,
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
             service_name: 'n8n',
             status: 'warning',
             last_checked_at: nowIso,
-            error_message: String(payload.error || payload.message || 'Workflow warning logged').slice(0, 255),
+            error_message: String(payload.error_message || payload.error || payload.message || 'Workflow warning logged').slice(0, 255),
             updated_at: nowIso,
           },
           { onConflict: 'service_name' }

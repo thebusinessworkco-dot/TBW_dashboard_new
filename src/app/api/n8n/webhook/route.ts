@@ -278,10 +278,10 @@ export async function POST(request: Request) {
       eventType === 'incoming_instagram_message' ||
       (eventType === 'incoming_message' && (payload.platform === 'instagram' || payload.sender_id))
     ) {
-      const senderId = String(payload.sender_id || payload.instagram_scoped_id || '').trim();
+      const senderId = String(payload.sender_id || payload.instagram_scoped_id || payload.ig_user_id || '').trim();
       const rawUsername = String(payload.username || payload.instagram_username || '').replace(/^@/, '').trim();
-      const content = String(payload.content || payload.text || payload.message_text || '').trim();
-      const externalMessageId = payload.external_message_id || payload.mid || payload.message_id || null;
+      const content = String(payload.content || payload.text || payload.message_text || payload.quick_reply_payload || '').trim();
+      const externalMessageId = payload.external_message_id || payload.mid || payload.message_id || payload.event_id || payload.id || null;
       const senderName = payload.sender_name || (rawUsername ? `@${rawUsername}` : `IG User ${senderId.slice(-4)}`);
 
       // STABLE IDENTIFIER ENFORCEMENT: sender_id (IGSID) is mandatory
@@ -1279,16 +1279,16 @@ export async function POST(request: Request) {
         rawSenderType === 'human_agent' || rawSenderType === 'human' || rawSenderType === 'agent' || rawSenderType === 'admin'
           ? 'human_agent'
           : rawSenderType === 'automation_rule' || rawSenderType === 'automation' || rawSenderType === 'system' || rawSenderType === 'rule'
-          ? 'automation_rule'
-          : 'automation_ai';
+            ? 'automation_rule'
+            : 'automation_ai';
 
       const senderName = String(
         payload.sender_name ||
         (normalizedSenderType === 'human_agent'
           ? 'Human Admin (Aman Rajbhar)'
           : normalizedSenderType === 'automation_rule'
-          ? 'TBW Automation'
-          : 'TBW AI Assistant')
+            ? 'TBW Automation'
+            : 'TBW AI Assistant')
       ).trim();
 
       const rawContent = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
@@ -1296,6 +1296,7 @@ export async function POST(request: Request) {
         payload.external_message_id ||
         payload.wa_message_id ||
         payload.wamid ||
+        payload.provider_message_id ||
         payload.mid ||
         payload.message_id ||
         payload.event_id ||
@@ -1544,6 +1545,38 @@ export async function POST(request: Request) {
 
       const mappedStatus = rawStatus as 'sent' | 'delivered' | 'read' | 'failed';
 
+      // Out-of-order protection: Never downgrade read -> delivered -> sent
+      const STATUS_RANK: Record<string, number> = {
+        sent: 1,
+        delivered: 2,
+        read: 3,
+        failed: 4,
+      };
+
+      const { data: existingMsg } = await adminSupabase
+        .from('admin_messages')
+        .select('id, conversation_id, status')
+        .eq('external_message_id', wamid)
+        .maybeSingle();
+
+      if (existingMsg) {
+        const currentRank = STATUS_RANK[existingMsg.status] || 0;
+        const newRank = STATUS_RANK[mappedStatus] || 0;
+
+        // Skip demoting status update if out of order (unless marking failed)
+        if (mappedStatus !== 'failed' && currentRank > newRank) {
+          return NextResponse.json({
+            success: true,
+            action: 'status_ignored_out_of_order',
+            wamid,
+            status: existingMsg.status,
+            ignored_status: mappedStatus,
+            message_id: existingMsg.id,
+            found: true,
+          });
+        }
+      }
+
       const { data: updatedMsg, error: updateErr } = await adminSupabase
         .from('admin_messages')
         .update({ status: mappedStatus })
@@ -1563,8 +1596,8 @@ export async function POST(request: Request) {
         action: 'status_updated',
         wamid,
         status: mappedStatus,
-        message_id: updatedMsg?.id || null,
-        found: Boolean(updatedMsg),
+        message_id: updatedMsg?.id || existingMsg?.id || null,
+        found: Boolean(updatedMsg || existingMsg),
       });
     }
 

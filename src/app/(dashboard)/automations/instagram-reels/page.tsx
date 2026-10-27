@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ExternalLink,
   MessageCircle,
-  Copy,
   Trash2,
   Edit3,
   Sliders,
@@ -19,7 +18,6 @@ import {
   Smartphone,
   Sparkles,
   ArrowRight,
-  Info,
   X,
   Link2,
   Layers,
@@ -43,7 +41,7 @@ export default function InstagramReelsPage() {
   const [rules, setRules] = useState<InstagramReelRule[]>([]);
   const [syncedReels, setSyncedReels] = useState<InstagramSyncedReel[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [accountInfo, setAccountInfo] = useState<{ id: string; username: string; name?: string; profile_picture_url?: string } | null>(null);
+  const [, setAccountInfo] = useState<{ id: string; username: string; name?: string; profile_picture_url?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
@@ -1932,7 +1930,7 @@ export default function InstagramReelsPage() {
                   </div>
 
                   <div className="text-[10px] text-stone-400 text-center pt-2">
-                    Strict Reel Isolation Active · Live n8n Workflow VBrjbhPeDypXt12q
+                    Strict Reel Isolation Active · Automation Integration Ready
                   </div>
                 </div>
               </div>

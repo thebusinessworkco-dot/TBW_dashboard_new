@@ -14,7 +14,8 @@ export function verifyIncomingN8nWebhook(
   request: Request,
   allowInternalSecret = false
 ): { authorized: boolean; reason?: string } {
-  const expectedWebhookSecret = process.env.N8N_WEBHOOK_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const expectedWebhookSecret = process.env.N8N_WEBHOOK_SECRET || (!isProduction ? process.env.N8N_API_KEY : undefined);
   const expectedInternalSecret = allowInternalSecret ? process.env.INTERNAL_API_SECRET : undefined;
 
   if (!expectedWebhookSecret && !expectedInternalSecret) {
@@ -27,10 +28,11 @@ export function verifyIncomingN8nWebhook(
   const authHeader = request.headers.get('authorization') || '';
   const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
   const customKey = request.headers.get('x-n8n-api-key') || '';
+  const n8nSecret = request.headers.get('x-n8n-secret') || '';
   const tbwSecret = request.headers.get('x-tbw-webhook-secret') || '';
   const internalHeader = request.headers.get('x-internal-secret') || '';
 
-  const candidates = [customKey, tbwSecret, bearerToken, internalHeader].filter(Boolean);
+  const candidates = [customKey, n8nSecret, tbwSecret, bearerToken, internalHeader].filter(Boolean);
 
   const isAuthorized = candidates.some(
     (cand) =>
