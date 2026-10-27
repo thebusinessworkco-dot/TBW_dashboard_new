@@ -1,0 +1,1999 @@
+{
+  "name": "TBW IG SIMPLE v3.1 - Dashboard Integrated (IMPORT INACTIVE)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tbw-ig-simple-v3-events",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "095d8f3b-3d9e-4cfa-9c38-f03a35a48835",
+      "name": "IG - Bridge Webhook (v3)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        704,
+        1728
+      ],
+      "webhookId": "8a0749e3-6f4e-458e-a399-d4a580fea647",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input must come from trusted Instagram bridge with Header Auth.\nconst inbound=$input.first()?.json||{};\nconst b=inbound.body||inbound;\nconst out=[];\n// Authenticated event-driven timer callbacks: never register as user messages.\nif(b.event_type==='timer_check' && ['nudge','close'].includes(b.timer_action)){\n const id=String(b.ig_user_id||'');\n const last=Number(b.expected_last_inbound_at);\n if(/^\\d{5,40}$/.test(id)&&Number.isFinite(last)&&last>0&&/^ig_\\d+_\\d{1,6}$/.test(String(b.session_id||''))){\n  return [{json:{event_type:'timer_check',ig_user_id:id,session_id:String(b.session_id),timer_action:String(b.timer_action),expected_last_inbound_at:last}}];\n }\n return [];\n}\n\nfunction str(v,max=900){return String(v??'').slice(0,max);}\nfunction add(e){\n  if(!['dm','comment'].includes(e.event_type)||!e.event_id)return;\n  if(e.is_echo===true||e.from_own_account===true)return;\n  if(e.event_type==='dm'&&!/^\\d{5,40}$/.test(String(e.ig_user_id||'')))return;\n  if(e.event_type==='comment'&&!/^\\d{5,80}$/.test(String(e.comment_id||'')))return;\n  out.push({json:{event_type:e.event_type,event_id:str(e.event_id,160),ig_user_id:str(e.ig_user_id,40),username:str(e.username,100),name:str(e.name,100),text:str(e.text||e.message?.text,900),quick_reply_payload:str(e.quick_reply_payload||e.postback_payload||e.message?.quick_reply?.payload||e.quick_reply?.payload||e.payload,150),comment_id:str(e.comment_id,80),media_id:str(e.media_id,80),reel_url:str(e.reel_url,450),timestamp:e.timestamp||new Date().toISOString(),channel:'instagram',source:'Instagram'}});\n}\nif(['dm','comment'].includes(b.event_type))add(b);\nfor(const entry of Array.isArray(b.entry)?b.entry:[]){\n  for(const m of Array.isArray(entry.messaging)?entry.messaging:[]){\n    if(m.message?.is_echo===true)continue;\n    const id=m.sender?.id,mid=m.message?.mid||m.postback?.mid;\n    if(!id||id===entry.id||!mid)continue;\n    add({event_type:'dm',event_id:mid,ig_user_id:id,text:m.message?.text||m.postback?.title||'',quick_reply_payload:m.message?.quick_reply?.payload||m.postback?.payload||'',timestamp:m.timestamp||entry.time});\n  }\n  for(const c of Array.isArray(entry.changes)?entry.changes:[]){\n    if(!['comments','live_comments'].includes(c.field))continue;\n    const v=c.value||{};if(!v.id&&!v.comment_id)continue;\n    if(String(v.from?.id||v.user_id||'')===String(entry.id||'')||v.from_own_account===true)continue;\n    add({event_type:'comment',event_id:'comment:'+(v.id||v.comment_id),ig_user_id:v.from?.id||v.user_id||'',username:v.from?.username||v.username||'',comment_id:v.id||v.comment_id,media_id:v.media?.id||v.media_id||'',reel_url:v.media?.permalink||'',text:v.text||'',timestamp:v.timestamp||entry.time});\n  }\n}\nreturn out;"
+      },
+      "id": "e26db055-6496-4dcb-8fe9-70bdba9b9a3f",
+      "name": "IG - Normalize Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        1920
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/register",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "b12b553e-81e6-400c-8eb7-f08757938660",
+      "name": "IG - Deduplicate via Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        1824
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a89cdf1b-67b9-42b0-8a0c-51f647c631f4",
+              "leftValue": "={{ $json.accepted === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "75cc5836-c171-476d-8d7e-32b04c7943c2",
+      "name": "IG - Accepted Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ad80bb69-8a33-42d3-ae11-ae58525c0929",
+              "leftValue": "={{ $json.event_type === 'dm' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6d2c46d4-6af7-49e0-9726-465d8544a0db",
+      "name": "IG - DM or Comment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1824,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "af53a5bb-ab9a-4388-92f0-360d1eeed2e3",
+              "leftValue": "={{ $json.mode === 'ai' && $json.reply_allowed === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "04d28566-eb0e-4287-b5ac-7d405359b9d6",
+      "name": "IG - Bot Reply Allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2272,
+        1728
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// TBW Instagram DM Reply Logic — clean WhatsApp button, no long URL in chat.\n// Replace only the code in the \"IG - DM Reply Logic\" node.\n// CATS, SVCS, M must be supplied by the preceding \"IG - Language + Catalog\" node.\n\nconst ev = $input.first()?.json || {};\nif (ev.event_type !== 'dm' || ev.accepted !== true || ev.reply_allowed !== true || ev.mode !== 'ai') return [];\n\nconst id = String(ev.ig_user_id || '');\nif (!/^\\d{5,40}$/.test(id)) return [];\n\nconst { CATS, SVCS, M } = ev.ig_catalog || {};\nif (!CATS || !SVCS || !M) throw new Error('Missing Instagram catalog from IG - Language + Catalog');\n\nconst mem = $getWorkflowStaticData('global');\nmem.tbwIgSessions ??= {};\nmem.tbwIgLeadCooldowns ??= {};\n\nconst now = Date.now();\nconst sessions = mem.tbwIgSessions;\nlet s = sessions[id];\nconst isNew = !s || s.closed || now - Number(s.lastInboundAt || 0) >= 20 * 60000;\nif (isNew) {\n  s = {\n    sessionId: 'ig_' + now + '_' + id.slice(-6),\n    stage: 'new',\n    language: '',\n    category: '',\n    service: '',\n    lastInboundAt: 0,\n    updatedAt: now,\n    promptAt: 0,\n    nudged: false,\n    closed: false,\n    alertedServices: {},\n    lastFallbackAt: 0,\n  };\n  sessions[id] = s;\n}\ns.lastInboundAt = now;\ns.updatedAt = now;\ns.nudged = false;\n\nconst raw = String(ev.text || '').trim().slice(0, 900);\nconst normalized = raw.toLocaleLowerCase().replace(/\\s+/g, ' ').trim();\nconst click = String(ev.quick_reply_payload || '').trim();\nconst language = () => s.language || 'en';\nconst translations = () => M[language()] || M.en;\nconst quick = (title, payload) => ({ content_type: 'text', title: String(title).slice(0, 20), payload });\nconst waBase = 'https://wa.me/917972020292';\n\nfunction waLink() {\n  const category = s.category ? (CATS[s.category]?.en || '') : '';\n  const text = [\n    'Hello The Business Work!',\n    'I came from Instagram.',\n    category ? 'Category: ' + category : '',\n    s.service ? 'Service: ' + s.service : '',\n    'I want more details and would like to book an appointment.',\n  ].filter(Boolean).join('\\n');\n  return waBase + '?text=' + encodeURIComponent(text);\n}\n\nfunction textReply(text, options = []) {\n  return {\n    recipient: { id },\n    message: {\n      text: String(text).slice(0, 950),\n      ...(options.length ? { quick_replies: options.slice(0, 13) } : {}),\n    },\n  };\n}\n\n// IMPORTANT: Link exists ONLY on the WhatsApp button, not in the message text.\nfunction urlReply(text) {\n  const t = translations();\n  return {\n    recipient: { id },\n    message: {\n      attachment: {\n        type: 'template',\n        payload: {\n          template_type: 'button',\n          text: String(text).slice(0, 640),\n          buttons: [\n            { type: 'web_url', url: waLink(), title: 'Chat on WhatsApp' },\n            { type: 'postback', title: String(t.menu || 'Main Menu').slice(0, 20), payload: 'IG_MENU' },\n            { type: 'postback', title: String(t.endbtn || 'End Chat').slice(0, 20), payload: 'IG_END' },\n          ],\n        },\n      },\n    },\n  };\n}\n\nfunction answer(payload, newLead = false) {\n  s.promptAt = 0;\n  return [{\n    json: {\n      event_type: 'dm_reply',\n      ig_user_id: id,\n      username: ev.username || '',\n      source_event_id: ev.event_id,\n      session_id: s.sessionId,\n      category: s.category,\n      service: s.service,\n      language: language(),\n      new_lead: newLead,\n      igPayload: payload,\n    },\n  }];\n}\n\nfunction langMenu() {\n  s.stage = 'language';\n  s.language = '';\n  s.lastFallbackAt = 0;\n  return answer(textReply(\n    M.en.hello + '\\n\\n1. English  2. हिंदी\\n3. Hinglish  4. मराठी\\n(Type 1–4 on desktop)',\n    [quick('English', 'IG_LANG_en'), quick('हिंदी', 'IG_LANG_hi'), quick('Hinglish', 'IG_LANG_hinglish'), quick('मराठी', 'IG_LANG_mr')]\n  ));\n}\n\nfunction catMenu() {\n  const t = translations();\n  s.stage = 'category';\n  s.lastFallbackAt = 0;\n  const keys = ['ai', 'crm', 'workflow', 'social'];\n  const names = keys.map((key, i) => `${i + 1}. ${CATS[key][language()]}`).join('\\n');\n  return answer(textReply(\n    `${t.category}\\n\\n${names}\\n\\n(Type 1–4 on desktop)`,\n    keys.map((key, i) => quick(`${i + 1}. ${CATS[key][language()].slice(0, 16)}`, 'IG_CAT_' + key))\n      .concat([quick(t.endbtn, 'IG_END')])\n  ));\n}\n\nfunction svcMenu(cat) {\n  const t = translations();\n  s.stage = 'service';\n  s.category = cat;\n  s.lastFallbackAt = 0;\n  const list = SVCS[cat] || [];\n  const names = list.map((svc, i) => `${i + 1}. ${svc[language()]}`).join('\\n');\n  return answer(textReply(\n    `${t.service}\\n\\n${names}\\n\\n(Type 1–6 on desktop)`,\n    list.map((svc, i) => quick(`${i + 1}. ${svc[language()].slice(0, 16)}`, `IG_SVC_${cat}_${i}`))\n      .concat([quick(t.back, 'IG_MENU'), quick(t.endbtn, 'IG_END')])\n  ));\n}\n\nfunction inferLanguage() {\n  if (/^IG_LANG_(en|hi|hinglish|mr)$/.test(click)) return click.slice(8);\n  const options = {\n    english: 'en', en: 'en', '1': 'en',\n    hindi: 'hi', 'हिंदी': 'hi', 'हिन्दी': 'hi', hi: 'hi', '2': 'hi',\n    hinglish: 'hinglish', '3': 'hinglish',\n    marathi: 'mr', 'मराठी': 'mr', mr: 'mr', '4': 'mr',\n  };\n  return options[normalized] || '';\n}\n\nfunction indexFromText(max) {\n  const match = normalized.match(/^([1-9])(?:\\s*[.):-]|\\s*$)/);\n  const i = match ? Number(match[1]) - 1 : -1;\n  return i >= 0 && i < max ? i : -1;\n}\n\nfunction inferCategory() {\n  if (click.startsWith('IG_CAT_') && CATS[click.slice(7)]) return click.slice(7);\n  const keys = ['ai', 'crm', 'workflow', 'social'];\n  const i = indexFromText(4);\n  if (i >= 0) return keys[i];\n  for (const key of keys) {\n    const names = Object.values(CATS[key]).map(value => String(value).toLocaleLowerCase());\n    if (names.includes(normalized) || normalized.startsWith(key + ' ') || normalized === key) return key;\n  }\n  return '';\n}\n\nfunction inferService() {\n  const match = /^IG_SVC_(ai|crm|workflow|social)_(\\d)$/.exec(click);\n  if (match && SVCS[match[1]]?.[Number(match[2])]) return [match[1], Number(match[2])];\n  if (s.stage !== 'service' || !s.category) return null;\n  const list = SVCS[s.category] || [];\n  const i = indexFromText(list.length);\n  if (i >= 0) return [s.category, i];\n  for (let j = 0; j < list.length; j++) {\n    const names = Object.values(list[j]).map(value => String(value).toLocaleLowerCase());\n    if (names.includes(normalized) || names.some(value => normalized === value.slice(0, 17))) return [s.category, j];\n  }\n  return null;\n}\n\nfunction navInput() {\n  if (click === 'IG_END' || ['end', 'end chat', 'stop', 'bye', 'chat band', 'चैट बंद', 'चॅट बंद'].includes(normalized)) return 'end';\n  if (click === 'IG_MENU' || ['menu', 'main menu', 'back', 'पीछे', 'मुख्य मेनू', 'मागे'].includes(normalized)) return 'menu';\n  if (click === 'IG_RESUME' || ['continue', 'yes continue', 'yes, continue', 'हाँ, जारी रखें', 'हो, पुढे चला'].includes(normalized)) return 'resume';\n  if (['whatsapp', 'chat on whatsapp', 'appointment', 'book appointment', 'book consultation', 'more details'].includes(normalized)) return 'whatsapp';\n  return '';\n}\n\nif (s.stage === 'new') return langMenu();\n\nconst nav = navInput();\nif (nav === 'end') {\n  s.closed = true;\n  s.stage = 'ended';\n  s.promptAt = 0;\n  return answer(textReply(translations().end));\n}\n\nif (s.stage === 'language') {\n  const chosen = inferLanguage();\n  if (chosen) {\n    s.language = chosen;\n    s.lastFallbackAt = 0;\n    return catMenu();\n  }\n  if (s.lastFallbackAt && now - s.lastFallbackAt < 120000) return [];\n  s.lastFallbackAt = now;\n  return answer(textReply(\n    'Please select a language by tapping or typing 1–4. 😊\\n1. English  2. हिंदी  3. Hinglish  4. मराठी',\n    [quick('English', 'IG_LANG_en'), quick('हिंदी', 'IG_LANG_hi'), quick('Hinglish', 'IG_LANG_hinglish'), quick('मराठी', 'IG_LANG_mr')]\n  ));\n}\n\nif (!s.language) return langMenu();\nif (nav === 'menu') return catMenu();\nif (nav === 'resume') return s.stage === 'service' && s.category ? svcMenu(s.category) : catMenu();\nif (nav === 'whatsapp') return answer(urlReply(translations().fallback));\n\nconst cat = inferCategory();\nif (cat && (s.stage === 'category' || click.startsWith('IG_CAT_'))) return svcMenu(cat);\n\nconst svc = inferService();\nif (svc) {\n  s.category = svc[0];\n  s.service = SVCS[svc[0]][svc[1]].en;\n  s.stage = 'selected';\n  s.lastFallbackAt = 0;\n  const leadKey = id + '|' + s.category + '|' + s.service;\n  const lastLead = Number(mem.tbwIgLeadCooldowns[leadKey] || 0);\n  const newLead = !(lastLead && now - lastLead < 86400000);\n  const serviceTitle = SVCS[svc[0]][svc[1]][language()];\n  return answer(urlReply(translations().selected.replace('{service}', serviceTitle)), newLead);\n}\n\nif (raw || click) {\n  if (s.lastFallbackAt && now - s.lastFallbackAt < 120000) return [];\n  s.lastFallbackAt = now;\n  // Keep existing stage: after fallback, typed category/service must still work.\n  return answer(urlReply(translations().fallback));\n}\n\nreturn [];\n"
+      },
+      "id": "a2689cf2-70c5-4426-89e9-7a90df153512",
+      "name": "IG - DM Reply Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3be5c44a-269c-415e-870d-8c090231b1ba",
+              "leftValue": "={{ !!$json.igPayload && !!$json.ig_user_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cb014f30-f6e3-46f4-bc47-8978ddc61f70",
+      "name": "IG - Reply Prepared?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2944,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v26.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.igPayload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 12000
+        }
+      },
+      "id": "17a3b953-1617-4f87-a3ba-570aadeffc55",
+      "name": "IG - Send DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3168,
+        1632
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "7sIHDKGWFf4OToxy",
+          "name": "Instagram Meta Send Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sent=$input.first()?.json||{};\nconst src=$('IG - DM Reply Logic').first().json;\nconst ok=!!sent.message_id&&!sent.error;\nconst mem=$getWorkflowStaticData('global');\nconst s=mem.tbwIgSessions?.[src.ig_user_id];\nif(s&&s.sessionId===src.session_id&&ok){s.promptAt=Date.now();s.nudged=false;}\nlet confirmedNewLead=false;\nif(ok && src.new_lead===true && src.service && src.category){\n mem.tbwIgLeadCooldowns??={};\n const leadKey=src.ig_user_id+'|'+src.category+'|'+src.service;\n const previous=Number(mem.tbwIgLeadCooldowns[leadKey]||0);\n if(!previous||Date.now()-previous>=86400000){mem.tbwIgLeadCooldowns[leadKey]=Date.now();confirmedNewLead=true;}\n}\nreturn [{json:{channel:'instagram',event_type:'dm_reply',source_event_id:src.source_event_id,\n ig_user_id:src.ig_user_id,username:src.username||'',session_id:src.session_id,\n category:src.category||'',service:src.service||'',language:src.language||'',new_lead:confirmedNewLead,\n last_inbound_at:Number(s?.lastInboundAt||0),session_closed:!!s?.closed,\n accepted_by_provider:ok,provider_message_id:sent.message_id||'',error:sent.error||null}}];"
+      },
+      "id": "7d8ab720-942e-4edc-837b-25814a3f4aca",
+      "name": "IG - DM Send Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3392,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "d5548498-ecd6-46ca-b519-0f5291366504",
+      "name": "IG - Log DM to Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3392,
+        1440
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fbb7a2cd-03bb-452d-87b9-9c6ebbf2376c",
+              "leftValue": "={{ $json.new_lead === true && $json.accepted_by_provider === true && !!$json.service }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4b5c7979-7ba9-4a9f-a853-0effe45e6328",
+      "name": "IG - New Instagram Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3392,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e=$input.first()?.json||{};\nif(e.new_lead!==true||!e.ig_user_id||!e.service)return [];\nconst c={ai:'AI Agents & Chatbots',crm:'CRM & Sales Automation',workflow:'Business Workflow Automation',social:'WhatsApp & Social Automation'};\nconst description=['📩 New Instagram Lead - The Business Work','Instagram user: '+(e.username?'@'+e.username:'ID '+e.ig_user_id),'Category: '+(c[e.category]||''),'Service: '+e.service,'Source: Instagram Direct DM','Dashboard: https://dashboard.thebusinesswork.com'].join('\\n');\nreturn [{json:{event_type:'lead_upsert',channel:'instagram',source:'Instagram',lead_id:e.session_id+'|'+e.category+'|'+e.service,ig_user_id:e.ig_user_id,username:e.username||'',category:c[e.category]||'',service:e.service,language:e.language||'',created_at:new Date().toISOString(),adminAlertPayload:{messaging_product:'whatsapp',to:'918604600292',type:'text',text:{preview_url:false,body:description}}}}];"
+      },
+      "id": "1215d34a-33e5-4d58-aa86-c58892c62b6d",
+      "name": "IG - Prepare Lead + Owner Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3616,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/lead",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "ef271935-f529-4004-8cd0-a2d2fb1f5b30",
+      "name": "IG - Dashboard Lead Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        1728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/1392092143987065/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.adminAlertPayload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "dcd47896-f2fb-44ba-9e8b-fbfb2e061da5",
+      "name": "IG - Owner WhatsApp Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        1920
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "zQ6qZKUzn2qjjSlf",
+          "name": "TBW WhatsApp System User"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/instagram/comment-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "d716adf4-b6b5-466d-a767-6805b2efcbd1",
+      "name": "IG - Dashboard Reel Rule",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2496,
+        2288
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "76a0b2b0-3faf-4f64-a478-42f2d5218ed8",
+              "leftValue": "={{ $json.approved === true && (!!$json.reply_text || ($json.public_reply_enabled === true && !!$json.public_reply_text)) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a3190cab-d936-4a23-8c03-b44d9fd1a122",
+      "name": "IG - Comment Rule Matched?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2944,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first()?.json||{};\nif(r.approved!==true||!r.reply_text||!/^[0-9]{5,80}$/.test(String(r.comment_id||'')))return [];\nconst n=typeof r.timestamp==='number'?r.timestamp:Number(r.timestamp);\nconst ts=Number.isFinite(n)&&n>1000000000?(n<1e12?n*1000:n):Date.parse(String(r.timestamp||''));\nif(!Number.isFinite(ts)||Date.now()-ts>=7*86400000||ts>Date.now()+300000)return [];\nreturn [{json:{event_type:'private_reply',comment_id:String(r.comment_id),media_id:r.media_id||'',rule_id:r.rule_id||'',ig_user_id:r.ig_user_id||'',username:r.username||'',source_event_id:r.event_id,\n igPayload:{recipient:{comment_id:String(r.comment_id)},message:{text:String(r.reply_text).trim().slice(0,950)}}}}];"
+      },
+      "id": "f21af6e8-68e7-44f4-81cc-81e198285cf4",
+      "name": "IG - Private Reply Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        2112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v26.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.igPayload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 12000
+        }
+      },
+      "id": "497a3470-cae6-4220-928f-30bb796c188e",
+      "name": "IG - Send Comment Private Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3392,
+        2112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "7sIHDKGWFf4OToxy",
+          "name": "Instagram Meta Send Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sent=$input.first()?.json||{},src=$('IG - Private Reply Payload').first().json;\nreturn [{json:{channel:'instagram',event_type:'private_reply',source_event_id:src.source_event_id,comment_id:src.comment_id,media_id:src.media_id,ig_user_id:src.ig_user_id,username:src.username,rule_id:src.rule_id,accepted_by_provider:!!sent.message_id&&!sent.error,provider_message_id:sent.message_id||'',error:sent.error||null}}];"
+      },
+      "id": "3557d3eb-f4c5-4a98-8724-12258e2c7861",
+      "name": "IG - Comment Send Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3616,
+        2112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "18db186f-ace0-4ce1-a0d7-0fbbf9451fb2",
+      "name": "IG - Log Comment to Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        2112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v26.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.igPayload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 12000
+        }
+      },
+      "id": "042b3506-d531-40d2-afd1-e89280433664",
+      "name": "IG - Send One Nudge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        2400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "7sIHDKGWFf4OToxy",
+          "name": "Instagram Meta Send Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sent=$input.first()?.json||{},src=$('IG - Timer Action').first().json;\nreturn [{json:{channel:'instagram',event_type:'dm_nudge',source_event_id:src.source_event_id,ig_user_id:src.ig_user_id,session_id:src.session_id,accepted_by_provider:!!sent.message_id&&!sent.error,provider_message_id:sent.message_id||'',error:sent.error||null}}];"
+      },
+      "id": "3c0e17ce-6413-442f-851a-27a11d475cf1",
+      "name": "IG - Nudge Send Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "e3534e69-6d8f-49b2-8bf0-41f333124786",
+      "name": "IG - Log Nudge to Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        2400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## TBW Instagram v3 — TEST SAFELY BEFORE DASHBOARD CUTOVER\n1. Publish Timer v3 then Main v3. Unpublish old IG-only v1/v2 listeners. Never unpublish a combined V4 if it still handles live WhatsApp; redirect its Instagram Bridge instead.\n2. New bridge endpoint: /webhook/tbw-ig-simple-v3-events (v2 alias supported; V4 is intentionally NOT aliased to protect WhatsApp). Only one listener per path.\n3. DM language selection supports both Meta payload and plain text `English` / 1–4 (Instagram desktop).\n4. Four categories → six services each → WhatsApp prefilled link and buttons. No AI.\n5. For Reels: edit `IG - Test Reel Rule (OFF by default)` with exact Reel media ID; enable for test ONLY; then OFF and use dashboard `/api/instagram/comment-check`.\n6. Public comment reply requires an explicitly enabled per-Reel rule (dashboard field public_reply_enabled), and private reply requires reply_text.\n7. One private reply per comment, within seven days; no follow-up DMs until user messages.\n8. 3m nudge once; 20m silent close. Timers only on successful DM response.\n9. Personal WhatsApp alert is best-effort due to Meta 24h/template restrictions. No unattended replay on DNS timeout.\n10. Actual dashboard `/comment-check` backend must return fields described in SETUP. Its UI alone cannot guarantee the endpoint returns public reply settings.\n11. Test with personal Instagram account. NEVER publish v3 alongside old IG listeners.\n",
+        "height": 460,
+        "width": 900
+      },
+      "id": "c6609b21-1724-4676-97f4-2609f4df4c71",
+      "name": "SETUP - Read Before Activating",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "93a3d377-79fb-47db-8440-bf2c435dce9d",
+              "leftValue": "={{ $json.event_type === 'timer_check' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9c24f04d-f38e-4f44-aedd-19debe8fe9c5",
+      "name": "IG - Timer Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        1920
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Timer callback from authenticated internal Wait workflow. No once-per-minute scheduler.\nconst e=$input.first()?.json||{};\nif(e.event_type!=='timer_check')return [];\nconst id=String(e.ig_user_id||'');\nconst mem=$getWorkflowStaticData('global');\nconst s=mem.tbwIgSessions?.[id];\nif(!s||s.closed||s.sessionId!==e.session_id)return [];\nconst last=Number(s.lastInboundAt||0);\nif(last!==Number(e.expected_last_inbound_at))return []; // user replied since timer was started\nconst age=Date.now()-last;\nif(e.timer_action==='close'){\n if(age>=20*60000){s.closed=true;s.stage='timeout';s.promptAt=0;s.updatedAt=Date.now();}\n return []; // absolutely no goodbye message\n}\nif(e.timer_action!=='nudge'||age<3*60000||age>=20*60000||s.nudged||!s.promptAt)return [];\n// A single nudge in the selected language. Never automatic retry after ambiguous provider result.\ns.nudged=true;\ns.updatedAt=Date.now();\nconst tr={\n en:['Are you still available? 😊','Yes, Continue','Main Menu','End Chat'],\n hi:['क्या आप अभी उपलब्ध हैं? 😊','हाँ, जारी रखें','मुख्य मेनू','चैट बंद'],\n hinglish:['Kya aap abhi available hain? 😊','Yes, Continue','Main Menu','End Chat'],\n mr:['आपण अजून उपलब्ध आहात का? 😊','हो, पुढे चला','मुख्य मेनू','चॅट बंद']\n};\nconst t=tr[s.language]||tr.en;\nconst q=(title,payload)=>({content_type:'text',title:title.slice(0,20),payload});\nreturn [{json:{event_type:'dm_nudge',ig_user_id:id,session_id:s.sessionId,\n source_event_id:'nudge:'+s.sessionId+':'+last,\n igPayload:{recipient:{id},message:{text:t[0],quick_replies:[q(t[1],'IG_RESUME'),q(t[2],'IG_MENU'),q(t[3],'IG_END')]}}}}];"
+      },
+      "id": "2cf56e61-2925-4dfd-8de2-12d45432fe9f",
+      "name": "IG - Timer Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b015464f-da20-4a59-a9f0-fdb2cef3adbd",
+              "leftValue": "={{ $json.accepted_by_provider === true && $json.event_type === 'dm_reply' && $json.session_closed !== true && $json.last_inbound_at > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c35904a-ea5b-4642-85d6-b1e271ea6a44",
+      "name": "IG - Schedule Timer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3392,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5678/webhook/tbw-ig-simple-v3-timer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ig_user_id: $json.ig_user_id, session_id: $json.session_id, expected_last_inbound_at: $json.last_inbound_at }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 4000
+        }
+      },
+      "id": "da561f22-e1e9-450c-b232-6ce6120886e6",
+      "name": "IG - Start 3m/20m Timer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3616,
+        1632
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tbw-ig-simple-v2-events",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "644c3732-cc57-443f-b8ad-4dcc9d1f72cc",
+      "name": "IG - Bridge Webhook (v2 legacy)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        704,
+        1920
+      ],
+      "webhookId": "626f7ddd-afa7-42eb-a1cb-c9ce2cd98ac5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const CATS={\"ai\":{\"en\":\"AI Agents & Chatbots\",\"hi\":\"AI एजेंट्स और चैटबॉट्स\",\"hinglish\":\"AI Agents & Chatbots\",\"mr\":\"AI एजंट्स आणि चॅटबॉट्स\"},\"crm\":{\"en\":\"CRM & Sales Automation\",\"hi\":\"CRM और सेल्स ऑटोमेशन\",\"hinglish\":\"CRM & Sales Automation\",\"mr\":\"CRM आणि सेल्स ऑटोमेशन\"},\"workflow\":{\"en\":\"Business Workflow Automation\",\"hi\":\"बिजनेस वर्कफ़्लो ऑटोमेशन\",\"hinglish\":\"Business Workflow Automation\",\"mr\":\"बिझनेस वर्कफ्लो ऑटोमेशन\"},\"social\":{\"en\":\"WhatsApp & Social Automation\",\"hi\":\"WhatsApp और सोशल ऑटोमेशन\",\"hinglish\":\"WhatsApp & Social Automation\",\"mr\":\"WhatsApp आणि सोशल ऑटोमेशन\"}};\nconst SVCS={\"ai\":[{\"en\":\"AI Sales Agents\",\"hi\":\"AI सेल्स एजेंट\",\"hinglish\":\"AI Sales Agents\",\"mr\":\"AI सेल्स एजंट\"},{\"en\":\"AI Customer Support Agents\",\"hi\":\"AI कस्टमर सपोर्ट एजेंट\",\"hinglish\":\"AI Customer Support Agents\",\"mr\":\"AI कस्टमर सपोर्ट एजंट\"},{\"en\":\"Website AI Chatbots\",\"hi\":\"वेबसाइट AI चैटबॉट\",\"hinglish\":\"Website AI Chatbots\",\"mr\":\"वेबसाइट AI चॅटबॉट\"},{\"en\":\"AI Lead Qualification\",\"hi\":\"AI लीड क्वालिफिकेशन\",\"hinglish\":\"AI Lead Qualification\",\"mr\":\"AI लीड क्वालिफिकेशन\"},{\"en\":\"AI Voice Agents\",\"hi\":\"AI वॉइस एजेंट\",\"hinglish\":\"AI Voice Agents\",\"mr\":\"AI व्हॉइस एजंट\"},{\"en\":\"AI Appointment Booking Agents\",\"hi\":\"AI अपॉइंटमेंट बुकिंग एजेंट\",\"hinglish\":\"AI Appointment Booking Agents\",\"mr\":\"AI अपॉइंटमेंट बुकिंग एजंट\"}],\"crm\":[{\"en\":\"CRM Setup & Customization\",\"hi\":\"CRM सेटअप और कस्टमाइज़ेशन\",\"hinglish\":\"CRM Setup & Customization\",\"mr\":\"CRM सेटअप आणि कस्टमायझेशन\"},{\"en\":\"Lead Management\",\"hi\":\"लीड मैनेजमेंट\",\"hinglish\":\"Lead Management\",\"mr\":\"लीड मॅनेजमेंट\"},{\"en\":\"Automated Follow-ups\",\"hi\":\"ऑटोमैटिक फॉलो-अप\",\"hinglish\":\"Automated Follow-ups\",\"mr\":\"ऑटोमॅटिक फॉलो-अप\"},{\"en\":\"Sales Pipeline Automation\",\"hi\":\"सेल्स पाइपलाइन ऑटोमेशन\",\"hinglish\":\"Sales Pipeline Automation\",\"mr\":\"सेल्स पाइपलाइन ऑटोमेशन\"},{\"en\":\"Lead Assignment & Notifications\",\"hi\":\"लीड असाइनमेंट और अलर्ट\",\"hinglish\":\"Lead Assignment & Notifications\",\"mr\":\"लीड असाइनमेंट आणि अलर्ट\"},{\"en\":\"Sales Reporting\",\"hi\":\"सेल्स रिपोर्टिंग\",\"hinglish\":\"Sales Reporting\",\"mr\":\"सेल्स रिपोर्टिंग\"}],\"workflow\":[{\"en\":\"Form-to-CRM Automation\",\"hi\":\"फॉर्म से CRM ऑटोमेशन\",\"hinglish\":\"Form-to-CRM Automation\",\"mr\":\"फॉर्म ते CRM ऑटोमेशन\"},{\"en\":\"Email Automation\",\"hi\":\"ईमेल ऑटोमेशन\",\"hinglish\":\"Email Automation\",\"mr\":\"ईमेल ऑटोमेशन\"},{\"en\":\"Google Sheets Automation\",\"hi\":\"Google Sheets ऑटोमेशन\",\"hinglish\":\"Google Sheets Automation\",\"mr\":\"Google Sheets ऑटोमेशन\"},{\"en\":\"Appointment & Calendar Automation\",\"hi\":\"अपॉइंटमेंट और कैलेंडर\",\"hinglish\":\"Appointment & Calendar Automation\",\"mr\":\"अपॉइंटमेंट आणि कॅलेंडर\"},{\"en\":\"Invoice & Document Workflows\",\"hi\":\"इनवॉइस और डॉक्यूमेंट वर्कफ़्लो\",\"hinglish\":\"Invoice & Document Workflows\",\"mr\":\"इनव्हॉइस आणि डॉक्युमेंट वर्कफ्लो\"},{\"en\":\"Business App Integrations\",\"hi\":\"बिजनेस ऐप इंटीग्रेशन\",\"hinglish\":\"Business App Integrations\",\"mr\":\"बिझनेस अ‍ॅप इंटिग्रेशन\"}],\"social\":[{\"en\":\"WhatsApp Business Automation\",\"hi\":\"WhatsApp बिजनेस ऑटोमेशन\",\"hinglish\":\"WhatsApp Business Automation\",\"mr\":\"WhatsApp बिझनेस ऑटोमेशन\"},{\"en\":\"WhatsApp AI Chat\",\"hi\":\"WhatsApp AI चैट\",\"hinglish\":\"WhatsApp AI Chat\",\"mr\":\"WhatsApp AI चॅट\"},{\"en\":\"Notifications & Reminders\",\"hi\":\"नोटिफिकेशन और रिमाइंडर\",\"hinglish\":\"Notifications & Reminders\",\"mr\":\"नोटिफिकेशन आणि रिमाइंडर\"},{\"en\":\"Instagram DM Automation\",\"hi\":\"Instagram DM ऑटोमेशन\",\"hinglish\":\"Instagram DM Automation\",\"mr\":\"Instagram DM ऑटोमेशन\"},{\"en\":\"Social Media Lead Capture\",\"hi\":\"सोशल मीडिया लीड कैप्चर\",\"hinglish\":\"Social Media Lead Capture\",\"mr\":\"सोशल मीडिया लीड कॅप्चर\"},{\"en\":\"Customer Follow-up Messages\",\"hi\":\"कस्टमर फॉलो-अप मैसेज\",\"hinglish\":\"Customer Follow-up Messages\",\"mr\":\"कस्टमर फॉलो-अप मेसेज\"}]};\nconst M={\"en\":{\"hello\":\"Hey! 👋 Welcome to The Business Work.\\nPlease choose your language.\",\"category\":\"What can we help you with? Choose a category:\",\"service\":\"Choose the service you need:\",\"selected\":\"You selected {service}.\\nTo learn more or book an appointment, tap WhatsApp below.\",\"fallback\":\"I don't have details about that here. For more information or an appointment, please contact our team on WhatsApp. 😊\",\"nudge\":\"Are you still available? 😊\",\"end\":\"Thanks for chatting! Have a wonderful day. 👋\",\"menu\":\"Main Menu\",\"back\":\"Back\",\"endbtn\":\"End Chat\",\"wa\":\"WhatsApp\",\"again\":\"Yes, Continue\"},\"hi\":{\"hello\":\"नमस्ते! 👋 The Business Work में आपका स्वागत है।\\nकृपया अपनी भाषा चुनें।\",\"category\":\"हम आपकी कैसे मदद करें? कैटेगरी चुनें:\",\"service\":\"आपको कौन सी सर्विस चाहिए?\",\"selected\":\"आपने {service} चुना है।\\nजानकारी या अपॉइंटमेंट के लिए नीचे WhatsApp दबाएं।\",\"fallback\":\"मेरे पास इसकी पूरी जानकारी नहीं है। अधिक जानकारी या अपॉइंटमेंट के लिए कृपया WhatsApp पर हमारी टीम से बात करें। 😊\",\"nudge\":\"क्या आप अभी उपलब्ध हैं? 😊\",\"end\":\"हमसे बात करने के लिए धन्यवाद! 👋\",\"menu\":\"मुख्य मेनू\",\"back\":\"पीछे\",\"endbtn\":\"चैट बंद\",\"wa\":\"WhatsApp\",\"again\":\"हाँ, जारी रखें\"},\"hinglish\":{\"hello\":\"Hey! 👋 The Business Work mein welcome.\\nApni language choose karein.\",\"category\":\"Hum aapki kaise help karein? Category choose karein:\",\"service\":\"Aapko kaunsi service chahiye?\",\"selected\":\"Aapne {service} select kiya hai.\\nDetails ya appointment ke liye neeche WhatsApp tap karein.\",\"fallback\":\"Mere paas iski poori information nahi hai. Zyada jankari ya appointment ke liye hamari team ko WhatsApp karein. 😊\",\"nudge\":\"Kya aap abhi available hain? 😊\",\"end\":\"Baat karne ke liye thanks! 👋\",\"menu\":\"Main Menu\",\"back\":\"Back\",\"endbtn\":\"End Chat\",\"wa\":\"WhatsApp\",\"again\":\"Yes, Continue\"},\"mr\":{\"hello\":\"नमस्कार! 👋 The Business Work मध्ये स्वागत आहे.\\nकृपया भाषा निवडा.\",\"category\":\"आम्ही कशी मदत करू? कॅटेगरी निवडा:\",\"service\":\"आपल्याला कोणती सेवा हवी आहे?\",\"selected\":\"आपण {service} निवडली आहे.\\nमाहिती किंवा अपॉइंटमेंटसाठी खाली WhatsApp दाबा.\",\"fallback\":\"माझ्याकडे याबद्दल पूर्ण माहिती नाही. अधिक माहितीसाठी किंवा अपॉइंटमेंटसाठी WhatsApp वर आमच्या टीमशी बोला. 😊\",\"nudge\":\"आपण अजून उपलब्ध आहात का? 😊\",\"end\":\"आमच्याशी बोलल्याबद्दल धन्यवाद! 👋\",\"menu\":\"मुख्य मेनू\",\"back\":\"मागे\",\"endbtn\":\"चॅट बंद\",\"wa\":\"WhatsApp\",\"again\":\"हो, पुढे चला\"}};\nconst ev=$input.first().json;return [{json:{...ev,ig_catalog:{CATS,SVCS,M}}}];"
+      },
+      "id": "a6ee6595-0b18-4e7c-804b-9fd261608a62",
+      "name": "IG - Language + Service Catalog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One easy-to-edit test switch. TEST MODE is OFF by default to prevent unsolicited replies.\n// To test WITHOUT dashboard, set enabled=true and enter EXACT Instagram Reel media ID.\n// After testing: enabled=false and use dashboard automation rules.\nconst TEST_RULE={\n enabled:false,\n media_id:'',\n trigger:'any', // 'any' or 'keywords'\n keywords:['interested','demo'],\n private_reply_text:'Thanks for commenting! 👋 Reply Hi to explore our services.',\n public_reply_enabled:true,\n public_reply_text:'Thanks for your comment! 😊'\n};\nconst e=$input.first()?.json||{};\nconst exactId=String(e.media_id||'');\nlet matched=TEST_RULE.enabled&&/^\\d{5,80}$/.test(String(TEST_RULE.media_id))&&exactId===String(TEST_RULE.media_id);\nif(matched&&TEST_RULE.trigger==='keywords'){\n const words=(TEST_RULE.keywords||[]).map(x=>String(x).toLowerCase()).filter(Boolean);\n const comment=String(e.text||'').toLowerCase();\n matched=words.some(word=>comment.includes(word));\n}\nif(matched){\n return [{json:{...e,rule_source:'local_test',approved:true,reply_text:TEST_RULE.private_reply_text,\n public_reply_enabled:TEST_RULE.public_reply_enabled,public_reply_text:TEST_RULE.public_reply_text,\n rule_id:'local-test-'+exactId}}];\n}\n// Important: if test rule is enabled but comment does not match, do not fall through to dashboard.\nif(TEST_RULE.enabled)return [];\nreturn [{json:{...e,rule_source:'dashboard'}}];\n"
+      },
+      "id": "6bc9e6c8-2118-48e8-a3dd-c243e633bcc6",
+      "name": "IG - Test Reel Rule (OFF by default)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fe3e15c4-2994-43a9-9b14-64ea51c177e1",
+              "leftValue": "={{ $json.rule_source === 'local_test' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bb65a395-41a9-4d1c-b1aa-4d10071a811b",
+      "name": "IG - Local Test Rule?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2272,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize the dashboard /comment-check response or local test rule into one safe shape.\n// Public reply ALWAYS requires an explicit true flag in the dashboard response.\nconst result=$input.first()?.json||{};\nconst incoming=$('IG - Deduplicate via Bridge').first().json||{};\nconst r=result.rule||result.data?.rule||result.data||result;\nconst approved=r.approved===true;\nconst media=String(r.media_id||r.ig_media_id||r.reel_media_id||'');\nif(media && media!==String(incoming.media_id||''))return [];\nconst privateText=String(r.reply_text||r.initial_private_reply_message||r.private_reply_text||'').trim().slice(0,950);\nconst publicEnabled=[r.public_reply_enabled,r.auto_reply_to_comments,r.autoReplyToComments,r.public_comment_reply_enabled,r.auto_reply_public].some(x=>x===true);\nconst publicText=String(r.public_reply_text||r.public_comment_reply_text||r.auto_reply_comment_text||'Thanks for your comment! 😊').trim().slice(0,400);\nreturn [{json:{...incoming,rule_id:String(r.rule_id||r.id||''),approved,\n reply_text:privateText,public_reply_enabled:publicEnabled,public_reply_text:publicText,\n rule_source:r.rule_source||'dashboard'}}];\n"
+      },
+      "id": "439af9f3-354d-490c-aa3d-170e0f098c84",
+      "name": "IG - Unify Dashboard Rule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1fe1ca92-a830-4adc-817b-d4d1016d4cf3",
+              "leftValue": "={{ $json.public_reply_enabled === true && !!$json.public_reply_text }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c0c97c59-207a-4c97-a71e-d836b4aac04b",
+      "name": "IG - Public Comment Reply ON?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3168,
+        2304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first()?.json||{};\nif(!r.approved||r.public_reply_enabled!==true||!r.public_reply_text||!/^[0-9]{5,80}$/.test(String(r.comment_id||'')))return [];\n// Only reply to fresh verified Instagram comments. Never post to somebody else's Reel.\nconst v=r.timestamp;\nconst n=typeof v==='number'?v:Number(v);\nconst ts=Number.isFinite(n)&&n>1000000000? (n<1e12?n*1000:n) : Date.parse(String(v||''));\nif(!Number.isFinite(ts)||Date.now()-ts>=7*86400000||ts>Date.now()+300000)return [];\nreturn [{json:{comment_id:String(r.comment_id),media_id:String(r.media_id||''),rule_id:r.rule_id||'',source_event_id:r.event_id,\n public_reply_text:String(r.public_reply_text).trim().slice(0,400)}}];\n"
+      },
+      "id": "4b7ffda1-a359-49ae-8179-e7765633e21b",
+      "name": "IG - Prepare Public Comment Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3392,
+        2304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://graph.instagram.com/v26.0/\" + $json.comment_id + \"/replies\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $json.public_reply_text }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 12000
+        }
+      },
+      "id": "e15a4377-54e8-4ca2-98db-b2696e0d7f7a",
+      "name": "IG - Send Public Comment Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3616,
+        2304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "7sIHDKGWFf4OToxy",
+          "name": "Instagram Meta Send Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sent=$input.first()?.json||{};\nconst src=$('IG - Prepare Public Comment Reply').first().json;\nreturn [{json:{channel:'instagram',event_type:'public_comment_reply',source_event_id:src.source_event_id,\ncomment_id:src.comment_id,media_id:src.media_id,rule_id:src.rule_id,\naccepted_by_provider:!!sent.id&&!sent.error,provider_comment_id:sent.id||'',error:sent.error||null}}];"
+      },
+      "id": "1142b303-e569-4d7e-9370-c11352f7557a",
+      "name": "IG - Public Comment Send Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        2304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "d0bec857-5653-48cb-b432-4aba164a1f1f",
+      "name": "IG - Log Public Comment Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4064,
+        2304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tbw-v3-instagram-verified-events",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "959f21a4-9180-4d82-bc70-56a84e71cbb6",
+      "name": "IG - Bridge Webhook (V4 legacy)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        704,
+        2112
+      ],
+      "webhookId": "1140fb9b-031d-44e9-b1eb-89cd2d821a33",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tbw-ig-simple-v1-events",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "bf3a8698-2147-4254-a594-f53d2a3bc4c4",
+      "name": "IG - Bridge Webhook (v1 legacy)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        704,
+        2304
+      ],
+      "webhookId": "ee2bf390-bd8d-4f39-8d1c-0e98900ded28",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tbw-ig-simple-v3-timer",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "130824b7-cff6-431f-a858-4a20ccced7b0",
+      "name": "IG TIMER - Incoming Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        704,
+        1216
+      ],
+      "webhookId": "44158c63-5ce5-4ca1-b7a3-2c10ef3ad34b",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$input.first()?.json?.body||{};\nconst id=String(b.ig_user_id||''),sid=String(b.session_id||''),last=Number(b.expected_last_inbound_at);\nif(!/^\\d{5,40}$/.test(id)||!/^ig_\\d+_\\d{1,6}$/.test(sid)||!Number.isFinite(last)||last<=0)return [];\nreturn [{json:{ig_user_id:id,session_id:sid,expected_last_inbound_at:last}}];"
+      },
+      "id": "188eddb6-2c0b-4562-9c60-0afcc05f611a",
+      "name": "IG TIMER - Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "id": "3d0b97da-cea0-49ab-9391-1832f6d8961b",
+      "name": "IG TIMER - Wait 3 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        1216
+      ],
+      "webhookId": "8770738d-0554-4737-80d8-2ddd0ac7ab4c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5678/webhook/tbw-ig-simple-v3-events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({event_type:'timer_check',timer_action:'nudge',ig_user_id:$json.ig_user_id,session_id:$json.session_id,expected_last_inbound_at:$json.expected_last_inbound_at}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 4000
+        }
+      },
+      "id": "983e8a4f-0676-4d94-905a-69de57bb4c0e",
+      "name": "IG TIMER - Check Nudge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        1216
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 17,
+        "unit": "minutes"
+      },
+      "id": "b0c604a9-9366-4a21-a38f-226a917f840f",
+      "name": "IG TIMER - Wait 17 More Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        1216
+      ],
+      "webhookId": "2ae66be4-262a-4ef3-b623-e56a4348b2ea"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5678/webhook/tbw-ig-simple-v3-events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({event_type:'timer_check',timer_action:'close',ig_user_id:$('IG TIMER - Validate Request').first().json.ig_user_id,session_id:$('IG TIMER - Validate Request').first().json.session_id,expected_last_inbound_at:$('IG TIMER - Validate Request').first().json.expected_last_inbound_at}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 4000
+        }
+      },
+      "id": "c377f03a-f2b5-4904-a687-76c2569f69a7",
+      "name": "IG TIMER - Close Silently",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        1216
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MiDWVYhAWZsVRoDX",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## Event-driven IG session timer — no cron!\nEvery successfully sent customer DM starts this timer by localhost HTTP. Wait 3 minutes → call Main workflow to nudge ONLY if no new customer message. Wait another 17 minutes → call Main to close session SILENTLY if still inactive. Old timer callbacks are ignored by session ID + latest inbound timestamp. No messages on every minute. This requires BOTH Main & Timer published and existing IG old listeners unpublished.",
+        "height": 270,
+        "width": 900
+      },
+      "id": "17b20f7b-e7d9-47cb-a380-e9b92ae43160",
+      "name": "IG TIMER - Setup Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'incoming_instagram_message',\n      sender_id: $json.ig_user_id,\n      username: $json.username,\n      content: $json.text || $json.quick_reply_payload || '[DM]',\n      external_message_id: $json.event_id,\n      timestamp: $json.timestamp\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "99615f88-4c83-4b9c-8723-7a7e17d9a6b7",
+      "name": "IG - Log Inbound DM to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        1440
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/instagram/dm-context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      ig_user_id: $json.ig_user_id,\n      username: $json.username,\n      text: $json.text,\n      event_id: $json.event_id\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "ca3d457f-a042-40a6-a736-03a7f90ee380",
+      "name": "IG - Check Dashboard DM Takeover",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        1632
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// IG - Evaluate DM Takeover & Campaign Context\nconst dmContext = $input.first()?.json || {};\nconst incoming = $('IG - Deduplicate via Bridge').first().json || {};\n\n// If dashboard takeover is active or query failed closed:\nconst isHuman = dmContext.error || dmContext.mode === 'human' || dmContext.reply_allowed === false || incoming.mode === 'human' || incoming.reply_allowed === false;\n\nif (isHuman) {\n  // Suppress automated bot reply\n  return [{\n    json: {\n      ...incoming,\n      mode: 'human',\n      reply_allowed: false,\n      takeover_active: true\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...incoming,\n    mode: 'ai',\n    reply_allowed: true,\n    whatsapp_url: dmContext.whatsapp_url || '',\n    campaign: dmContext.campaign || null\n  }\n}];\n"
+      },
+      "id": "adde4961-05c3-4d4c-b182-35b352598a52",
+      "name": "IG - Evaluate DM Takeover",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'log_ai_reply',\n      sender_id: $json.ig_user_id,\n      content: $json.service ? ('Selected ' + $json.service + '. Chat on WhatsApp: https://wa.me/917972020292') : 'Menu reply',\n      external_message_id: $json.provider_message_id,\n      sender_type: 'automation_ai',\n      sender_name: 'TBW Instagram Assistant',\n      timestamp: new Date().toISOString()\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "c4788b54-4283-4e85-bf1c-d54c3f1f314e",
+      "name": "IG - Log Outbound DM to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3392,
+        1536
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'log_comment_reply',\n      comment_id: $json.comment_id,\n      media_id: $json.media_id,\n      sender_id: $json.ig_user_id,\n      username: $json.username,\n      content: $('IG - Private Reply Payload').first().json.igPayload?.message?.text || 'Private reply',\n      external_message_id: $json.provider_message_id || ('comment:' + $json.comment_id),\n      rule_id: $json.rule_id,\n      status: $json.accepted_by_provider ? 'success' : 'failed'\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "8160a1ff-7dc5-481f-bf5f-9aa3d536bd6a",
+      "name": "IG - Log Comment Reply to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        2208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "IG - Normalize Events": {
+      "main": [
+        [
+          {
+            "node": "IG - Timer Callback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Deduplicate via Bridge": {
+      "main": [
+        [
+          {
+            "node": "IG - Accepted Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Accepted Event?": {
+      "main": [
+        [
+          {
+            "node": "IG - DM or Comment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - DM or Comment?": {
+      "main": [
+        [
+          {
+            "node": "IG - Log Inbound DM to Dashboard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Check Dashboard DM Takeover",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IG - Test Reel Rule (OFF by default)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Bot Reply Allowed?": {
+      "main": [
+        [
+          {
+            "node": "IG - Language + Service Catalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - DM Reply Logic": {
+      "main": [
+        [
+          {
+            "node": "IG - Reply Prepared?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Reply Prepared?": {
+      "main": [
+        [
+          {
+            "node": "IG - Send DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Send DM": {
+      "main": [
+        [
+          {
+            "node": "IG - DM Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - DM Send Result": {
+      "main": [
+        [
+          {
+            "node": "IG - Log DM to Bridge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - New Instagram Lead?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Schedule Timer?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Log Outbound DM to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - New Instagram Lead?": {
+      "main": [
+        [
+          {
+            "node": "IG - Prepare Lead + Owner Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Prepare Lead + Owner Alert": {
+      "main": [
+        [
+          {
+            "node": "IG - Dashboard Lead Event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Owner WhatsApp Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Dashboard Reel Rule": {
+      "main": [
+        [
+          {
+            "node": "IG - Unify Dashboard Rule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Comment Rule Matched?": {
+      "main": [
+        [
+          {
+            "node": "IG - Private Reply Payload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Public Comment Reply ON?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Private Reply Payload": {
+      "main": [
+        [
+          {
+            "node": "IG - Send Comment Private Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Send Comment Private Reply": {
+      "main": [
+        [
+          {
+            "node": "IG - Comment Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Comment Send Result": {
+      "main": [
+        [
+          {
+            "node": "IG - Log Comment to Bridge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IG - Log Comment Reply to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Send One Nudge": {
+      "main": [
+        [
+          {
+            "node": "IG - Nudge Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Nudge Send Result": {
+      "main": [
+        [
+          {
+            "node": "IG - Log Nudge to Bridge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Timer Callback?": {
+      "main": [
+        [
+          {
+            "node": "IG - Timer Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IG - Deduplicate via Bridge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Timer Action": {
+      "main": [
+        [
+          {
+            "node": "IG - Send One Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Schedule Timer?": {
+      "main": [
+        [
+          {
+            "node": "IG - Start 3m/20m Timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Bridge Webhook (v3)": {
+      "main": [
+        [
+          {
+            "node": "IG - Normalize Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Bridge Webhook (v2 legacy)": {
+      "main": [
+        [
+          {
+            "node": "IG - Normalize Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Language + Service Catalog": {
+      "main": [
+        [
+          {
+            "node": "IG - DM Reply Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Test Reel Rule (OFF by default)": {
+      "main": [
+        [
+          {
+            "node": "IG - Local Test Rule?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Local Test Rule?": {
+      "main": [
+        [
+          {
+            "node": "IG - Unify Dashboard Rule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IG - Dashboard Reel Rule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Unify Dashboard Rule": {
+      "main": [
+        [
+          {
+            "node": "IG - Comment Rule Matched?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Public Comment Reply ON?": {
+      "main": [
+        [
+          {
+            "node": "IG - Prepare Public Comment Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Prepare Public Comment Reply": {
+      "main": [
+        [
+          {
+            "node": "IG - Send Public Comment Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Send Public Comment Reply": {
+      "main": [
+        [
+          {
+            "node": "IG - Public Comment Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Public Comment Send Result": {
+      "main": [
+        [
+          {
+            "node": "IG - Log Public Comment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Bridge Webhook (V4 legacy)": {
+      "main": [
+        [
+          {
+            "node": "IG - Normalize Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Bridge Webhook (v1 legacy)": {
+      "main": [
+        [
+          {
+            "node": "IG - Normalize Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG TIMER - Incoming Request": {
+      "main": [
+        [
+          {
+            "node": "IG TIMER - Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG TIMER - Validate Request": {
+      "main": [
+        [
+          {
+            "node": "IG TIMER - Wait 3 Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG TIMER - Wait 3 Minutes": {
+      "main": [
+        [
+          {
+            "node": "IG TIMER - Check Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG TIMER - Check Nudge": {
+      "main": [
+        [
+          {
+            "node": "IG TIMER - Wait 17 More Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG TIMER - Wait 17 More Minutes": {
+      "main": [
+        [
+          {
+            "node": "IG TIMER - Close Silently",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Check Dashboard DM Takeover": {
+      "main": [
+        [
+          {
+            "node": "IG - Evaluate DM Takeover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IG - Evaluate DM Takeover": {
+      "main": [
+        [
+          {
+            "node": "IG - Bot Reply Allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveExecutionProgress": true
+  },
+  "versionId": "41dc07c2-1b8f-4700-aa05-d72e0dfb1737",
+  "meta": {
+    "instanceId": "739a1d5e1c0391c796f92deb076a438c34d854381954b0f76fa59fbaf3e45f0d"
+  },
+  "nodeGroups": [],
+  "id": "sDg5l37cgp7KY6df",
+  "tags": []
+}

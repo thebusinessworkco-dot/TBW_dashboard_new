@@ -33,8 +33,8 @@ export async function POST(request: Request) {
       if (payload?.execution_id || payload?.workflow_id) {
         try {
           await adminSupabase.from('admin_workflow_executions').insert({
-            workflow_id: String(payload.workflow_id || 'v4_monitor'),
-            workflow_name: String(payload.workflow_name || 'V4 Health Monitor'),
+            workflow_id: String(payload.workflow_id || 'n8n_health_monitor'),
+            workflow_name: String(payload.workflow_name || 'n8n Health Monitor'),
             execution_id: String(payload.execution_id || Date.now()),
             status: 'success',
             duration_ms: Number(payload.duration_ms) || 50,

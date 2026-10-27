@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const filterLang = searchParams.get('language'); // 'English' | 'Hindi' | etc.
 
     const adminSupabase = createAdminClient();
-    let contacts: Array<Record<string, unknown>> = [];
+    const contacts: Array<Record<string, unknown>> = [];
 
     if (adminSupabase) {
       try {

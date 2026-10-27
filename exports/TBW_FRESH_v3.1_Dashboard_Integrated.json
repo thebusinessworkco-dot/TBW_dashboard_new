@@ -1,0 +1,2238 @@
+{
+  "name": "TBW FRESH v3.1 - Dashboard Integrated (IMPORT INACTIVE)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "id": "71fff416-0de0-4de1-8e70-18ccb5e57816",
+      "name": "01 - Meta WhatsApp Incoming",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        608
+      ],
+      "webhookId": "4730784a-4e80-447f-b96c-9705387ddffb",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "aRqiYpowAZGuwvWr",
+          "name": "WhatsApp OAuth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "b310f1ec-fa74-4670-adee-c954210f6244",
+      "name": "02 - Every Minute Session Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## TBW 2026 — Single Meta trigger, separate editable logic\n01–08 Routing/language/navigation • 09 Appointment • 10 Our Services • 11 Human • 12 Error/invalid input.\n03-minute nudge + 20-minute timeout ONLY; NO appointment reminder.\nBooking DATE only + daily 001–100; team sets call time manually.\nGoogle Sheets: existing Appointments and WhatsApp Leads.\nKeep INACTIVE until controlled handover.\nOwner personal alert: Cloud API free-form delivery requires recipient 24h conversation window or approved template.\nV2 FIX: Appointments worksheet selection corrected; Google OAuth must be reconnected in n8n; failed Sheets reads DO NOT create Calendar events or claim success.\nThe scheduler running every minute is intentional. No pending session = zero WhatsApp sends. No automatic pre-appointment reminders.\n",
+        "height": 450,
+        "width": 660
+      },
+      "id": "733e71c5-c2c3-4dab-807a-d5bbc03b5723",
+      "name": "03 - Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// 04 - Parse Inbound\n// WhatsApp inbound filter, status receipt routing, session restart and duplicate protection.\n\nconst raw = $input.first().json;\nconst v = raw.entry?.[0]?.changes?.[0]?.value || raw;\n\n// Handle WhatsApp delivery/read status updates cleanly without treating as customer messages\nconst rawStatuses = raw.statuses || v.statuses;\nif (Array.isArray(rawStatuses) && rawStatuses.length > 0) {\n  const st = rawStatuses[0];\n  const wamid = st.id;\n  const status = String(st.status || '').toLowerCase(); // sent, delivered, read, failed\n  return [{\n    json: {\n      action: 'status_receipt',\n      event_type: 'whatsapp_status_update',\n      wamid,\n      external_message_id: wamid,\n      status,\n      recipient_id: String(st.recipient_id || ''),\n      timestamp: st.timestamp || Date.now(),\n      errors: st.errors || null\n    }\n  }];\n}\n\nconst m = raw.messages?.[0] || v.messages?.[0];\n\n// Ignore invalid webhook events\nif (!m?.from || !m?.id) {\n  return [];\n}\n\nconst phone = String(m.from).replace(/\\D/g, '');\n\nif (!phone) {\n  return [];\n}\n\nconst msgText = String(\n  m.text?.body ||\n  m.interactive?.list_reply?.title ||\n  m.interactive?.button_reply?.title ||\n  m.button?.text ||\n  ''\n).trim().slice(0, 500);\n\nconst choice = String(\n  m.interactive?.list_reply?.id ||\n  m.interactive?.button_reply?.id ||\n  m.button?.payload ||\n  ''\n);\n\n// Workflow session storage\nconst mem = $getWorkflowStaticData('global');\n\nmem.sessions ??= {};\nmem.seen ??= {};\n\nconst now = Date.now();\n\n// Prevent duplicate WhatsApp webhook processing\nif (\n  mem.seen[m.id] &&\n  now - mem.seen[m.id] < 86400000\n) {\n  return [];\n}\n\nmem.seen[m.id] = now;\n\n// Remove old duplicate records\nif (Object.keys(mem.seen).length > 4000) {\n  for (const [id, ts] of Object.entries(mem.seen)) {\n    if (now - ts > 86400000) {\n      delete mem.seen[id];\n    }\n  }\n}\n\nlet s = mem.sessions[phone];\nlet newSession = false;\n\n// Manual restart command\nconst hello = /^hello\\s+bot[!.\\s]*$/i.test(msgText);\n\n// Restart if:\n// 1. New customer\n// 2. Previous session timed out\n// 3. Customer ended previous chat\n// 4. Customer sends \"hello bot\"\n\nconst shouldRestart =\n  !s ||\n  s.stage === 'timeout' ||\n  s.stage === 'manual_closed' ||\n  hello;\n\nif (shouldRestart) {\n  const lastBooking = s?.booking || null;\n  const previousLeadKeys = s?.doneLeadKeys || {};\n\n  s = {\n    sessionId:\n      's_' +\n      now.toString(36) +\n      '_' +\n      Math.random().toString(36).slice(2, 8),\n\n    stage: 'new',\n    flow: '',\n    lang: '',\n    name: '',\n    business: '',\n    history: [],\n    lastPayload: null,\n\n    lastInboundAt: now,\n    promptAt: now,\n    nudged: false,\n\n    booking: lastBooking,\n    doneLeadKeys: previousLeadKeys,\n\n    created: now,\n    updated: now\n  };\n\n  mem.sessions[phone] = s;\n  newSession = true;\n}\n\n// Update customer activity\ns.lastInboundAt = now;\ns.lastInboundMessageId = m.id;\ns.updated = now;\n\nif (s.pendingCustomerMessage) {\n  const old = mem.outbox?.[s.pendingCustomerMessage];\n  if (old && old.status === 'retry') old.status = 'cancelled';\n  s.pendingCustomerMessage = null;\n}\n\n// Human handover detection\nconst isHuman = choice === 'go_human' && !s.humanAlertQueuedAt;\n\nlet adminAlertPayload = null;\n\nif ((newSession && !hello) || isHuman) {\n  if (isHuman) s.humanAlertQueuedAt = now;\n\n  const label = isHuman\n    ? '🚨 Talk to Human Requested'\n    : '🔔 WhatsApp Chat Started';\n\n  const alert =\n    label +\n    '\\nCustomer: ' + (s.name || 'Visitor') +\n    '\\nPhone: +' + phone +\n    '\\nMessage: ' + msgText.slice(0, 100) +\n    '\\nTime: ' +\n    new Date(now).toLocaleString('en-IN', {\n      timeZone: 'Asia/Kolkata'\n    });\n\n  adminAlertPayload = {\n    messaging_product: 'whatsapp',\n    to: '918604600292',\n    type: 'text',\n    text: {\n      preview_url: false,\n      body: alert\n    }\n  };\n}\n\ns.promptAt = 0;\ns.nudged = false;\n\nreturn [\n  {\n    json: {\n      phone,\n      choice,\n      body: msgText,\n      messageType: m.type,\n      messageId: m.id,\n      s,\n      newSession,\n      adminAlertPayload,\n      action: 'route'\n    }\n  }\n];\n"
+      },
+      "id": "10d22cef-6122-489c-819c-5f35b827025e",
+      "name": "04 - Parse Inbound",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Change human-facing strings here only. English / Hindi / Hinglish / Marathi.\nconst T={\n en:{welcome:'Hi! 👋 Welcome to The Business Work. How can we help you?',language:'Please choose your language:',name:'Please type your full name.',business:'What is your business/company name?',date:'Choose an appointment date (IST). Our team will arrange the call time with you.',category:'Choose a service category:',service:'Choose the service you are interested in:',saved:'✅ We have saved your details. Our team will connect with you soon. Stay tuned! Thank you for choosing The Business Work. 😊',thanks:'Thank you for connecting with The Business Work! We Make Business Simpler. Have a wonderful day! 😊\\nTo restart later, type *hello bot*.',end:'Are you sure you want to end this chat?',invalid:'I did not understand that message. Would you like to speak with our team?',human:'Your request has been forwarded to our team. Please be patient; we will respond as soon as possible. 😊',there:'Are you still there? Please reply to continue. 😊',timeout:'This session has timed out. Message us again or type *hello bot* to start a new chat. Thank you! 😊',booking:'✅ Your appointment DATE is booked!\\nRef: {ref}\\nDate: {date} (IST)\\nName: {name}\\nOur team will contact you directly to arrange the call time. No automatic appointment reminder will be sent.\\nThank you for choosing The Business Work! 😊',existing:'You already have a booking:\\nRef: {ref}\\nDate: {date}\\nWould you like to reschedule?',keeping:'Your original appointment is unchanged. Thank you! 😊',full:'This date has reached its 100-booking limit. Please choose another date.',error:'We could not complete that request. Please try again or talk to our team. Sorry for the inconvenience.',back:'Back',menu:'Main Menu',endbtn:'End Chat',confirm:'Yes, End',resume:'No, Continue',humanbtn:'Talk to Human',no:'No, Main Menu',book:'Book Appointment',services:'Our Services',help:'Help / Error',resched:'Reschedule',keep:'Keep Booking',restart:'Hello Bot',datechange:'Choose New Date'},\n hi:{welcome:'नमस्ते! 👋 The Business Work में आपका स्वागत है। आज हम आपकी कैसे मदद करें?',language:'कृपया अपनी भाषा चुनें:',name:'कृपया अपना पूरा नाम लिखें।',business:'आपके बिज़नेस या कंपनी का नाम क्या है?',date:'अपॉइंटमेंट की तारीख चुनें (IST)। कॉल का समय हमारी टीम तय करेगी।',category:'सेवा की कैटेगरी चुनें:',service:'अपनी पसंद की सर्विस चुनें:',saved:'✅ आपकी जानकारी सेव हो गई है। हमारी टीम जल्द आपसे संपर्क करेगी। धन्यवाद! 😊',thanks:'The Business Work से जुड़ने के लिए धन्यवाद! आपका दिन शुभ हो! 😊\\nदोबारा शुरू करने के लिए *hello bot* लिखें।',end:'क्या आप सच में यह चैट बंद करना चाहते हैं?',invalid:'आपका मैसेज समझ नहीं आया। क्या आप हमारी टीम से बात करना चाहेंगे?',human:'आपकी रिक्वेस्ट हमारी टीम तक पहुंचा दी है। कृपया थोड़ा इंतज़ार करें। 😊',there:'क्या आप अभी भी यहाँ हैं? बातचीत जारी रखने के लिए जवाब दें। 😊',timeout:'20 मिनट तक जवाब नहीं मिला, इसलिए चैट बंद हो गई है। दोबारा मैसेज करें या *hello bot* लिखें। धन्यवाद! 😊',booking:'✅ आपकी अपॉइंटमेंट की तारीख बुक हो गई!\\nनंबर: {ref}\\nतारीख: {date} (IST)\\nनाम: {name}\\nहमारी टीम कॉल का समय तय करने के लिए आपसे बात करेगी। ऑटो रिमाइंडर नहीं आएगा।\\nधन्यवाद! 😊',existing:'आपकी पहले से बुकिंग है:\\nनंबर: {ref}\\nतारीख: {date}\\nक्या तारीख बदलना चाहते हैं?',keeping:'आपकी पुरानी बुकिंग सुरक्षित है। धन्यवाद! 😊',full:'इस दिन की सभी 100 बुकिंग भर चुकी हैं। दूसरी तारीख चुनें।',error:'रिक्वेस्ट पूरी नहीं हो सकी। दोबारा कोशिश करें या हमारी टीम से बात करें।',back:'पीछे',menu:'मुख्य मेनू',endbtn:'चैट बंद',confirm:'हाँ, बंद करें',resume:'नहीं, जारी रखें',humanbtn:'टीम से बात',no:'नहीं, मेनू',book:'अपॉइंटमेंट',services:'हमारी सेवाएं',help:'मदद',resched:'तारीख बदलें',keep:'वही बुकिंग',restart:'Hello Bot',datechange:'नई तारीख'},\n hinglish:{welcome:'Hey! 👋 The Business Work mein welcome! Aaj hum kaise help karein?',language:'Apni language choose karein:',name:'Apna full name type karein.',business:'Aapke business/company ka naam kya hai?',date:'Appointment ki date choose karein (IST). Call ka time hamari team aapse decide karegi.',category:'Service category choose karein:',service:'Aapko kaunsi service chahiye?',saved:'✅ Aapki details save ho gayi hain. Hamari team aapse jaldi connect karegi. Stay tuned! Thank you! 😊',thanks:'The Business Work se connect karne ke liye thanks! Have a great day! 😊\\nDobara start karne ke liye *hello bot* type karein.',end:'Kya aap sach mein chat end karna chahte hain?',invalid:'Aapka message samajh nahi aaya. Kya aap team se baat karna chahenge?',human:'Aapki request hamari team ko forward kar di hai. Please thoda patience rakhein. 😊',there:'Aap abhi bhi yahin hain? Continue karne ke liye reply karein. 😊',timeout:'Reply nahi aaya, isliye session timeout ho gaya. Dobara message karein ya *hello bot* type karein. Thanks! 😊',booking:'✅ Aapki appointment DATE book ho gayi!\\nNumber: {ref}\\nDate: {date} (IST)\\nName: {name}\\nHamari team aapse direct call time decide karegi. Automatic appointment reminder nahi jayega.\\nThank you! 😊',existing:'Aapki booking pehle se hai:\\nNumber: {ref}\\nDate: {date}\\nReschedule karna hai?',keeping:'Aapki existing booking same rahegi. Thanks! 😊',full:'Is date ki 100 bookings full ho gayi hain. Doosri date choose karein.',error:'Request complete nahi hui. Please dobara try karein ya team se baat karein.',back:'Back',menu:'Main Menu',endbtn:'End Chat',confirm:'Yes, End',resume:'No, Continue',humanbtn:'Talk to Human',no:'No, Menu',book:'Book Appointment',services:'Our Services',help:'Help',resched:'Reschedule',keep:'Keep Booking',restart:'Hello Bot',datechange:'New Date'},\n mr:{welcome:'नमस्कार! 👋 The Business Work मध्ये स्वागत आहे. आम्ही कशी मदत करू?',language:'कृपया भाषा निवडा:',name:'कृपया आपले पूर्ण नाव लिहा.',business:'आपल्या व्यवसाय किंवा कंपनीचे नाव काय आहे?',date:'अपॉइंटमेंटची तारीख निवडा (IST). कॉलची वेळ आमची टीम ठरवेल.',category:'सेवेची कॅटेगरी निवडा:',service:'आपल्याला कोणती सेवा हवी आहे?',saved:'✅ आपली माहिती सेव्ह झाली आहे. आमची टीम लवकरच संपर्क करेल. धन्यवाद! 😊',thanks:'The Business Work शी संपर्क केल्याबद्दल धन्यवाद! आपला दिवस छान जावो! 😊\\nपुन्हा सुरू करण्यासाठी *hello bot* लिहा.',end:'आपल्याला ही चॅट नक्की बंद करायची आहे का?',invalid:'आपला संदेश समजला नाही. आमच्या टीमशी बोलायचे आहे का?',human:'आपली विनंती टीमकडे पाठवली आहे. कृपया थोडा वेळ थांबा. 😊',there:'आपण अजून इथे आहात का? कृपया उत्तर द्या. 😊',timeout:'उत्तर मिळाले नाही म्हणून सत्र संपले आहे. पुन्हा मेसेज करा किंवा *hello bot* लिहा. धन्यवाद! 😊',booking:'✅ आपली अपॉइंटमेंट तारीख बुक झाली!\\nक्रमांक: {ref}\\nतारीख: {date} (IST)\\nनाव: {name}\\nकॉलची वेळ ठरवण्यासाठी आमची टीम थेट संपर्क करेल. ऑटो रिमाइंडर येणार नाही.\\nधन्यवाद! 😊',existing:'आपली आधीची बुकिंग आहे:\\nक्रमांक: {ref}\\nतारीख: {date}\\nतारीख बदलायची आहे का?',keeping:'आपली जुनी बुकिंग कायम आहे. धन्यवाद! 😊',full:'या तारखेच्या 100 बुकिंग पूर्ण झाल्या आहेत. दुसरी तारीख निवडा.',error:'विनंती पूर्ण होऊ शकली नाही. पुन्हा प्रयत्न करा किंवा टीमशी बोला.',back:'मागे',menu:'मुख्य मेनू',endbtn:'चॅट बंद',confirm:'होय, बंद',resume:'नाही, सुरू ठेवा',humanbtn:'टीमशी बोला',no:'नाही, मेनू',book:'अपॉइंटमेंट',services:'आमच्या सेवा',help:'मदत',resched:'तारीख बदला',keep:'तीच बुकिंग',restart:'Hello Bot',datechange:'नवी तारीख'}\n};\nconst src=$input.first().json; return [{json:{...src,T}}];"
+      },
+      "id": "d5a51e7c-d150-4bac-943b-14d36345c5a7",
+      "name": "05 - Translations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7891e522-a4a3-4619-9b5b-a6c085516577",
+              "leftValue": "={{ !!$json.adminAlertPayload }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2668f768-fe1c-473e-972b-b8ccda31f02f",
+      "name": "06 - Owner Alert Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5376,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/1392092143987065/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.adminAlertPayload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a53e5e2f-a7cc-46f0-b6bd-943a774ad11b",
+      "name": "07 - Send Owner Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5600,
+        544
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "zQ6qZKUzn2qjjSlf",
+          "name": "TBW WhatsApp System User"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const old=$('05 - Translations').first().json;const r=$input.first().json;return [{json:{...old,ownerAlertError:r.error?(r.error.message||String(r.error)):''}}];"
+      },
+      "id": "3a017b93-69cd-4593-9228-d262bab9bbd9",
+      "name": "07b - Continue After Owner Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5824,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ab692798-b369-418f-a6d0-106e179c8502",
+              "leftValue": "={{ !!$json.ownerAlertError }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f4f8389-f4e9-463b-9d05-e3fa4532ed0f",
+      "name": "07c - Owner Alert Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6048,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{event_type:'workflow_error',workflow_id:'',workflow_name:'TBW FRESH - WhatsApp Router',execution_id:'',error_node:'07 - Send Owner Alert',error_message:String($json.ownerAlertError).slice(0,1000),observed_at:new Date().toISOString()}}];"
+      },
+      "id": "199d480e-cada-4153-b755-98436a879882",
+      "name": "07d - Format Owner Alert Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6272,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/error",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "459009a6-7aba-4ea7-800f-ef83ddcfd4ec",
+      "name": "07e - Report Owner Alert Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6496,
+        544
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const _sessionContext = $input.first().json; const _staticStore = $getWorkflowStaticData('global'); try {\n// Helpers common to separate editable logic nodes.\nconst x=$input.first().json, s=x.s, T=x.T||{}, L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction message(text){return {messaging_product:'whatsapp',to:x.phone,type:'text',text:{preview_url:false,body:text}};}\nfunction prompt(stage,flow,payload,{history=true}={}){if(history&&s.stage&&s.lastPayload&&s.stage!==stage){s.history??=[];s.history.push({stage:s.stage,flow:s.flow,payload:s.lastPayload});if(s.history.length>12)s.history.shift();}s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction menu(){return prompt('menu','',list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['go_error',fmt('help')],['nav_end',fmt('endbtn')]],'Choose Service'));}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\n\nif(x.skip||x.handled)return [{json:x}];\nconst choice=x.choice;\nif(s.stage==='human_wait'&&!['nav_end','nav_main','nav_back'].includes(choice))return []; // human team owns subsequent messages\nif(choice==='nav_end'){s.returnTo={stage:s.stage,flow:s.flow,payload:s.lastPayload};return [{json:prompt('end_confirm',s.flow,button(fmt('end'),[['end_yes',fmt('confirm')],['end_no',fmt('resume')]]),{history:false})}];}\nif(s.stage==='end_confirm'&&choice==='end_yes'){s.stage='manual_closed';s.promptAt=0;s.lastPayload=null;s.history=[];x.waPayload=message(fmt('thanks'));x.handled=true;x.action='send';return [{json:x}];}\nif(s.stage==='end_confirm'&&choice==='end_no'){const p=s.returnTo||{};s.stage=p.stage||'menu';s.flow=p.flow||'';s.promptAt=Date.now();s.nudged=false;s.lastPayload=p.payload||null;x.waPayload=p.payload||list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['nav_end',fmt('endbtn')]],'Choose');x.handled=true;x.action='send';return [{json:x}];}\nif(choice==='nav_main')return [{json:menu()}];\nif(choice==='nav_back'){let p=s.history?.pop();if(!p)return [{json:menu()}];s.stage=p.stage;s.flow=p.flow;s.lastPayload=p.payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=p.payload;x.action='send';x.handled=true;return [{json:x}];}\nif(s.stage==='new')return [{json:menu()}];\nif(['go_appointment','go_services','go_human'].includes(choice)){\n s.flow=choice.replace('go_','');s.history=[];\n if(choice==='go_human'&&!x.adminAlertPayload&&!s.humanAlertQueuedAt){s.humanAlertQueuedAt=Date.now();x.adminAlertPayload={messaging_product:'whatsapp',to:'918604600292',type:'text',text:{body:'🚨 Customer needs human support\\nPhone: +'+x.phone}};}\n if(!s.lang)return [{json:prompt('language',s.flow,list(fmt('language'),[['lang_en','English'],['lang_hi','हिंदी'],['lang_hinglish','Hinglish'],['lang_mr','मराठी'],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]],'Choose Language'))}];\n s.stage='flow_start';x.action='flow';return [{json:x}];\n}\nif(s.stage==='language'&&choice.startsWith('lang_')){const l=choice.slice(5);if(!['en','hi','hinglish','mr'].includes(l))return [{json:menu()}];s.lang=l;x.action='flow';s.stage='flow_start';return [{json:x}];}\nif(choice==='go_error')return [{json:prompt('help','',button(fmt('invalid'),[['go_human',fmt('humanbtn')],['nav_main',fmt('no')],['nav_end',fmt('endbtn')]]))}];\nif(s.stage==='help'&&choice==='nav_main')return [{json:menu()}];\nif(s.stage==='fallback'&&choice==='fallback_no'){const p=s.fallbackReturn||{};s.stage=p.stage||'menu';s.flow=p.flow||'';s.lastPayload=p.payload||null;s.promptAt=Date.now();s.nudged=false;x.waPayload=p.payload||list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['nav_end',fmt('endbtn')]],'Choose');x.handled=true;x.action='send';return [{json:x}];}\nif(s.stage==='fallback'&&choice==='fallback_yes'){s.flow='human';s.stage='flow_start';x.action='flow';if(!s.humanAlertQueuedAt){s.humanAlertQueuedAt=Date.now();x.adminAlertPayload={messaging_product:'whatsapp',to:'918604600292',type:'text',text:{body:'🚨 Customer needs human support\\nPhone: +'+x.phone}};}return [{json:x}];}\nreturn [{json:x}];\n} finally { if (_sessionContext.s?.sessionId && _sessionContext.phone) { _staticStore.sessions ??= {}; _staticStore.sessions[_sessionContext.phone] = _sessionContext.s; } }"
+      },
+      "id": "d2581973-f2c8-42ec-87bf-56a5ba47bb50",
+      "name": "08 - Main Menu + Navigation Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const _sessionContext = $input.first().json; const _staticStore = $getWorkflowStaticData('global'); try {\n// Helpers common to separate editable logic nodes.\nconst x=$input.first().json, s=x.s, T=x.T||{}, L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction message(text){return {messaging_product:'whatsapp',to:x.phone,type:'text',text:{preview_url:false,body:text}};}\nfunction prompt(stage,flow,payload,{history=true}={}){if(history&&s.stage&&s.lastPayload&&s.stage!==stage){s.history??=[];s.history.push({stage:s.stage,flow:s.flow,payload:s.lastPayload});if(s.history.length>12)s.history.shift();}s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction menu(){return prompt('menu','',list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['go_error',fmt('help')],['nav_end',fmt('endbtn')]],'Choose Service'));}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\n\nif(x.handled||!['appointment'].includes(s.flow))return [{json:x}];\nif(s.stage==='flow_start'){s.flow='appointment';if(!s.name)return [{json:prompt('appt_name','appointment',button(fmt('name'),nav()))}];if(!s.business)return [{json:prompt('appt_business','appointment',button(fmt('business'),nav()))}];s.stage='appt_lookup';x.action='book_read';return [{json:x}];}\nif(s.stage==='appt_name'&&!x.choice&&x.messageType==='text'&&/\\p{L}/u.test(x.body)&&x.body.length>=2&&!/^hello bot$/i.test(x.body)){s.name=x.body.slice(0,75);return [{json:prompt('appt_business','appointment',button(fmt('business'),nav()))}];}\nif(s.stage==='appt_business'&&!x.choice&&x.messageType==='text'&&/\\p{L}/u.test(x.body)&&x.body.length>=2){s.business=x.body.slice(0,100);s.stage='appt_lookup';x.action='book_read';return [{json:x}];}\nif(s.stage==='appt_date'&&/^date_\\d{4}-\\d{2}-\\d{2}$/.test(x.choice)){\n const date=x.choice.slice(5);const now=istNow();const base=Date.UTC(Number(now.year),Number(now.month)-1,Number(now.day));const target=Date.parse(date+'T00:00:00Z');const days=(target-base)/86400000;\n if(!Number.isInteger(days)||days<0||days>5||(days===0&&Number(now.hour)>=21))return [{json:dates()}];\n s.apptDate=date;s.stage='booking_processing';s.promptAt=0;x.action='book_read';return [{json:x}];\n}\nif(s.stage==='appt_existing'&&x.choice==='appt_keep')return [{json:prompt('appt_complete','appointment',button(fmt('keeping'),[['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]]))}];\nif(s.stage==='appt_existing'&&x.choice==='appt_reschedule'){s.rescheduling=true;return [{json:dates()}];}\nif(s.stage==='appt_complete'&&x.choice==='appt_reschedule'){s.rescheduling=true;return [{json:dates()}];}\nreturn [{json:x}];\n} finally { if (_sessionContext.s?.sessionId && _sessionContext.phone) { _staticStore.sessions ??= {}; _staticStore.sessions[_sessionContext.phone] = _sessionContext.s; } }"
+      },
+      "id": "e93388ec-1ac2-4497-b258-1cb7fbba6445",
+      "name": "09 - Appointment Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const _sessionContext = $input.first().json; const _staticStore = $getWorkflowStaticData('global'); try {\n// Helpers common to separate editable logic nodes.\nconst x=$input.first().json, s=x.s, T=x.T||{}, L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction message(text){return {messaging_product:'whatsapp',to:x.phone,type:'text',text:{preview_url:false,body:text}};}\nfunction prompt(stage,flow,payload,{history=true}={}){if(history&&s.stage&&s.lastPayload&&s.stage!==stage){s.history??=[];s.history.push({stage:s.stage,flow:s.flow,payload:s.lastPayload});if(s.history.length>12)s.history.shift();}s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction menu(){return prompt('menu','',list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['go_error',fmt('help')],['nav_end',fmt('endbtn')]],'Choose Service'));}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\n\nconst cats=[['ai','AI Agents & Chatbots'],['crm','CRM & Sales Automation'],['workflow','Business Workflow Automation'],['social','WhatsApp & Social Automation']];\nconst services={ai:['AI Sales Agents','AI Customer Support Agents','Website AI Chatbots','AI Lead Qualification','AI Voice Agents','AI Appointment Booking Agents'],crm:['CRM Setup & Customization','Lead Management','Automated Follow-ups','Sales Pipeline Automation','Lead Assignment & Notifications','Sales Reporting'],workflow:['Form-to-CRM Automation','Email Automation','Google Sheets Automation','Appointment & Calendar Automation','Invoice & Document Workflows','Business App Integrations'],social:['WhatsApp Business Automation','WhatsApp AI Chat','Notifications & Reminders','Instagram DM Automation','Social Media Lead Capture','Customer Follow-up Messages']};\nif(x.handled||s.flow!=='services')return [{json:x}];\nif(s.stage==='flow_start'){if(!s.name)return [{json:prompt('svc_name','services',button(fmt('name'),nav()))}];if(!s.business)return [{json:prompt('svc_business','services',button(fmt('business'),nav()))}];return [{json:prompt('svc_cat','services',list(fmt('category'),cats.map(c=>['cat_'+c[0],c[1]]).concat(nav()),'Choose Category'))}];}\nif(s.stage==='svc_name'&&!x.choice&&x.messageType==='text'&&/\\p{L}/u.test(x.body)&&x.body.length>=2){s.name=x.body.slice(0,75);return [{json:prompt('svc_business','services',button(fmt('business'),nav()))}];}\nif(s.stage==='svc_business'&&!x.choice&&x.messageType==='text'&&/\\p{L}/u.test(x.body)&&x.body.length>=2){s.business=x.body.slice(0,100);return [{json:prompt('svc_cat','services',list(fmt('category'),cats.map(c=>['cat_'+c[0],c[1]]).concat(nav()),'Choose Category'))}];}\nif(s.stage==='svc_cat'&&x.choice.startsWith('cat_')&&services[x.choice.slice(4)]){s.category=x.choice.slice(4);let choices=services[s.category].map((v,i)=>['svc_'+s.category+'_'+i,v]).concat(nav());return [{json:prompt('svc_choice','services',list(fmt('service'),choices,'Choose Service'))}];}\nif(s.stage==='svc_choice'&&x.choice.startsWith('svc_'+s.category+'_')){let ix=Number(x.choice.split('_').pop());if(!Number.isInteger(ix)||ix<0||ix>=6)return [{json:x}];s.service=services[s.category][ix];s.purpose=cats.find(c=>c[0]===s.category)[1]+' | '+s.service;const key=s.sessionId+'|'+s.purpose;if(s.doneLeadKeys?.[key])return [{json:prompt('svc_complete','services',button(fmt('saved'),[['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]]))}];s.pendingLeadKey=key;s.stage='service_saving';s.promptAt=0;x.action='save_service';return [{json:x}];}\nreturn [{json:x}];\n} finally { if (_sessionContext.s?.sessionId && _sessionContext.phone) { _staticStore.sessions ??= {}; _staticStore.sessions[_sessionContext.phone] = _sessionContext.s; } }"
+      },
+      "id": "0fc94cc3-2101-499e-ab12-68dffb02928b",
+      "name": "10 - Our Services Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const _sessionContext = $input.first().json; const _staticStore = $getWorkflowStaticData('global'); try {\n// Helpers common to separate editable logic nodes.\nconst x=$input.first().json, s=x.s, T=x.T||{}, L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction message(text){return {messaging_product:'whatsapp',to:x.phone,type:'text',text:{preview_url:false,body:text}};}\nfunction prompt(stage,flow,payload,{history=true}={}){if(history&&s.stage&&s.lastPayload&&s.stage!==stage){s.history??=[];s.history.push({stage:s.stage,flow:s.flow,payload:s.lastPayload});if(s.history.length>12)s.history.shift();}s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction menu(){return prompt('menu','',list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['go_error',fmt('help')],['nav_end',fmt('endbtn')]],'Choose Service'));}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\n\nif(x.handled||s.flow!=='human')return [{json:x}];\nif(s.stage==='flow_start'){return [{json:prompt('human_wait','human',button(fmt('human'),[['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]]))}];}\nreturn [{json:x}];\n} finally { if (_sessionContext.s?.sessionId && _sessionContext.phone) { _staticStore.sessions ??= {}; _staticStore.sessions[_sessionContext.phone] = _sessionContext.s; } }"
+      },
+      "id": "5a5d5d55-c967-4972-aaf8-81c98cfa4c85",
+      "name": "11 - Talk to Human Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const _sessionContext = $input.first().json; const _staticStore = $getWorkflowStaticData('global'); try {\n// Helpers common to separate editable logic nodes.\nconst x=$input.first().json, s=x.s, T=x.T||{}, L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction message(text){return {messaging_product:'whatsapp',to:x.phone,type:'text',text:{preview_url:false,body:text}};}\nfunction prompt(stage,flow,payload,{history=true}={}){if(history&&s.stage&&s.lastPayload&&s.stage!==stage){s.history??=[];s.history.push({stage:s.stage,flow:s.flow,payload:s.lastPayload});if(s.history.length>12)s.history.shift();}s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction menu(){return prompt('menu','',list(fmt('welcome'),[['go_appointment',fmt('book')],['go_services',fmt('services')],['go_human',fmt('humanbtn')],['go_error',fmt('help')],['nav_end',fmt('endbtn')]],'Choose Service'));}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\n\nif(x.handled||x.skip)return [{json:x}];\nif(x.action==='book_read'||x.action==='save_service')return [{json:x}];\n// Exactly ONE human suggestion for unexpected free text; no AI model and no repeated greeting.\nif(s.stage==='fallback')return []; // Subsequent invalid inputs stay quiet until valid button or hello bot\ns.fallbackReturn={stage:s.stage,flow:s.flow,payload:s.lastPayload};return [{json:prompt('fallback','',button(fmt('invalid'),[['fallback_yes',fmt('humanbtn')],['fallback_no',fmt('no')],['nav_end',fmt('endbtn')]]),{history:false})}];\n} finally { if (_sessionContext.s?.sessionId && _sessionContext.phone) { _staticStore.sessions ??= {}; _staticStore.sessions[_sessionContext.phone] = _sessionContext.s; } }"
+      },
+      "id": "bab2920d-4e60-49ec-9f0c-8439ca3fa30c",
+      "name": "12 - Unexpected Input Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "efa243f3-ce1b-46a6-93db-0095a99f13ef",
+              "leftValue": "={{ $json.action === 'save_service' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "43281ae8-0559-419e-8de9-cbda32fe9860",
+      "name": "13 - Save Service Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first().json,s=a.s;return [{json:{receivedAt:new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}),phone:a.phone,name:s.name,business:s.business,purpose:s.purpose,language:s.lang,source:'WhatsApp'}}];"
+      },
+      "id": "cacb3b14-5a34-48d8-9ce1-d997f2f78b7a",
+      "name": "14 - Prepare Service Sheet Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list",
+          "cachedResultName": "TBW Leads From Website",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 671996512,
+          "mode": "list",
+          "cachedResultName": "WhatsApp Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit#gid=671996512"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "receivedAt": "={{ $json.receivedAt }}",
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "business": "={{ $json.business }}",
+            "purpose": "={{ $json.purpose }}",
+            "language": "={{ $json.language }}",
+            "source": "={{ $json.source }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "receivedAt",
+              "displayName": "receivedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business",
+              "displayName": "business",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "purpose",
+              "displayName": "purpose",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5e510603-8555-4e0e-bddb-56812e18312c",
+      "name": "15 - Save WhatsApp Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4032,
+        224
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sheetResponse=$input.first().json;\nif(sheetResponse.error){\n const ctx=$('04 - Parse Inbound').first().json;\n const mem=$getWorkflowStaticData('global');const s=mem.sessions?.[ctx.phone];\n if(!s)return [];\n const T=$('05 - Translations').first().json.T;const LL=T[s.lang]||T.en;\n const payload={messaging_product:'whatsapp',to:ctx.phone,type:'interactive',interactive:{type:'button',body:{text:LL.error},action:{buttons:[{type:'reply',reply:{id:'nav_main',title:LL.menu.slice(0,20)}},{type:'reply',reply:{id:'nav_end',title:LL.endbtn.slice(0,20)}}]}}};\n s.pendingLeadKey=null;s.stage='svc_save_error';s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;\n return [{json:{phone:ctx.phone,waPayload:payload,action:'send',saveConfirmed:false}}];\n}\n\nconst mem=$getWorkflowStaticData('global');const ctx=$('04 - Parse Inbound').first().json;const s=mem.sessions?.[ctx.phone];if(!s)return [];\ns.doneLeadKeys??={};if(s.pendingLeadKey)s.doneLeadKeys[s.pendingLeadKey]=Date.now();s.pendingLeadKey=null;\nconst xx={phone:ctx.phone,s,T:$('05 - Translations').first().json.T};const LL=xx.T[s.lang]||xx.T.en;const payload={messaging_product:'whatsapp',to:ctx.phone,type:'interactive',interactive:{type:'button',body:{text:LL.saved},action:{buttons:[{type:'reply',reply:{id:'nav_main',title:LL.menu.slice(0,20)}},{type:'reply',reply:{id:'nav_end',title:LL.endbtn.slice(0,20)}}]}}};s.stage='svc_complete';s.promptAt=Date.now();s.nudged=false;s.lastPayload=payload;return [{json:{phone:ctx.phone,waPayload:payload,action:'send'}}];"
+      },
+      "id": "cb2bf89b-44fc-411b-a156-58d9a96b6df9",
+      "name": "16 - Service Save Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "35c865ec-9a58-4f7b-b57e-681a1b2a7916",
+              "leftValue": "={{ $json.action === 'book_read' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "76aee55d-1e94-400b-a3dc-d72bb99852e3",
+      "name": "14b - Appointment Sheet Lookup?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2016,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list",
+          "cachedResultName": "TBW Leads From Website",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit#gid=949713765"
+        },
+        "options": {}
+      },
+      "id": "dfe03dbc-c186-46d7-a191-0dce395e9362",
+      "name": "15b - Read Existing Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2240,
+        752
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "if($input.first()?.json?.sheetReadError)return [{json:$input.first().json}];\n\nconst mem=$getWorkflowStaticData('global'); const arr=$input.all().map(v=>v.json).filter(o=>o.phone||o.appointmentDate||o.calendarEventId);\nconst ctx=$('04 - Parse Inbound').first().json;const s=mem.sessions?.[ctx.phone];if(!s)return [];\nconst x={...ctx,T:$('05 - Translations').first().json.T,s};const T=x.T,L=T[s?.lang]||T.en;\nfunction fmt(key,obj={}){let v=String(L[key]||T.en?.[key]||key);for(const [k,z] of Object.entries(obj))v=v.replaceAll('{'+k+'}',String(z));return v;}\nfunction button(text,options){return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'button',body:{text},action:{buttons:options.slice(0,3).map(v=>({type:'reply',reply:{id:v[0],title:String(v[1]).slice(0,20)}}))}}};}\nfunction list(text,options,title='Choose Option'){const rows=options.slice(0,10).map(v=>({id:v[0],title:String(v[1]).slice(0,24),description:String(v[2]||'').slice(0,72)}));return {messaging_product:'whatsapp',to:x.phone,type:'interactive',interactive:{type:'list',body:{text},action:{button:title.slice(0,20),sections:[{title:'The Business Work',rows}]}}};}\nfunction prompt(stage,flow,payload){s.stage=stage;s.flow=flow;s.lastPayload=payload;s.promptAt=Date.now();s.nudged=false;x.waPayload=payload;x.handled=true;x.action='send';return x;}\nfunction nav(){return [['nav_back',fmt('back')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]];}\nfunction istNow(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());\n  return Object.fromEntries(parts.filter(v=>v.type!=='literal').map(v=>[v.type,v.value]));\n}\nfunction dates(stage='appt_date'){\n  const v=istNow(),day0=Date.UTC(Number(v.year),Number(v.month)-1,Number(v.day));\n  const choices=[];\n  for(let i=(Number(v.hour)>=21?1:0);i<=5;i++){\n    const day=new Date(day0+i*86400000).toISOString().slice(0,10);\n    choices.push(['date_'+day,day]);\n  }\n  return prompt(stage,'appointment',list(fmt('date'),choices.concat(nav()),'Select Date'));\n}\nconst xx={...x,action:'send'};\n// Existing confirmed booking is identified from actual Sheets, even after n8n restart.\nconst mine=arr.filter(r=>String(r.phone||'').replace(/\\D/g,'')===ctx.phone&&String(r.bookingStatus||'').toLowerCase().includes('confirm')&&r.calendarEventId);\nconst p=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const todayParts=Object.fromEntries(p.filter(q=>q.type!=='literal').map(q=>[q.type,q.value]));const todayIST=todayParts.year+'-'+todayParts.month+'-'+todayParts.day;const future=mine.filter(r=>String(r.appointmentDate||'')>=todayIST);\nconst current=future.sort((a,b)=>String(b.bookedAtIST).localeCompare(String(a.bookedAtIST)))[0];\nfunction reference(row){const z=String(row?.source||'').match(/REF:(\\d{5})/);return z?z[1]:'Not assigned';}\nif(s.stage==='appt_lookup'){\n if(current){s.booking={date:current.appointmentDate,eventId:current.calendarEventId,ref:reference(current),eventLink:current.calendarEventLink||''};xx.waPayload=button(fmt('existing',{date:s.booking.date,ref:s.booking.ref}),[['appt_reschedule',fmt('resched')],['appt_keep',fmt('keep')],['nav_end',fmt('endbtn')]]);s.stage='appt_existing';s.lastPayload=xx.waPayload;s.promptAt=Date.now();s.nudged=false;return [{json:xx}];}\n s.booking=null;s.rescheduling=false;return [{json:dates()}];\n}\nif(s.stage!=='booking_processing'||!s.apptDate)return [];\nlet original=s.booking; if(!original&&current){original={date:current.appointmentDate,eventId:current.calendarEventId,ref:reference(current)}};\nif(original&&!s.rescheduling){s.booking=original;s.stage='appt_existing';return [{json:prompt('appt_existing','appointment',button(fmt('existing',{date:original.date,ref:original.ref}),[['appt_reschedule',fmt('resched')],['appt_keep',fmt('keep')],['nav_end',fmt('endbtn')]]))}];}\nif(original&&s.rescheduling&&original.date===s.apptDate){s.stage='appt_existing';return [{json:prompt('appt_existing','appointment',button(fmt('keeping'),[['appt_reschedule',fmt('resched')],['nav_main',fmt('menu')],['nav_end',fmt('endbtn')]]))}];}\nlet max=0;for(const row of arr){if(String(row.appointmentDate)!==s.apptDate)continue;const mat=String(row.source||'').match(/REF:(\\d{5})/);if(mat)max=Math.max(max,Number(mat[1].slice(2)));}\nmem.dayCounter??={};max=Math.max(max,mem.dayCounter[s.apptDate]||0);\nif(max>=100)return [{json:dates()}];const serial=max+1;mem.dayCounter[s.apptDate]=serial;\nlet dd=s.apptDate.slice(8),ref=dd+String(serial).padStart(3,'0');\nlet next=new Date(s.apptDate+'T12:00:00Z');next.setUTCDate(next.getUTCDate()+1);let endDate=next.toISOString().slice(0,10);\nlet appt={date:s.apptDate,ref,phone:ctx.phone,name:s.name,business:s.business,start:s.apptDate+'T12:00:00+05:30',end:endDate+'T12:00:00+05:30',reschedule:Boolean(original&&s.rescheduling),originalEventId:original?.eventId||''};\n// Calendar IDs allow only lower-case a-v and digits. One per (date, customer phone); retries cannot make a second event.\nappt.generatedId='a'+s.apptDate.replace(/-/g,'')+ctx.phone.slice(-12);\ns.pendingBooking=appt;xx.appt=appt;xx.action=appt.reschedule?'cal_update':'cal_create';return [{json:xx}];"
+      },
+      "id": "7b265e2a-6810-42a8-96b5-9db71cb0441d",
+      "name": "15 - Resolve Calendar + Serial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2bc23b16-6d31-4113-8652-74439214eb56",
+              "leftValue": "={{ $json.action === 'cal_create' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ccbdd760-9cc2-4e58-8bfc-2d3946936c00",
+      "name": "16 - Calendar Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "primary"
+        },
+        "start": "={{ $json.appt.start }}",
+        "end": "={{ $json.appt.end }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "allday": "no",
+          "description": "={{ 'TBW_APPOINTMENT\\nREF='+$json.appt.ref+'\\nPHONE='+$json.appt.phone+'\\nBUSINESS='+$json.appt.business+'\\nTIME=To be arranged directly\\nNO_AUTOMATED_REMINDER=true' }}",
+          "id": "={{ $json.appt.generatedId }}",
+          "showMeAs": "transparent",
+          "summary": "={{ 'TBW Appointment #'+$json.appt.ref+' - '+$json.appt.name+' (DATE ONLY)' }}",
+          "visibility": "private"
+        }
+      },
+      "id": "aa7e3624-217d-4a28-9531-9dc38f128837",
+      "name": "17 - Google Calendar Create",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3360,
+        608
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "908S442Wu110o93T",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9373108c-3b49-4e0f-a621-82961b5f3094",
+              "leftValue": "={{ $json.action === 'cal_update' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "01056b3b-81ff-4503-b319-1ab6bf0505b6",
+      "name": "17b - Calendar Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3136,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "primary"
+        },
+        "eventId": "={{ $json.appt.originalEventId }}",
+        "useDefaultReminders": false,
+        "updateFields": {
+          "allday": "yes",
+          "description": "={{ 'TBW_APPOINTMENT\\nREF='+$json.appt.ref+'\\nPHONE='+$json.appt.phone+'\\nTIME=To be arranged directly\\nNO_AUTOMATED_REMINDER=true' }}",
+          "end": "={{ $json.appt.end }}",
+          "start": "={{ $json.appt.start }}",
+          "summary": "={{ 'TBW Appointment #'+$json.appt.ref+' - '+$json.appt.name+' (RESCHEDULED DATE)' }}"
+        }
+      },
+      "id": "3cdeb9f0-86b4-4060-8ad7-0b295af5f031",
+      "name": "18 - Google Calendar Reschedule",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3360,
+        992
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "908S442Wu110o93T",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const src=$('15 - Resolve Calendar + Serial').first().json;const a=src.appt;const ev=$input.first().json;if(!a||ev.error||(!ev.id&&!a.originalEventId))throw new Error('Google Calendar create/update failed; Sheet not modified');\nconst id=ev.id||a.originalEventId;\nconst row={bookedAtIST:new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}),phone:a.phone,name:a.name,appointmentDate:a.date,startTimeIST:'To be arranged',endTimeIST:'To be arranged',durationMinutes:'0',timezone:'Asia/Kolkata',bookingStatus:'Confirmed',calendarEventId:id,calendarEventLink:ev.htmlLink||src.s.booking?.eventLink||'',reminderDueAtIST:'',source:'WhatsApp | REF:'+a.ref};return [{json:{...row,appt:a,phone:a.phone,calendarEventId:id}}];"
+      },
+      "id": "5cfa718a-eaea-4073-b59f-98b258529527",
+      "name": "20 - Build Appointment Sheet Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "214038fc-004f-458b-abd4-cc68b6fa6821",
+              "leftValue": "={{ $json.appt.reschedule === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d96fba25-6f76-476d-93c4-6563aecb1528",
+      "name": "21 - Appointment Reschedule?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3808,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list",
+          "cachedResultName": "TBW Leads From Website",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit#gid=949713765"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookedAtIST": "={{ $json.bookedAtIST }}",
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "appointmentDate": "={{ $json.appointmentDate }}",
+            "startTimeIST": "={{ $json.startTimeIST }}",
+            "endTimeIST": "={{ $json.endTimeIST }}",
+            "durationMinutes": "={{ $json.durationMinutes }}",
+            "timezone": "={{ $json.timezone }}",
+            "bookingStatus": "={{ $json.bookingStatus }}",
+            "calendarEventId": "={{ $json.calendarEventId }}",
+            "calendarEventLink": "={{ $json.calendarEventLink }}",
+            "reminderDueAtIST": "={{ $json.reminderDueAtIST }}",
+            "source": "={{ $json.source }}"
+          },
+          "matchingColumns": [
+            "calendarEventId"
+          ],
+          "schema": [
+            {
+              "id": "bookedAtIST",
+              "displayName": "bookedAtIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "appointmentDate",
+              "displayName": "appointmentDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "startTimeIST",
+              "displayName": "startTimeIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "endTimeIST",
+              "displayName": "endTimeIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "durationMinutes",
+              "displayName": "durationMinutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bookingStatus",
+              "displayName": "bookingStatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendarEventId",
+              "displayName": "calendarEventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendarEventLink",
+              "displayName": "calendarEventLink",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminderDueAtIST",
+              "displayName": "reminderDueAtIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5700abb4-0af9-47c9-89f3-9dbad24ba4a7",
+      "name": "22 - Update Existing Appointment Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4032,
+        512
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list",
+          "cachedResultName": "TBW Leads From Website",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/edit#gid=949713765"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookedAtIST": "={{ $json.bookedAtIST }}",
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "appointmentDate": "={{ $json.appointmentDate }}",
+            "startTimeIST": "={{ $json.startTimeIST }}",
+            "endTimeIST": "={{ $json.endTimeIST }}",
+            "durationMinutes": "={{ $json.durationMinutes }}",
+            "timezone": "={{ $json.timezone }}",
+            "bookingStatus": "={{ $json.bookingStatus }}",
+            "calendarEventId": "={{ $json.calendarEventId }}",
+            "calendarEventLink": "={{ $json.calendarEventLink }}",
+            "reminderDueAtIST": "={{ $json.reminderDueAtIST }}",
+            "source": "={{ $json.source }}"
+          },
+          "matchingColumns": [
+            "calendarEventId"
+          ],
+          "schema": [
+            {
+              "id": "bookedAtIST",
+              "displayName": "bookedAtIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "appointmentDate",
+              "displayName": "appointmentDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "startTimeIST",
+              "displayName": "startTimeIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "endTimeIST",
+              "displayName": "endTimeIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "durationMinutes",
+              "displayName": "durationMinutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bookingStatus",
+              "displayName": "bookingStatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendarEventId",
+              "displayName": "calendarEventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendarEventLink",
+              "displayName": "calendarEventLink",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminderDueAtIST",
+              "displayName": "reminderDueAtIST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "908f3ca0-777a-41e9-a8a1-65d2ddd2ee3a",
+      "name": "23 - Save New Appointment Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4032,
+        704
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst mem=$getWorkflowStaticData('global');const row=$('20 - Build Appointment Sheet Row').first().json;const s=mem.sessions?.[row.phone];if(!s)return [];\ns.booking={date:row.appt.date,eventId:row.calendarEventId,ref:row.appt.ref,eventLink:row.calendarEventLink};s.rescheduling=false;s.pendingBooking=null;\nconst xx={phone:row.phone,s,T:$('05 - Translations').first().json.T};const LL=xx.T[s.lang]||xx.T.en;const body=LL.booking.replace('{ref}',row.appt.ref).replace('{date}',row.appt.date).replace('{name}',row.appt.name);let payload={messaging_product:'whatsapp',to:row.phone,type:'interactive',interactive:{type:'button',body:{text:body},action:{buttons:[{type:'reply',reply:{id:'appt_reschedule',title:LL.resched.slice(0,20)}},{type:'reply',reply:{id:'nav_main',title:LL.menu.slice(0,20)}},{type:'reply',reply:{id:'nav_end',title:LL.endbtn.slice(0,20)}}]}}};s.stage='appt_complete';s.flow='appointment';s.promptAt=Date.now();s.nudged=false;s.lastPayload=payload;return [{json:{phone:row.phone,waPayload:payload,action:'send'}}];"
+      },
+      "id": "aafd94ae-7219-46f0-bcba-124b112a6d79",
+      "name": "24 - Appointment Confirm + Thank You",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d81ad1a1-ecba-4dc5-bb4a-7e31c48a2615",
+              "leftValue": "={{ !!$json.waPayload }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "39cacdcd-9631-4713-bc79-59131dbc3687",
+      "name": "25 - Customer Message Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4480,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/1392092143987065/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.waPayload }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "2b5ed5f2-2ed6-4bfa-ba8f-f5aa2a7337a7",
+      "name": "26 - Send Customer WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4928,
+        544
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "zQ6qZKUzn2qjjSlf",
+          "name": "TBW WhatsApp System User"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const mem=$getWorkflowStaticData('global');mem.sessions??={};const now=Date.now(),out=[];\nconst T={en:['Are you still there? Please reply to continue. 😊','Your session has timed out. Message us or type *hello bot* to restart. Thank you! 😊'],hi:['क्या आप अभी भी यहाँ हैं? कृपया जवाब दें। 😊','सेशन टाइमआउट हो गया। दोबारा मैसेज करें या *hello bot* लिखें। धन्यवाद! 😊'],hinglish:['Aap abhi bhi yahin hain? Reply karke continue karein. 😊','Session timeout ho gaya. Dobara message karein ya *hello bot* likhein. Thanks! 😊'],mr:['आपण अजून इथे आहात का? कृपया उत्तर द्या. 😊','सत्र संपले आहे. पुन्हा मेसेज करा किंवा *hello bot* लिहा. धन्यवाद! 😊']};\nfor(const [phone,s] of Object.entries(mem.sessions)){\n if(!s.promptAt||s.pendingCustomerMessage||['human_wait','fallback','manual_closed','timeout','service_saving','booking_processing','appt_sheet_error','svc_save_error'].includes(s.stage))continue;\n const age=now-s.promptAt;if(age>=20*60000){s.stage='timeout';s.flow='';s.promptAt=0;s.nudged=true;out.push({json:{phone,waPayload:{messaging_product:'whatsapp',to:phone,type:'text',text:{body:(T[s.lang]||T.en)[1]}}}});}\n else if(age>=3*60000&&!s.nudged){s.nudged=true;out.push({json:{phone,waPayload:{messaging_product:'whatsapp',to:phone,type:'text',text:{body:(T[s.lang]||T.en)[0]}}}});}\n}\nreturn out;"
+      },
+      "id": "11597e9b-7521-4ede-bb55-f212c7e0b031",
+      "name": "27 - Session Timer Due",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2d60913a-4fcc-4f88-87ad-a993cd6940d3",
+              "leftValue": "={{ !!$json.waPayload }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e36f8f6c-ef06-4eae-aef9-33438dbbbf5a",
+      "name": "28 - Due Customer Timer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/1392092143987065/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.waPayload }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "8b61d1c5-7a3e-42fa-aa15-1965aed69221",
+      "name": "29 - Send One Timer Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        1216
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "zQ6qZKUzn2qjjSlf",
+          "name": "TBW WhatsApp System User"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fail closed: NEVER book an appointment using a failed/unknown Sheets read.\nconst items=$input.all();\nconst bad=items.find(v=>v.json?.error);\nif(!bad)return items;\nconst ctx=$('04 - Parse Inbound').first().json;\nconst mem=$getWorkflowStaticData('global');const s=mem.sessions?.[ctx.phone];\nif(!s)return [];\nconst T=$('05 - Translations').first().json.T;\nconst L=T[s.lang]||T.en;\nconst payload={messaging_product:'whatsapp',to:ctx.phone,type:'interactive',interactive:{type:'button',body:{text:L.error},action:{buttons:[{type:'reply',reply:{id:'nav_main',title:L.menu.slice(0,20)}},{type:'reply',reply:{id:'nav_end',title:L.endbtn.slice(0,20)}}]}}};\ns.stage='appt_sheet_error';s.flow='appointment';s.promptAt=Date.now();s.nudged=false;s.lastPayload=payload;\nreturn [{json:{phone:ctx.phone,waPayload:payload,action:'send',sheetReadError:true}}];\n"
+      },
+      "id": "528198d1-6bc0-45ff-aad8-502dca14fbf8",
+      "name": "15c - Guard Sheet Read Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 26a - Record outgoing customer message before attempting Meta API.\n// Same incoming WhatsApp message ID must never create two normal replies.\nconst x=$input.first().json;\nconst inbound=$('04 - Parse Inbound').first().json;\nif(!x.waPayload || !x.phone || !inbound.messageId)return [];\nconst mem=$getWorkflowStaticData('global');mem.outbox??={};mem.sessions??={};\nconst s=mem.sessions[x.phone];\nconst key='wa:'+inbound.messageId;\nconst prior=mem.outbox[key];\nif(prior)return []; // includes sent, retry queued, review, cancelled and sending\nconst now=Date.now();\nmem.outbox[key]={key,phone:x.phone,messageId:inbound.messageId,sessionId:s?.sessionId||'',payload:x.waPayload,status:'sending',attempts:1,createdAt:now,updatedAt:now,nextRetryAt:0,error:''};\nif(s)s.pendingCustomerMessage=key;\n// Keep the owner's notification AFTER customer attempt; do not block fast replies.\nconst route=$('08 - Main Menu + Navigation Logic').first().json;\nconst adminAlertPayload=x.adminAlertPayload||route.adminAlertPayload||inbound.adminAlertPayload||null;\nreturn [{json:{...x,sendKey:key,adminAlertPayload}}];"
+      },
+      "id": "6d896e52-a46f-481a-bde7-94352b52c354",
+      "name": "26a - Queue Customer Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 26b - Record Meta outcome; retry only failures known to happen BEFORE a network send (DNS resolution).\nconst mem=$getWorkflowStaticData('global');mem.outbox??={};\nconst ctx=$('26a - Queue Customer Reply').first().json;\nconst job=mem.outbox[ctx.sendKey];\nconst res=$input.first()?.json||{};\nconst now=Date.now();\nconst msgId=res.messages?.[0]?.id||'';\nconst e=res.error||res;\nconst errorText=typeof e==='string'?e:JSON.stringify(e);\nconst isDnsFailure=/EAI_AGAIN|DNS server returned an error|[Gg]etaddrinfo EAI_AGAIN/.test(errorText);\nlet status='review';\nif(job){\n if(msgId){status='sent';job.status='sent';job.wamid=msgId;job.error='';}\n else if(isDnsFailure){status='retry';job.status='retry';job.nextRetryAt=now+60000;job.error='EAI_AGAIN';}\n else{status='review';job.status='review';job.error=errorText.slice(0,300);}\n job.updatedAt=now;\n const s=mem.sessions?.[ctx.phone];\n if(s && s.pendingCustomerMessage===job.key){\n   if(status!=='retry')s.pendingCustomerMessage=null;\n   if(status==='sent'&&s.sessionId===job.sessionId&&s.lastInboundMessageId===job.messageId&&s.promptAt){s.promptAt=now;s.nudged=false;}\n }\n}\nreturn [{json:{phone:ctx.phone,sendKey:ctx.sendKey,sendStatus:status,adminAlertPayload:ctx.adminAlertPayload||null}}];"
+      },
+      "id": "38cd79e2-fb38-4f54-bd8b-ba24a4fab519",
+      "name": "26b - Record Customer Send Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5152,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 30 - At most ONE stale-safe DNS-only retry per minute globally.\n// No retry for timeouts, ECONNRESET, HTTP 400/429/500, or uncertain Meta acceptance.\nconst mem=$getWorkflowStaticData('global');mem.outbox??={};mem.sessions??={};\nconst now=Date.now();\nfor(const [key,job] of Object.entries(mem.outbox)){\n  if(!job||typeof job!=='object')continue;\n  if(['sent','cancelled'].includes(job.status)&&now-job.createdAt>2*86400000){delete mem.outbox[key];continue;}\n  if(job.status==='review'&&now-job.createdAt>7*86400000){delete mem.outbox[key];continue;}\n  if(job.status==='sending'&&now-job.updatedAt>3*60000){job.status='review';job.error='Unknown outcome; manual review required';}\n}\nconst candidates=Object.values(mem.outbox).filter(j=>j.status==='retry'&&j.nextRetryAt<=now).sort((a,b)=>a.nextRetryAt-b.nextRetryAt);\nfor(const job of candidates){\n const s=mem.sessions[job.phone];\n if(!s||s.sessionId!==job.sessionId||s.lastInboundMessageId!==job.messageId||s.pendingCustomerMessage!==job.key||['manual_closed','timeout','human_wait'].includes(s.stage)||now-job.createdAt>15*60000||now-s.lastInboundAt>23*3600000){\n   job.status='cancelled';job.error='Old conversation, expired or superseded';\n   if(s?.pendingCustomerMessage===job.key)s.pendingCustomerMessage=null;\n   continue;\n }\n if(job.attempts>=5){job.status='review';job.error='DNS retry limit reached';s.pendingCustomerMessage=null;continue;}\n job.attempts++;job.status='sending';job.updatedAt=now;\n return [{json:{phone:job.phone,sendKey:job.key,waPayload:job.payload,attempts:job.attempts}}];\n}\nreturn [];"
+      },
+      "id": "d16b02cf-23df-4164-a160-f713915dfa31",
+      "name": "30 - Pick Safe DNS Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/1392092143987065/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.waPayload }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "84d82eaf-8385-41b1-b4e7-8b677ba7a6c3",
+      "name": "31 - Retry Customer WhatsApp DNS Only",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        1408
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "zQ6qZKUzn2qjjSlf",
+          "name": "TBW WhatsApp System User"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// 32 - Save retry outcome. Only DNS failures can schedule a further attempt.\nconst mem=$getWorkflowStaticData('global');const ctx=$('30 - Pick Safe DNS Retry').first().json;\nconst job=mem.outbox?.[ctx.sendKey];if(!job)return [];\nconst res=$input.first()?.json||{},wamid=res.messages?.[0]?.id||'';\nconst error=typeof res.error==='string'?res.error:JSON.stringify(res.error||res);\nconst now=Date.now();\nif(wamid){job.status='sent';job.wamid=wamid;job.error='';}\nelse if(/EAI_AGAIN|DNS server returned an error|[Gg]etaddrinfo EAI_AGAIN/.test(error)&&job.attempts<5){\n  job.status='retry';const gaps=[60000,180000,300000,600000];job.nextRetryAt=now+(gaps[Math.min(job.attempts-1,gaps.length-1)]||600000);job.error='EAI_AGAIN';\n}else{job.status='review';job.error=error.slice(0,300);}\njob.updatedAt=now;\nconst s=mem.sessions?.[job.phone];\nif(s&&s.pendingCustomerMessage===job.key){\n if(job.status!=='retry')s.pendingCustomerMessage=null;\n if(job.status==='sent'&&s.sessionId===job.sessionId&&s.lastInboundMessageId===job.messageId&&s.promptAt){s.promptAt=now;s.nudged=false;}\n}\nreturn [];"
+      },
+      "id": "c22cbf05-20cc-4356-b25b-81a3bd90fc1a",
+      "name": "32 - Record DNS Retry Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## FAST RESPONSE + DNS-ONLY RETRY\n- Customer send FIRST. Owner alert AFTER response, never blocking reply.\n- No HTTP Request auto-retry. Only confirmed DNS lookup failures eligible for delayed retry.\n- Outbound queue in workflow static data is BEST-EFFORT; it is NOT a transactional durable outbox. For production exactly-once semantics use database idempotency + reconciliation.\n- Import INACTIVE. Do not activate alongside the original WhatsApp trigger.\n- After import, connect the separate error monitor in workflow Settings.\n- Google OAuth must be connected in n8n. Verify data sheets before activation.\n- Scheduler is required for the retry process.\n- Timer messages are never auto-retried (avoids late spam).",
+        "height": 390,
+        "width": 660
+      },
+      "id": "c647cd98-f189-4b70-a70c-553b5b4f2489",
+      "name": "TBW v3 - Safety & Import Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3728,
+        48
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "f028dc21-f519-4982-86db-dbbd8eb0306d",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e=$input.first().json;const ex=e.execution||{},er=ex.error||e.trigger?.error||{};return [{json:{event_type:'workflow_error',workflow_id:String(e.workflow?.id||''),workflow_name:String(e.workflow?.name||''),execution_id:String(ex.id||''),error_node:String(ex.lastNodeExecuted||er.node?.name||''),error_message:String(er.message||e.message||'Unknown n8n error').slice(0,1000),observed_at:new Date().toISOString()}}];"
+      },
+      "id": "a11760ae-47f2-404e-8704-2b4e42e00343",
+      "name": "Normalize n8n Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/error",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "0572e210-9815-4338-bcfa-88375887ed4a",
+      "name": "POST Error to Existing Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aa980f0d-df69-4bd9-b2b7-89616eb21ede",
+              "leftValue": "={{ $json.action === 'status_receipt' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "42c7c037-4626-4cae-968d-fbd6f5a41d44",
+      "name": "04_status - Is Status Receipt?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'whatsapp_status_update',\n      external_message_id: $json.wamid,\n      status: $json.status,\n      recipient_id: $json.recipient_id,\n      timestamp: $json.timestamp\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "73f2fb5f-e828-492d-a96e-77f4b8080388",
+      "name": "04_status_sync - Sync Status to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        384
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'incoming_whatsapp_message',\n      phone: $json.phone,\n      external_message_id: $json.messageId,\n      content: $json.body,\n      message_type: $json.messageType || 'text',\n      customer_name: $json.s?.name || '',\n      timestamp: new Date().toISOString()\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "02c6ac9f-95c6-4129-82a9-655b00e2b927",
+      "name": "04a - Log Inbound to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://dashboard.thebusinesswork.com/api/webhook/n8n/mode/{{ $json.phone }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 6000
+        }
+      },
+      "id": "ec8e5a16-8deb-450b-bcde-fc5fe059bc83",
+      "name": "04b - Check Takeover Mode",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        608
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// 04c - Evaluate Dashboard Takeover State\nconst res = $input.first()?.json || {};\nconst inbound = $('04 - Parse Inbound').first().json;\nconst mem = $getWorkflowStaticData('global');\nconst s = mem.sessions?.[inbound.phone] || inbound.s;\n\n// Fail closed: if request had error or can_respond is false or manual_takeover is true\nconst isTakeover = res.error || res.data?.can_respond === false || res.data?.manual_takeover === true || res.data?.mode === 'human';\n\nif (isTakeover) {\n  if (s) {\n    s.stage = 'human_wait';\n    s.promptAt = 0; // Suppress inactivity nudges\n    s.nudged = true;\n  }\n  // Stop automatic conversational replies\n  return [];\n}\n\n// When manual takeover is OFF:\nif (s && s.stage === 'human_wait') {\n  // Released from takeover - reset safely to menu, no stale replay\n  s.stage = 'menu';\n  s.promptAt = Date.now();\n  s.nudged = false;\n}\n\nreturn [{ json: inbound }];\n"
+      },
+      "id": "fb7ea6e3-f8d7-4789-9fe7-ad2f01d54eec",
+      "name": "04c - Evaluate Takeover State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bdf24920-e397-4d2d-9180-fd72f721197e",
+              "leftValue": "={{ $json.sendStatus === 'sent' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fb472fba-f1b5-4853-a0d4-d04711e42282",
+      "name": "26c - Send Confirmed by Meta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5264,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n      event_type: 'outgoing_whatsapp_message',\n      phone: $json.phone,\n      external_message_id: $('26 - Send Customer WhatsApp').first().json.messages?.[0]?.id || $('26a - Queue Customer Reply').first().json.sendKey,\n      content: $('26a - Queue Customer Reply').first().json.waPayload?.text?.body || $('26a - Queue Customer Reply').first().json.waPayload?.interactive?.body?.text || '[WhatsApp Reply]',\n      sender_type: 'automation_ai',\n      sender_name: 'TBW Assistant',\n      timestamp: new Date().toISOString()\n    }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "4f69ddb8-9542-48ce-af49-d1f836c9718f",
+      "name": "26d - Log Outbound to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5488,
+        384
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth WhatsApp"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "01 - Meta WhatsApp Incoming": {
+      "main": [
+        [
+          {
+            "node": "04 - Parse Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Parse Inbound": {
+      "main": [
+        [
+          {
+            "node": "04_status - Is Status Receipt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Translations": {
+      "main": [
+        [
+          {
+            "node": "08 - Main Menu + Navigation Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Owner Alert Exists?": {
+      "main": [
+        [
+          {
+            "node": "07 - Send Owner Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Send Owner Alert": {
+      "main": [
+        [
+          {
+            "node": "07b - Continue After Owner Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07b - Continue After Owner Alert": {
+      "main": [
+        [
+          {
+            "node": "07c - Owner Alert Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07c - Owner Alert Failed?": {
+      "main": [
+        [
+          {
+            "node": "07d - Format Owner Alert Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07d - Format Owner Alert Error": {
+      "main": [
+        [
+          {
+            "node": "07e - Report Owner Alert Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - Main Menu + Navigation Logic": {
+      "main": [
+        [
+          {
+            "node": "09 - Appointment Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 - Appointment Logic": {
+      "main": [
+        [
+          {
+            "node": "10 - Our Services Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 - Our Services Logic": {
+      "main": [
+        [
+          {
+            "node": "11 - Talk to Human Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 - Talk to Human Logic": {
+      "main": [
+        [
+          {
+            "node": "12 - Unexpected Input Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 - Unexpected Input Logic": {
+      "main": [
+        [
+          {
+            "node": "13 - Save Service Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14 - Prepare Service Sheet Row": {
+      "main": [
+        [
+          {
+            "node": "15 - Save WhatsApp Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15 - Save WhatsApp Lead": {
+      "main": [
+        [
+          {
+            "node": "16 - Service Save Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16 - Service Save Confirm": {
+      "main": [
+        [
+          {
+            "node": "25 - Customer Message Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15b - Read Existing Appointments": {
+      "main": [
+        [
+          {
+            "node": "15c - Guard Sheet Read Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15 - Resolve Calendar + Serial": {
+      "main": [
+        [
+          {
+            "node": "16 - Calendar Create?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17 - Google Calendar Create": {
+      "main": [
+        [
+          {
+            "node": "20 - Build Appointment Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "18 - Google Calendar Reschedule": {
+      "main": [
+        [
+          {
+            "node": "20 - Build Appointment Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 - Build Appointment Sheet Row": {
+      "main": [
+        [
+          {
+            "node": "21 - Appointment Reschedule?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "22 - Update Existing Appointment Row": {
+      "main": [
+        [
+          {
+            "node": "24 - Appointment Confirm + Thank You",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "23 - Save New Appointment Row": {
+      "main": [
+        [
+          {
+            "node": "24 - Appointment Confirm + Thank You",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "24 - Appointment Confirm + Thank You": {
+      "main": [
+        [
+          {
+            "node": "25 - Customer Message Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "25 - Customer Message Ready?": {
+      "main": [
+        [
+          {
+            "node": "26a - Queue Customer Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Every Minute Session Check": {
+      "main": [
+        [
+          {
+            "node": "27 - Session Timer Due",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "30 - Pick Safe DNS Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "27 - Session Timer Due": {
+      "main": [
+        [
+          {
+            "node": "28 - Due Customer Timer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "28 - Due Customer Timer?": {
+      "main": [
+        [
+          {
+            "node": "29 - Send One Timer Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13 - Save Service Lead?": {
+      "main": [
+        [
+          {
+            "node": "14 - Prepare Service Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "14b - Appointment Sheet Lookup?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14b - Appointment Sheet Lookup?": {
+      "main": [
+        [
+          {
+            "node": "15b - Read Existing Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "25 - Customer Message Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16 - Calendar Create?": {
+      "main": [
+        [
+          {
+            "node": "17 - Google Calendar Create",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "17b - Calendar Update?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17b - Calendar Update?": {
+      "main": [
+        [
+          {
+            "node": "18 - Google Calendar Reschedule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "25 - Customer Message Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "21 - Appointment Reschedule?": {
+      "main": [
+        [
+          {
+            "node": "22 - Update Existing Appointment Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "23 - Save New Appointment Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15c - Guard Sheet Read Failure": {
+      "main": [
+        [
+          {
+            "node": "15 - Resolve Calendar + Serial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "26a - Queue Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "26 - Send Customer WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "26 - Send Customer WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "26b - Record Customer Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "26b - Record Customer Send Result": {
+      "main": [
+        [
+          {
+            "node": "06 - Owner Alert Exists?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "26c - Send Confirmed by Meta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 - Pick Safe DNS Retry": {
+      "main": [
+        [
+          {
+            "node": "31 - Retry Customer WhatsApp DNS Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "31 - Retry Customer WhatsApp DNS Only": {
+      "main": [
+        [
+          {
+            "node": "32 - Record DNS Retry Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize n8n Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize n8n Failure": {
+      "main": [
+        [
+          {
+            "node": "POST Error to Existing Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04_status - Is Status Receipt?": {
+      "main": [
+        [
+          {
+            "node": "04_status_sync - Sync Status to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04a - Log Inbound to Dashboard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "04b - Check Takeover Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04b - Check Takeover Mode": {
+      "main": [
+        [
+          {
+            "node": "04c - Evaluate Takeover State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c - Evaluate Takeover State": {
+      "main": [
+        [
+          {
+            "node": "05 - Translations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "26c - Send Confirmed by Meta?": {
+      "main": [
+        [
+          {
+            "node": "26d - Log Outbound to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "74b40666-decc-4084-95a9-85e2bc61ad49",
+  "meta": {
+    "instanceId": "739a1d5e1c0391c796f92deb076a438c34d854381954b0f76fa59fbaf3e45f0d"
+  },
+  "nodeGroups": [],
+  "id": "DgY7Ej8wSSLkOmXx",
+  "tags": []
+}

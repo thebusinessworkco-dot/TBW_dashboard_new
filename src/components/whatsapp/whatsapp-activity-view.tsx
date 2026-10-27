@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   RefreshCw,
   Calendar,
-  CheckCheck,
   Globe,
   Radio,
 } from 'lucide-react';
@@ -82,10 +81,34 @@ export function WhatsAppActivityView({ onSelectCustomer }: { onSelectCustomer?: 
   }, []);
 
   useEffect(() => {
-    void fetchActivity();
-    const interval = setInterval(fetchActivity, 3000);
-    return () => clearInterval(interval);
-  }, [fetchActivity]);
+    let mounted = true;
+    const run = async () => {
+      try {
+        const res = await fetch('/api/whatsapp/activity');
+        if (!res.ok || !mounted) return;
+        const data = await res.json();
+        if (data.success && mounted) {
+          setMetrics(data.metrics);
+          setCustomers(data.contacts || []);
+          setEvents(data.events || []);
+          setLastRefreshed(new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }));
+        }
+      } catch (err) {
+        console.error('Activity fetch error:', err);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void run();
+    const interval = setInterval(run, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#FAF8F5] p-6 space-y-6">

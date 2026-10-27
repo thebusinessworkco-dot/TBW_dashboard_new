@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "backups/**",
+    "scratch/**",
+    "n8n-deleted-workflows-backup/**",
   ]),
 ]);
 

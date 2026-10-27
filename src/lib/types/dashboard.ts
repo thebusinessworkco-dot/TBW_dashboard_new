@@ -441,7 +441,7 @@ export interface InstagramDmContextResponse {
 
 export interface InstagramCommentCheckResponse {
   approved: boolean;
-  event_type: 'comment';
+  event_type?: 'comment';
   event_id?: string;
   comment_id: string;
   media_id: string;
@@ -451,11 +451,14 @@ export interface InstagramCommentCheckResponse {
   timestamp?: string;
   reply_text?: string;
   rule_id?: string;
+  public_reply_enabled?: boolean;
+  public_reply_text?: string | null;
   public_reply?: {
     enabled: boolean;
     comment_id: string;
     text: string | null;
   };
+  error?: string;
 }
 export interface InstagramAutomationAnalytics {
   connected_reels: number;

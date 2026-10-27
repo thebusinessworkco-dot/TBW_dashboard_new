@@ -5,17 +5,12 @@ import {
   Search,
   Trash2,
   AlertTriangle,
-  User,
   Phone,
   Calendar,
-  Clock,
-  Globe,
   ShieldAlert,
   X,
   CheckCircle2,
-  RotateCcw,
   RefreshCw,
-  ExternalLink,
 } from 'lucide-react';
 import { formatDateTime, formatRelativeTime } from '@/lib/utils';
 
@@ -74,8 +69,35 @@ export function WhatsAppContactsView({ onOpenChat }: { onOpenChat?: (phone: stri
   }, [searchQuery, classificationFilter, statusFilter, languageFilter]);
 
   useEffect(() => {
-    void fetchContacts();
-  }, [fetchContacts]);
+    let active = true;
+    const run = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) params.set('q', searchQuery.trim());
+        if (classificationFilter !== 'all') params.set('classification', classificationFilter);
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (languageFilter !== 'all') params.set('language', languageFilter);
+
+        const res = await fetch(`/api/whatsapp/contacts?${params.toString()}`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (data.success && active) {
+          setContacts(data.contacts || []);
+        }
+      } catch (err) {
+        console.error('Fetch contacts error:', err);
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [searchQuery, classificationFilter, statusFilter, languageFilter]);
 
   const handleDeleteConfirmed = async () => {
     if (!contactToDelete) return;

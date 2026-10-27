@@ -72,3 +72,6 @@ next-env.d.ts
 /scripts/test_meta_*.mjs
 /scripts/test_rpc.mjs
 /scripts/trace_*.mjs
+
+.vercel
+.env*
