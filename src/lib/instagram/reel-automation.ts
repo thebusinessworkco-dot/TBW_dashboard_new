@@ -509,10 +509,7 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
   }
 
   // 8. Fail-closed if initial_dm_text is empty or too long
-  let replyText = rule.initial_dm_text.trim();
-  if (replyText.includes('Send Me Details')) {
-    replyText = "Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨";
-  }
+  let replyText = (rule.initial_dm_text || '').trim();
   if (!replyText || replyText.length > 950) {
     return baseResponse;
   }

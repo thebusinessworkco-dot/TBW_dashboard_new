@@ -15,7 +15,7 @@ export function verifyIncomingN8nWebhook(
   allowInternalSecret = false
 ): { authorized: boolean; reason?: string } {
   const isProduction = process.env.NODE_ENV === 'production';
-  const expectedWebhookSecret = process.env.N8N_WEBHOOK_SECRET || (!isProduction ? process.env.N8N_API_KEY : undefined);
+  const expectedWebhookSecret = process.env.N8N_WEBHOOK_SECRET || process.env.N8N_API_KEY;
   const expectedInternalSecret = allowInternalSecret ? process.env.INTERNAL_API_SECRET : undefined;
 
   if (!expectedWebhookSecret && !expectedInternalSecret) {
