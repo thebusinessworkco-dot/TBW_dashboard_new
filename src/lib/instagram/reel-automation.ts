@@ -840,6 +840,11 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
 
         if (existingCtx) {
           isFirstDm = false;
+          await adminSupabase.from('instagram_customer_context').update({
+            follow_status: customerFollowStatus,
+            last_inbound_at: new Date().toISOString(),
+            last_event_at: new Date().toISOString(),
+          }).eq('ig_user_id', igUserId);
         } else {
           isFirstDm = true;
           await adminSupabase.from('instagram_customer_context').upsert({
@@ -857,6 +862,12 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
     } else {
       isFirstDm = !memoryCustomerContext.has(igUserId);
     }
+  }
+
+  const existingMemory = memoryCustomerContext.get(igUserId);
+  if (existingMemory) {
+    existingMemory.follow_status = customerFollowStatus;
+    existingMemory.last_inbound_at = new Date().toISOString();
   }
 
   return {
