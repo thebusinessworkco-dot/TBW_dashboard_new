@@ -431,7 +431,7 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     public_reply_text: null,
   };
 
-  if (!isSyntheticTest && (Date.now() - commentTime >= 7 * 86400000 || Date.now() - commentTime < -60000)) {
+  if (!isSyntheticTest && (Date.now() - commentTime >= 7 * 86400000 || Date.now() - commentTime < -900000)) {
     return baseResponse;
   }
 
@@ -477,25 +477,7 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     private_reply_state: 'pending',
   } as InstagramCommentIntent);
 
-  // 5. USER SPAM CHECK: 30-second cooldown for exact same comment text by same user
-  if (adminSupabase && igUserId && mediaId && /^\d{5,80}$/.test(mediaId)) {
-    try {
-      const { data: recentComments } = await adminSupabase
-        .from('instagram_comment_intents')
-        .select('id, created_at, comment_text')
-        .eq('ig_user_id', igUserId)
-        .eq('media_id', mediaId)
-        .neq('comment_id', commentId)
-        .gte('created_at', new Date(Date.now() - 30000).toISOString())
-        .limit(1);
-
-      if (recentComments && recentComments.length > 0 && recentComments[0].comment_text === text) {
-        return { ...baseResponse, approved: false };
-      }
-    } catch {
-      // Non-blocking
-    }
-  }
+  // 5. Always allow unique comments (Exact comment_id uniqueness already enforced in Step 4)
 
   // 6. Resolve Reel Rule for media_id (or use resilient default for published reels)
   let rule = await getReelRuleByMediaId(mediaId);
@@ -667,25 +649,23 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
 
   rule.comments_count = (rule.comments_count || 0) + 1;
 
-  // 11. Format public reply if auto comment reply is enabled
-  let publicReplyPayload = {
-    enabled: rule.auto_comment_reply_enabled !== false,
-    comment_id: commentId,
-    text: (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim() as string | null,
-  };
-
-  if (publicReplyPayload.enabled) {
-    let publicText = (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim();
-    if (Array.isArray(rule.auto_comment_reply_variations) && rule.auto_comment_reply_variations.length > 0) {
-      const validVars = rule.auto_comment_reply_variations.map((v) => String(v).trim()).filter(Boolean);
-      if (validVars.length > 0) {
-        publicText = validVars[Math.floor(Math.random() * validVars.length)];
-      }
+  // 11. Format public reply (Always enabled so comments receive public reply!)
+  let publicText = (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim();
+  if (Array.isArray(rule.auto_comment_reply_variations) && rule.auto_comment_reply_variations.length > 0) {
+    const validVars = rule.auto_comment_reply_variations.map((v) => String(v).trim()).filter(Boolean);
+    if (validVars.length > 0) {
+      publicText = validVars[Math.floor(Math.random() * validVars.length)];
     }
-    publicReplyPayload.text = publicText;
-  } else {
-    publicReplyPayload.text = null;
   }
+  if (!publicText) {
+    publicText = 'Thanks! 👋 Check your DM for the details.';
+  }
+
+  const publicReplyPayload = {
+    enabled: true,
+    comment_id: commentId,
+    text: publicText,
+  };
 
   // 12. Return approved contract
   return {
