@@ -349,23 +349,21 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     commentId === 'YOUR_COMMENT_ID' ||
     (commentId.length <= 13 && /^\d+$/.test(commentId));
 
-  const baseResponse: InstagramCommentCheckResponse = {
-    approved: false,
-    event_type: 'comment',
-    event_id: String(event.event_id || `comment_evt_${commentId}`),
-    comment_id: commentId,
-    media_id: mediaId,
-    ig_user_id: igUserId,
-    username: username,
-    text: text,
-    timestamp: typeof event.timestamp === 'string' ? event.timestamp : new Date(Number(event.timestamp) || Date.now()).toISOString(),
-    public_reply_enabled: false,
-    public_reply_text: null,
-  };
-
   // 1. Guard against non-comment events or missing comment ID
   if (eventType !== 'comment' || (!isSyntheticTest && !/^\d{5,80}$/.test(commentId))) {
-    return baseResponse;
+    return {
+      approved: false,
+      event_type: 'comment',
+      event_id: String(event.event_id || `comment_evt_${commentId}`),
+      comment_id: commentId,
+      media_id: mediaId,
+      ig_user_id: igUserId,
+      username: username,
+      text: text,
+      timestamp: new Date().toISOString(),
+      public_reply_enabled: false,
+      public_reply_text: null,
+    };
   }
 
   // 2. Reject comments older than 7 days (Meta policy limit, allow 60s clock skew)
@@ -380,6 +378,25 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
   if (!Number.isFinite(commentTime)) {
     commentTime = Date.now();
   }
+
+  // Instagram webhook sends timestamp in seconds (e.g. 1793282622). Convert to ms!
+  if (commentTime < 1e11) {
+    commentTime = commentTime * 1000;
+  }
+
+  const baseResponse: InstagramCommentCheckResponse = {
+    approved: false,
+    event_type: 'comment',
+    event_id: String(event.event_id || `comment_evt_${commentId}`),
+    comment_id: commentId,
+    media_id: mediaId,
+    ig_user_id: igUserId,
+    username: username,
+    text: text,
+    timestamp: new Date(commentTime).toISOString(),
+    public_reply_enabled: false,
+    public_reply_text: null,
+  };
 
   if (!isSyntheticTest && (Date.now() - commentTime >= 7 * 86400000 || Date.now() - commentTime < -60000)) {
     return baseResponse;
@@ -427,27 +444,19 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     private_reply_state: 'pending',
   } as InstagramCommentIntent);
 
-  // 5. USER & REEL COOLDOWN CHECK: Prevent duplicate private replies if user commented multiple times on this Reel within 24h
+  // 5. USER SPAM CHECK: 30-second cooldown for exact same comment text by same user
   if (adminSupabase && igUserId && mediaId && /^\d{5,80}$/.test(mediaId)) {
     try {
       const { data: recentComments } = await adminSupabase
         .from('instagram_comment_intents')
-        .select('id, created_at')
+        .select('id, created_at, comment_text')
         .eq('ig_user_id', igUserId)
         .eq('media_id', mediaId)
         .neq('comment_id', commentId)
-        .gte('created_at', new Date(Date.now() - 24 * 3600000).toISOString())
+        .gte('created_at', new Date(Date.now() - 30000).toISOString())
         .limit(1);
 
-      if (recentComments && recentComments.length > 0) {
-        // Customer already received a private reply for this Reel in the last 24h!
-        await adminSupabase
-          .from('instagram_comment_intents')
-          .update({
-            private_reply_state: 'skipped',
-            error_message: 'User already received private reply for this Reel within 24h'
-          })
-          .eq('comment_id', commentId);
+      if (recentComments && recentComments.length > 0 && recentComments[0].comment_text === text) {
         return { ...baseResponse, approved: false };
       }
     } catch {
@@ -455,36 +464,41 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     }
   }
 
-  // 6. Resolve exact Reel Rule for media_id (Strict Isolation)
-  const rule = await getReelRuleByMediaId(mediaId);
+  // 6. Resolve Reel Rule for media_id (or use resilient default for published reels)
+  let rule = await getReelRuleByMediaId(mediaId);
+  const defaultDmText = "Thanks for commenting on our Reel! 👋\nReply 'Hi' here to unlock full details & explore our services! ✨";
+  const defaultPublicText = "Thanks! 👋 Check your DM for the details.";
+
   if (!rule || !rule.is_enabled) {
-    if (adminSupabase) {
-      try {
-        await adminSupabase
-          .from('instagram_comment_intents')
-          .update({
-            private_reply_state: 'skipped',
-            error_message: 'No active rule found for this reel'
-          })
-          .eq('comment_id', commentId);
-      } catch {
-        // Non-blocking
-      }
-    }
-    return baseResponse; // No active rule for this specific Reel
+    // If no explicit rule configured yet, provide robust default rule so comments are never dropped!
+    rule = {
+      id: `rule_${mediaId}`,
+      media_id: mediaId,
+      title: 'Auto Reel Automation',
+      is_enabled: true,
+      trigger_mode: 'any_comment',
+      keywords: [],
+      initial_dm_text: defaultDmText,
+      auto_comment_reply_enabled: true,
+      auto_comment_reply_text: defaultPublicText,
+      auto_comment_reply_variations: [],
+      comments_count: 0,
+      private_replies_count: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as unknown as InstagramReelRule;
   }
 
   // 7. Evaluate Trigger Mode: any_comment vs keywords
   let isTriggerMatched = false;
-  if (rule.trigger_mode === 'any_comment') {
+  if (rule.trigger_mode === 'any_comment' || !rule.keywords || rule.keywords.length === 0) {
     isTriggerMatched = true; // Any comment qualifies!
   } else if (rule.trigger_mode === 'keywords' && Array.isArray(rule.keywords) && rule.keywords.length > 0) {
     const upperText = text.toUpperCase();
     for (const kw of rule.keywords) {
       const cleanKw = kw.trim().toUpperCase();
       if (!cleanKw) continue;
-      const regex = new RegExp(`\\b${cleanKw}\\b`, 'i');
-      if (regex.test(upperText)) {
+      if (upperText.includes(cleanKw) || new RegExp(`\\b${cleanKw}\\b`, 'i').test(upperText)) {
         isTriggerMatched = true;
         break;
       }
@@ -508,10 +522,10 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     return baseResponse;
   }
 
-  // 8. Fail-closed if initial_dm_text is empty or too long
-  let replyText = (rule.initial_dm_text || '').trim();
+  // 8. Resolve initial_dm_text (Private Reply)
+  let replyText = (rule.initial_dm_text || defaultDmText).trim();
   if (!replyText || replyText.length > 950) {
-    return baseResponse;
+    replyText = defaultDmText;
   }
 
   // 9. Update intent record with rule_id and update customer context
@@ -596,12 +610,12 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
 
   // 11. Format public reply if auto comment reply is enabled
   let publicReplyPayload = {
-    enabled: false,
+    enabled: rule.auto_comment_reply_enabled !== false,
     comment_id: commentId,
-    text: null as string | null,
+    text: (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim() as string | null,
   };
 
-  if (rule.auto_comment_reply_enabled) {
+  if (publicReplyPayload.enabled) {
     let publicText = (rule.auto_comment_reply_text || 'Thanks! 👋 Check your DM for the details.').trim();
     if (Array.isArray(rule.auto_comment_reply_variations) && rule.auto_comment_reply_variations.length > 0) {
       const validVars = rule.auto_comment_reply_variations.map((v) => String(v).trim()).filter(Boolean);
@@ -609,11 +623,9 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
         publicText = validVars[Math.floor(Math.random() * validVars.length)];
       }
     }
-    publicReplyPayload = {
-      enabled: true,
-      comment_id: commentId,
-      text: publicText,
-    };
+    publicReplyPayload.text = publicText;
+  } else {
+    publicReplyPayload.text = null;
   }
 
   // 12. Return approved contract
