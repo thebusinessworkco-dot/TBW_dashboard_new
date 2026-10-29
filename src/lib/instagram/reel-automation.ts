@@ -115,6 +115,39 @@ export async function generateWhatsAppUrl(prefillText?: string | null): Promise<
 }
 
 /**
+ * Real-time Meta Graph API Instagram Follower Verification
+ * Checks if user is following the business account: GET /v26.0/${igUserId}?fields=is_user_follow_business
+ */
+export async function checkUserFollows(igUserId: string): Promise<boolean> {
+  const cleanId = String(igUserId || '').trim();
+  if (!cleanId || !/^\d{5,40}$/.test(cleanId)) return false;
+
+  const token = process.env.INSTAGRAM_GRAPH_API_ACCESS_TOKEN;
+  if (!token) {
+    console.warn('[checkUserFollows] INSTAGRAM_GRAPH_API_ACCESS_TOKEN missing');
+    return false;
+  }
+
+  try {
+    const url = `https://graph.instagram.com/v26.0/${cleanId}?fields=is_user_follow_business&access_token=${token}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      console.warn(`[checkUserFollows] HTTP ${res.status} checking user ${cleanId}`);
+      return false;
+    }
+    const data = (await res.json()) as { is_user_follow_business?: boolean };
+    return data.is_user_follow_business === true;
+  } catch (err: unknown) {
+    console.warn(`[checkUserFollows] Verification failed for user ${cleanId}:`, err);
+    return false;
+  }
+}
+
+/**
  * Fetch all Reel Rules
  */
 export async function getAllReelRules(): Promise<InstagramReelRule[]> {
@@ -522,10 +555,55 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     return baseResponse;
   }
 
-  // 8. Resolve initial_dm_text (Private Reply)
-  let replyText = (rule.initial_dm_text || defaultDmText).trim();
-  if (!replyText || replyText.length > 950) {
-    replyText = defaultDmText;
+  // 8. Follow Verification & Private Reply Payload Resolution
+  // If user already follows: Start directly with Language Selection menu!
+  // If user does not follow: Send Follow Gate button template card!
+  const isFollowing = await checkUserFollows(igUserId);
+  const followStatus: 'follows' | 'not_following' = isFollowing ? 'follows' : 'not_following';
+
+  let replyText = '';
+  let template: Record<string, unknown> | null = null;
+  let quickReplies: Array<{ content_type: string; title: string; payload?: string }> | null = null;
+
+  if (isFollowing) {
+    replyText = "Welcome to The Business Work! 👋\nPlease select your preferred language to explore our services:\n\n1. English\n2. हिंदी\n3. Hinglish\n4. मराठी\n\n(Tap below or type 1–4)";
+    template = null;
+    quickReplies = [
+      { content_type: 'text', title: 'English', payload: 'IG_LANG_en' },
+      { content_type: 'text', title: 'हिंदी', payload: 'IG_LANG_hi' },
+      { content_type: 'text', title: 'Hinglish', payload: 'IG_LANG_hinglish' },
+      { content_type: 'text', title: 'मराठी', payload: 'IG_LANG_mr' }
+    ];
+  } else {
+    replyText = "Hey! 👋 Before I send you the details, are you following me?\n\n👉 Not yet? Tap \"Follow me\" and hit Follow\n✅ Already following? Tap \"I'm following\"";
+    template = {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text: "Hey! 👋 Before I send you the details, are you following me?\n\n👉 Not yet? Tap \"Follow me\" and hit Follow\n✅ Already following? Tap \"I'm following\"",
+          buttons: [
+            {
+              type: 'web_url',
+              url: 'https://www.instagram.com/thebusinesswork.co/',
+              title: '👉 Follow me'
+            },
+            {
+              type: 'postback',
+              title: "I'm following ✅",
+              payload: 'IG_VERIFY_FOLLOW'
+            }
+          ]
+        }
+      }
+    };
+    quickReplies = [
+      {
+        content_type: 'text',
+        title: "I'm following ✅",
+        payload: 'IG_VERIFY_FOLLOW'
+      }
+    ];
   }
 
   // 9. Update intent record with rule_id and update customer context
@@ -559,25 +637,6 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
 
   // 10. Durable Customer Context (Store pending campaign for commenter)
   if (igUserId && /^\d{5,40}$/.test(igUserId)) {
-    let preservedFollowStatus: 'follows' | 'not_following' | 'unknown' = 'unknown';
-    const memoryCtx = memoryCustomerContext.get(igUserId);
-    if (memoryCtx?.follow_status === 'follows') {
-      preservedFollowStatus = 'follows';
-    } else if (adminSupabase) {
-      try {
-        const { data: existingCtx } = await adminSupabase
-          .from('instagram_customer_context')
-          .select('follow_status')
-          .eq('ig_user_id', igUserId)
-          .maybeSingle();
-        if (existingCtx?.follow_status === 'follows') {
-          preservedFollowStatus = 'follows';
-        }
-      } catch {
-        // Fallback
-      }
-    }
-
     const custContextDb: Record<string, unknown> = {
       ig_user_id: igUserId,
       pending_media_id: mediaId,
@@ -585,7 +644,7 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
       last_inbound_at: new Date().toISOString(),
       first_dm_at: new Date().toISOString(),
       last_event_at: new Date().toISOString(),
-      follow_status: preservedFollowStatus,
+      follow_status: followStatus,
       context_expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
       created_at: new Date().toISOString(),
     };
@@ -640,6 +699,10 @@ export async function evaluateCommentCheck(event: Record<string, unknown>): Prom
     text: text,
     timestamp: baseResponse.timestamp,
     reply_text: replyText,
+    is_following: isFollowing,
+    follow_status: followStatus,
+    template: template,
+    quick_replies: quickReplies,
     rule_id: rule.id,
     public_reply_enabled: publicReplyPayload.enabled,
     public_reply_text: publicReplyPayload.text,
@@ -712,9 +775,10 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
     };
   }
 
-  // 3. Resolve Target Reel Rule (Strict Campaign Resolution)
+  // 3. Real-Time Follow Verification & Target Reel Rule Resolution
+  const isFollowing = await checkUserFollows(igUserId);
+  let customerFollowStatus: 'follows' | 'not_following' | 'unknown' = isFollowing ? 'follows' : 'not_following';
   let resolvedMediaId: string | null = null;
-  let customerFollowStatus: 'follows' | 'not_following' | 'unknown' = 'unknown';
 
   // A. Check explicit referral media ID from incoming event
   if (referralMediaId && /^\d{5,80}$/.test(referralMediaId)) {
@@ -724,7 +788,6 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
   // B. Query durable customer context
   const memoryCtx = memoryCustomerContext.get(igUserId);
   if (memoryCtx) {
-    if (memoryCtx.follow_status) customerFollowStatus = memoryCtx.follow_status;
     if (!resolvedMediaId && memoryCtx.pending_media_id) {
       const expiry = Date.parse(memoryCtx.context_expires_at);
       if (Number.isFinite(expiry) && Date.now() < expiry) {
@@ -742,9 +805,6 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
         .maybeSingle();
 
       if (dbCtx) {
-        if (dbCtx.follow_status) {
-          customerFollowStatus = dbCtx.follow_status as 'follows' | 'not_following' | 'unknown';
-        }
         if (!resolvedMediaId && dbCtx.pending_media_id) {
           const expiry = Date.parse(dbCtx.context_expires_at);
           if (Number.isFinite(expiry) && Date.now() < expiry) {
@@ -807,6 +867,7 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
             first_dm_at: new Date().toISOString(),
             last_inbound_at: new Date().toISOString(),
             last_event_at: new Date().toISOString(),
+            follow_status: customerFollowStatus,
             context_expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
           }, { onConflict: 'ig_user_id' });
         }
@@ -830,8 +891,9 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
     reply_allowed: true,
     is_first_dm: isFirstDm,
     whatsapp_url: whatsappUrl,
+    is_following: isFollowing,
     follow_status: customerFollowStatus,
-    already_verified: customerFollowStatus === 'follows',
+    already_verified: isFollowing,
     campaign: campaignPayload,
     clear_campaign: !campaignPayload,
   };

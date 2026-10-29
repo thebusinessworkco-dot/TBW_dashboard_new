@@ -433,6 +433,7 @@ export interface InstagramDmContextResponse {
   reply_allowed: boolean;
   is_first_dm: boolean;
   whatsapp_url: string;
+  is_following?: boolean;
   follow_status?: 'follows' | 'not_following' | 'unknown';
   already_verified?: boolean;
   campaign: InstagramCampaignPayload | null;
@@ -451,6 +452,10 @@ export interface InstagramCommentCheckResponse {
   timestamp?: string;
   reply_text?: string;
   rule_id?: string;
+  is_following?: boolean;
+  follow_status?: 'follows' | 'not_following' | 'unknown';
+  template?: Record<string, unknown> | null;
+  quick_replies?: Array<{ content_type: string; title: string; payload?: string }> | null;
   public_reply_enabled?: boolean;
   public_reply_text?: string | null;
   public_reply?: {
