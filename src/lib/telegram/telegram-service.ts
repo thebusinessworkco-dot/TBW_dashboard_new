@@ -257,22 +257,18 @@ export async function sendTelegramAdminAlert(params: SendAlertParams): Promise<{
 
   const html = `<b>${titleHeader}</b>\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>Customer:</b> ${safeName}\n📱 <b>Phone:</b> <code>${phoneFormatted}</code>\n⏰ <b>Time:</b> ${timeIST}\n\n💬 <b>Details:</b>\n${safeText}`;
 
-  // Build inline keyboard action buttons
+  // Build inline keyboard action buttons (Telegram Bot API strictly requires http/https/tg URLs)
   const buttons: Array<Array<{ text: string; url: string }>> = [];
 
   const row1: Array<{ text: string; url: string }> = [];
   if (cleanPhone) {
-    row1.push({ text: '📞 Call Customer', url: `tel:+${cleanPhone}` });
     row1.push({ text: '💬 WhatsApp Chat', url: `https://wa.me/${cleanPhone}` });
   }
-  if (row1.length > 0) buttons.push(row1);
-
-  buttons.push([
-    {
-      text: '🖥️ Open in Dashboard',
-      url: 'https://dashboard.thebusinesswork.com/whatsapp',
-    },
-  ]);
+  row1.push({
+    text: '🖥️ Open Dashboard',
+    url: 'https://dashboard.thebusinesswork.com/whatsapp',
+  });
+  buttons.push(row1);
 
   const sendRes = await sendTelegramRawMessage(config.chat_id, html, {
     parse_mode: 'HTML',
