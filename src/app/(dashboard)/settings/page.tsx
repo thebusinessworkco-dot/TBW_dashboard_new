@@ -14,12 +14,17 @@ import {
   Phone,
   AlertTriangle,
   ExternalLink,
+  Sun,
+  Moon,
+  Monitor,
   BellOff,
 } from 'lucide-react';
 import { InstagramIcon as Instagram, WhatsAppIcon as WhatsApp } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
+import { useDashboardStore } from '@/lib/store/dashboard-store';
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useDashboardStore();
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -171,7 +176,111 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* SECTION 1.1: PERSONAL TEST NUMBER ALERT SUPPRESSION */}
+        {/* SECTION 1.1: APPEARANCE & THEME (DARK / LIGHT MODE) */}
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
+          <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                {theme === 'dark' ? (
+                  <Moon className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <Sun className="h-4 w-4 text-amber-500" />
+                )}
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-900">
+                  Appearance & Theme
+                </h2>
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Customize your dashboard interface theme. Changes persist automatically in your browser.
+              </p>
+            </div>
+            <span className="rounded-lg bg-stone-100 border border-stone-200/80 px-2.5 py-1 text-[11px] font-mono text-stone-600 self-start sm:self-auto">
+              Current: <strong className="capitalize text-stone-900">{theme} Mode</strong>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {/* Light Mode Option */}
+            <button
+              type="button"
+              onClick={() => setTheme('light')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                theme === 'light'
+                  ? 'border-stone-900 bg-stone-50/80 ring-2 ring-stone-900/10 shadow-xs'
+                  : 'border-stone-200/80 bg-white hover:border-stone-300 hover:bg-stone-50/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="rounded-lg bg-amber-50 p-2 border border-amber-200/60">
+                  <Sun className="h-4 w-4 text-amber-600" />
+                </div>
+                {theme === 'light' && (
+                  <CheckCircle2 className="h-4 w-4 text-stone-900" />
+                )}
+              </div>
+              <div>
+                <div className="font-semibold text-xs text-stone-900">Light Theme</div>
+                <div className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
+                  Clean daylight interface with warm stone accents.
+                </div>
+              </div>
+            </button>
+
+            {/* Dark Mode Option */}
+            <button
+              type="button"
+              onClick={() => setTheme('dark')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                theme === 'dark'
+                  ? 'border-stone-900 bg-stone-50/80 ring-2 ring-stone-900/10 shadow-xs'
+                  : 'border-stone-200/80 bg-white hover:border-stone-300 hover:bg-stone-50/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="rounded-lg bg-indigo-50 p-2 border border-indigo-200/60">
+                  <Moon className="h-4 w-4 text-indigo-600" />
+                </div>
+                {theme === 'dark' && (
+                  <CheckCircle2 className="h-4 w-4 text-stone-900" />
+                )}
+              </div>
+              <div>
+                <div className="font-semibold text-xs text-stone-900">Dark Theme</div>
+                <div className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
+                  Obsidian & slate dark palette for night use & focus.
+                </div>
+              </div>
+            </button>
+
+            {/* System Default Option */}
+            <button
+              type="button"
+              onClick={() => setTheme('system')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                theme === 'system'
+                  ? 'border-stone-900 bg-stone-50/80 ring-2 ring-stone-900/10 shadow-xs'
+                  : 'border-stone-200/80 bg-white hover:border-stone-300 hover:bg-stone-50/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="rounded-lg bg-stone-100 p-2 border border-stone-200">
+                  <Monitor className="h-4 w-4 text-stone-600" />
+                </div>
+                {theme === 'system' && (
+                  <CheckCircle2 className="h-4 w-4 text-stone-900" />
+                )}
+              </div>
+              <div>
+                <div className="font-semibold text-xs text-stone-900">System Preference</div>
+                <div className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
+                  Automatically adapts to your device OS settings.
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* SECTION 1.2: PERSONAL TEST NUMBER ALERT SUPPRESSION */}
         <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-4">
           <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>

@@ -1,7 +1,6 @@
-
-
-
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #F8F7F4;
@@ -21,6 +20,24 @@
   --instagram: #E1306C;
 }
 
+.dark {
+  --background: #080A0F;
+  --foreground: #F8FAFC;
+  --surface: #0E1118;
+  --surface-muted: #131722;
+  --surface-subtle: #171C28;
+  --border: #1A202C;
+  --border-subtle: #151922;
+  --border-strong: #252D3D;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --brand-accent: #FFFFFF;
+  --whatsapp: #10B981;
+  --whatsapp-dark: #059669;
+  --instagram: #E1306C;
+}
+
 html,
 body {
   height: 100%;
@@ -32,28 +49,266 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Premium micro scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+/* ══════════════════════════════════════════════════════════════════════════
+   TBW OS — Ultra-Modern Seamless Dark Theme
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 1. Global Background Canvas (No light cream patches anywhere) */
+html.dark,
+body.dark,
+.dark body,
+.dark main,
+.dark .bg-\[\#F8F7F4\],
+.dark .bg-\[\#F8F7F3\],
+.dark .bg-\[\#FAF8F5\],
+.dark .bg-\[\#FAF9F6\],
+.dark .bg-\[\#F7F5F0\] {
+  background-color: #080A0F !important;
+  color: #F8FAFC !important;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* 2. Sidebars, Headers, and Top Navbars */
+.dark aside,
+.dark header,
+.dark .bg-\[\#FAF8F5\],
+.dark .bg-white\/85,
+.dark .bg-white\/90,
+.dark .bg-white\/80 {
+  background-color: #0E1118 !important;
+  border-color: #1A202C !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #D4CFCA;
-  border-radius: 9999px;
+/* Sidebar Administrator Footer */
+.dark .bg-\[\#F5F2EA\]\/70,
+.dark .bg-\[\#F5F2EA\] {
+  background-color: #090B10 !important;
+  border-color: #1A202C !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #A8A29E;
+/* 3. Primary Cards, Drawers, Panels */
+.dark .bg-white {
+  background-color: #0E1118 !important;
+  border-color: #1A202C !important;
 }
 
-/* Focus styles for keyboard accessibility */
-:focus-visible {
-  outline: 2px solid #18181B;
+/* Secondary Elevated Cards & Metric Tiles */
+.dark .bg-stone-50,
+.dark .bg-stone-50\/70,
+.dark .bg-stone-50\/60,
+.dark .bg-stone-50\/80,
+.dark .bg-stone-50\/50,
+.dark .bg-\[\#FAF8F5\]\/60 {
+  background-color: #131722 !important;
+  border-color: #1C2230 !important;
+}
+
+.dark .bg-stone-100,
+.dark .bg-stone-100\/80,
+.dark .bg-stone-100\/70,
+.dark .bg-\[\#F4F2EB\] {
+  background-color: #171C28 !important;
+  border-color: #1C2230 !important;
+}
+
+.dark .bg-stone-200,
+.dark .bg-stone-200\/70,
+.dark .bg-stone-200\/60 {
+  background-color: #1E2536 !important;
+  border-color: #263044 !important;
+}
+
+/* 4. Active / Selected / Hover States */
+.dark .bg-\[\#F2EFE7\] {
+  background-color: #161C2B !important;
+  border-left-color: #10B981 !important;
+}
+
+.dark .hover\:bg-\[\#FAF8F5\]:hover,
+.dark .hover\:bg-\[\#EFECE4\]:hover,
+.dark .hover\:bg-stone-100:hover,
+.dark .hover\:bg-stone-50:hover,
+.dark .hover\:bg-stone-200\/60:hover,
+.dark .hover\:bg-stone-200\/50:hover {
+  background-color: #161A26 !important;
+  color: #FFFFFF !important;
+}
+
+.dark .bg-stone-900 {
+  background-color: #202738 !important;
+  color: #FFFFFF !important;
+}
+
+.dark .hover\:bg-stone-900:hover {
+  background-color: #283248 !important;
+  color: #FFFFFF !important;
+}
+
+.dark .hover\:bg-stone-800:hover {
+  background-color: #2D3850 !important;
+}
+
+/* 5. Borders & Dividers */
+.dark .border-\[\#E6E1D7\],
+.dark .border-\[\#E5E1D8\],
+.dark .border-\[\#E2DDD3\],
+.dark .border-\[\#CDC7BA\],
+.dark .border-\[\#CDC7BC\],
+.dark .border-stone-200,
+.dark .border-stone-200\/80,
+.dark .border-stone-200\/60,
+.dark .border-stone-200\/90,
+.dark .border-stone-100 {
+  border-color: #1A202C !important;
+}
+
+.dark .border-stone-300 {
+  border-color: #252D3D !important;
+}
+
+.dark .divide-\[\#EFECE5\] > :not([hidden]) ~ :not([hidden]),
+.dark .divide-stone-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-stone-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #151922 !important;
+}
+
+/* 6. Typography & High-Contrast Readability */
+.dark .text-stone-900 {
+  color: #F8FAFC !important;
+}
+
+.dark .text-stone-800 {
+  color: #E2E8F0 !important;
+}
+
+.dark .text-stone-700 {
+  color: #CBD5E1 !important;
+}
+
+.dark .text-stone-600 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-stone-500 {
+  color: #64748B !important;
+}
+
+.dark .text-stone-400 {
+  color: #475569 !important;
+}
+
+.dark .text-stone-300 {
+  color: #334155 !important;
+}
+
+/* 7. WhatsApp & Instagram Chat Windows */
+/* Chat canvas background */
+.dark .bg-\[\#F7F5F0\] {
+  background-color: #06070B !important;
+}
+
+/* Inbound customer chat bubbles */
+.dark .bg-white.border-stone-200\/90,
+.dark .bg-white.border-stone-200 {
+  background-color: #131722 !important;
+  border: 1px solid #1E2536 !important;
+  color: #F8FAFC !important;
+}
+
+/* Outbound bot/agent chat bubbles */
+.dark .bg-\[\#18181B\] {
+  background-color: #172132 !important;
+  border: 1px solid #25334D !important;
+  color: #FFFFFF !important;
+}
+
+/* Interactive WhatsApp action buttons inside bot bubble */
+.dark .bg-\[\#18181B\] button,
+.dark .bg-\[\#18181B\] a,
+.dark .bg-\[\#18181B\] .border-white\/20 {
+  background-color: #0D121D !important;
+  border-color: #202C40 !important;
+  color: #38BDF8 !important;
+}
+
+/* Chat reply box at bottom */
+.dark .bg-white.border-t {
+  background-color: #0E1118 !important;
+  border-color: #1A202C !important;
+}
+
+/* Dashed empty placeholders */
+.dark .border-dashed {
+  border-color: #222938 !important;
+  background-color: rgba(18, 22, 34, 0.4) !important;
+  color: #64748B !important;
+}
+
+/* 8. Form Inputs, Textareas, Selects */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #121622 !important;
+  color: #F8FAFC !important;
+  border: 1px solid #202636 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #475569 !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #38BDF8 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15) !important;
+}
+
+/* 9. Status Badges & Pills */
+.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.25) !important;
+  border-color: rgba(5, 150, 105, 0.35) !important;
+  color: #34D399 !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.25) !important;
+  border-color: rgba(217, 119, 6, 0.35) !important;
+  color: #FBBF24 !important;
+}
+
+.dark .bg-purple-50 {
+  background-color: rgba(88, 28, 135, 0.25) !important;
+  border-color: rgba(147, 51, 234, 0.35) !important;
+  color: #C084FC !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-rose-50\/50,
+.dark .bg-rose-50\/90 {
+  background-color: rgba(136, 19, 55, 0.25) !important;
+  border-color: rgba(225, 29, 72, 0.35) !important;
+  color: #FB7185 !important;
+}
+
+.dark .bg-sky-50 {
+  background-color: rgba(12, 74, 110, 0.25) !important;
+  border-color: rgba(14, 165, 233, 0.35) !important;
+  color: #38BDF8 !important;
+}
+
+/* 10. Scrollbar & Keyboard Focus */
+.dark ::-webkit-scrollbar-thumb {
+  background: #252D3D;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #354056;
+}
+
+.dark :focus-visible {
+  outline: 2px solid #38BDF8;
   outline-offset: 2px;
 }
 
@@ -69,4 +324,3 @@ body {
     display: block !important;
   }
 }
-
