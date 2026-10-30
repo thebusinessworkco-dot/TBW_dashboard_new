@@ -28,6 +28,7 @@ import {
   List as ListIcon,
   ExternalLink,
   ArrowDown,
+  ArrowLeft,
   Layers,
   X,
   AlertTriangle,
@@ -517,6 +518,7 @@ function WhatsAppPageContent() {
   const [selectedConvId, setSelectedConvId] = useState<string>(
     waConversations[0]?.id || ''
   );
+  const [mobileViewingChat, setMobileViewingChat] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus || 'all');
   const [replyText, setReplyText] = useState('');
@@ -711,6 +713,7 @@ function WhatsAppPageContent() {
     if (matched) {
       setSelectedConvId(matched.id);
     }
+    setMobileViewingChat(true);
     setActiveTab('inbox');
   };
 
@@ -722,11 +725,11 @@ function WhatsAppPageContent() {
       />
 
       {/* WhatsApp V6 Top Navigation Tabs */}
-      <div className="flex items-center justify-between border-b border-[#E6E1D7] bg-[#FAF8F5] px-4 py-2 shrink-0">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between border-b border-[#E6E1D7] bg-[#FAF8F5] px-3 sm:px-4 py-2 shrink-0 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setActiveTab('inbox')}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-3 sm:px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'inbox'
                 ? 'bg-stone-900 text-white shadow-xs'
                 : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
@@ -738,7 +741,7 @@ function WhatsAppPageContent() {
 
           <button
             onClick={() => setActiveTab('activity')}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-3 sm:px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'activity'
                 ? 'bg-stone-900 text-white shadow-xs'
                 : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
@@ -750,7 +753,7 @@ function WhatsAppPageContent() {
 
           <button
             onClick={() => setActiveTab('contacts')}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-3 sm:px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'contacts'
                 ? 'bg-stone-900 text-white shadow-xs'
                 : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
@@ -761,7 +764,7 @@ function WhatsAppPageContent() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2 shrink-0 ml-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 border border-emerald-200/80">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Live Supabase Connected
@@ -773,9 +776,13 @@ function WhatsAppPageContent() {
       {activeTab === 'activity' && <WhatsAppActivityView onSelectCustomer={handleOpenChatByPhone} />}
       {activeTab === 'contacts' && <WhatsAppContactsView onOpenChat={handleOpenChatByPhone} />}
       {activeTab === 'inbox' && (
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* PANEL 1: CONVERSATION LIST */}
-        <div className="flex w-full flex-col border-r border-[#E6E1D7] bg-white sm:w-72 lg:w-80 shrink-0">
+        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+          {/* PANEL 1: CONVERSATION LIST */}
+          <div
+            className={`flex flex-col border-r border-[#E6E1D7] bg-white w-full md:w-72 lg:w-80 shrink-0 ${
+              mobileViewingChat ? 'hidden md:flex' : 'flex'
+            }`}
+          >
           {/* Search & Filter Header */}
           <div className="border-b border-[#E6E1D7] p-3 space-y-2.5 bg-[#FAF8F5]/60">
             <div className="relative">
@@ -825,6 +832,7 @@ function WhatsAppPageContent() {
                     onClick={() => {
                       setSelectedConvId(conv.id);
                       setNotesDraft(conv.internal_notes || '');
+                      setMobileViewingChat(true);
                     }}
                     className={`cursor-pointer p-3 transition-all relative ${
                       isSelected
@@ -890,12 +898,25 @@ function WhatsAppPageContent() {
 
         {/* PANEL 2: ACTIVE CHAT CONVERSATION */}
         {activeConversation ? (
-          <div className="flex flex-1 flex-col bg-[#F7F5F0] overflow-hidden min-w-0">
+          <div className={`flex-1 flex-col bg-[#F7F5F0] overflow-hidden min-w-0 w-full h-full ${
+            mobileViewingChat ? 'flex' : 'hidden md:flex'
+          }`}>
             {/* Chat Top Bar */}
-            <div className="flex h-16 items-center justify-between border-b border-[#E6E1D7] bg-white px-4 sm:px-5 gap-3 shrink-0">
+            <div className="flex h-16 items-center justify-between border-b border-[#E6E1D7] bg-white px-3 sm:px-5 gap-2 shrink-0">
               {/* Contact Information */}
-              <div className="flex items-center gap-2.5 min-w-0 shrink">
-                <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold text-xs shadow-xs">
+              <div className="flex items-center gap-2 min-w-0 shrink">
+                {/* Mobile Back Button */}
+                <button
+                  type="button"
+                  onClick={() => setMobileViewingChat(false)}
+                  className="md:hidden -ml-1.5 p-2 rounded-xl text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors cursor-pointer shrink-0"
+                  title="Back to conversation list"
+                  aria-label="Back to conversations"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+
+                <div className="relative flex h-8.5 w-8.5 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold text-xs shadow-xs">
                   WA
                   <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-1.5 ring-white" />
                 </div>
@@ -910,8 +931,8 @@ function WhatsAppPageContent() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-stone-500 truncate">
-                    <span>{activeConversation.contact?.company_name || 'Direct Contact'}</span>
+                  <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-stone-500 truncate">
+                    <span className="truncate max-w-[90px] sm:max-w-none">{activeConversation.contact?.company_name || 'Direct Contact'}</span>
                     <span>•</span>
                     <span className="capitalize font-medium text-stone-800">
                       {activeConversation.status.replace(/_/g, ' ')}
@@ -921,13 +942,13 @@ function WhatsAppPageContent() {
               </div>
 
               {/* Automation Controls & Actions */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 {/* Instant Sync Button */}
                 <button
                   type="button"
                   onClick={handleManualSync}
                   disabled={isManualSyncing}
-                  className="inline-flex h-8.5 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 transition disabled:opacity-60 cursor-pointer shrink-0"
+                  className="inline-flex h-8.5 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-2 sm:px-2.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 transition disabled:opacity-60 cursor-pointer shrink-0 active:scale-95"
                   title="Force refresh conversation & message records"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isManualSyncing ? 'animate-spin text-emerald-600' : 'text-stone-500'}`} />
@@ -938,7 +959,7 @@ function WhatsAppPageContent() {
                 <button
                   type="button"
                   onClick={() => toggleManualTakeover(activeConversation.id)}
-                  className={`inline-flex h-8.5 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 ${
+                  className={`inline-flex h-8.5 items-center gap-1 sm:gap-1.5 rounded-xl px-2 sm:px-3 text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 active:scale-95 ${
                     activeConversation.manual_takeover
                       ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-xs ring-1 ring-purple-600'
                       : 'border border-purple-200 bg-purple-50 text-purple-900 hover:bg-purple-100'
@@ -949,7 +970,7 @@ function WhatsAppPageContent() {
                   <span className="hidden sm:inline">
                     {activeConversation.manual_takeover ? 'Takeover Active' : 'Take Over Chat'}
                   </span>
-                  <span className="sm:hidden">
+                  <span className="sm:hidden text-[11px]">
                     {activeConversation.manual_takeover ? 'Active' : 'Takeover'}
                   </span>
                 </button>
@@ -958,7 +979,7 @@ function WhatsAppPageContent() {
                 <button
                   type="button"
                   onClick={() => toggleAutomationPaused(activeConversation.id)}
-                  className={`inline-flex h-8.5 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 ${
+                  className={`inline-flex h-8.5 items-center justify-center gap-1 sm:gap-1.5 rounded-xl px-2 sm:px-3 text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 active:scale-95 ${
                     activeConversation.automation_paused
                       ? 'bg-amber-600 text-white hover:bg-amber-700'
                       : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
@@ -987,7 +1008,7 @@ function WhatsAppPageContent() {
                       activeConversation.status === 'completed' ? 'open' : 'completed'
                     )
                   }
-                  className={`inline-flex h-8.5 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 text-xs font-semibold border shadow-2xs transition cursor-pointer shrink-0 ${
+                  className={`inline-flex h-8.5 items-center justify-center gap-1 sm:gap-1.5 rounded-xl px-2 sm:px-3 text-xs font-semibold border shadow-2xs transition cursor-pointer shrink-0 active:scale-95 ${
                     activeConversation.status === 'completed'
                       ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
                       : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
@@ -1002,7 +1023,7 @@ function WhatsAppPageContent() {
                 <button
                   type="button"
                   onClick={() => setRightPanelOpen(!rightPanelOpen)}
-                  className={`inline-flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-stone-200 p-2 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition shrink-0 cursor-pointer ${
+                  className={`inline-flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-stone-200 p-2 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition shrink-0 cursor-pointer active:scale-95 ${
                     rightPanelOpen ? 'bg-stone-100 text-stone-900 border-stone-300' : 'bg-white'
                   }`}
                   title="Toggle customer profile panel"
@@ -1014,7 +1035,7 @@ function WhatsAppPageContent() {
                 <button
                   type="button"
                   onClick={() => setIsDeleteModalOpen(true)}
-                  className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-rose-200 bg-rose-50/50 p-2 text-rose-600 hover:bg-rose-100 hover:text-rose-800 transition shrink-0 cursor-pointer"
+                  className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-rose-200 bg-rose-50/50 p-2 text-rose-600 hover:bg-rose-100 hover:text-rose-800 transition shrink-0 cursor-pointer active:scale-95"
                   title="Delete contact and reset customer session"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -1069,7 +1090,7 @@ function WhatsAppPageContent() {
                     >
                       {/* Message Card */}
                       <div
-                        className={`max-w-lg rounded-2xl p-4 shadow-2xs text-xs sm:text-sm leading-relaxed ${
+                        className={`max-w-[88%] sm:max-w-md md:max-w-lg rounded-2xl p-3 sm:p-4 shadow-2xs text-xs sm:text-sm leading-relaxed ${
                           isCustomer
                             ? 'bg-white border border-stone-200/90 text-stone-900 rounded-tl-xs'
                             : 'bg-[#18181B] text-white rounded-tr-xs shadow-xs'
@@ -1193,27 +1214,34 @@ function WhatsAppPageContent() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-xs text-stone-500">
+          <div className="hidden md:flex flex-1 items-center justify-center p-8 text-xs text-stone-500">
             Select a WhatsApp conversation to inspect history and controls.
           </div>
         )}
 
-        {/* PANEL 3: LEAD & CONTACT DRAWER */}
+        {/* PANEL 3: LEAD & CONTACT DRAWER (Desktop in-line, Mobile slide-over) */}
         {activeConversation && rightPanelOpen && (
-          <div className="hidden lg:flex w-72 xl:w-80 flex-col border-l border-[#E6E1D7] bg-[#FAF8F5]/60 overflow-y-auto p-4 space-y-5 shrink-0">
-            {/* Customer Details */}
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Customer Profile
-                </h3>
-                <button
-                  onClick={() => setRightPanelOpen(false)}
-                  className="text-stone-400 hover:text-stone-900 p-1 rounded-lg hover:bg-stone-200/50 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+          <>
+            {/* Mobile backdrop */}
+            <div
+              onClick={() => setRightPanelOpen(false)}
+              className="fixed inset-0 z-40 bg-stone-900/40 backdrop-blur-xs lg:hidden"
+            />
+            <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-80 flex flex-col border-l border-[#E6E1D7] bg-[#FAF8F5] overflow-y-auto p-4 space-y-5 shadow-2xl lg:static lg:z-auto lg:shadow-none lg:flex lg:w-72 xl:w-80 shrink-0">
+              {/* Customer Details */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Customer Profile
+                  </h3>
+                  <button
+                    onClick={() => setRightPanelOpen(false)}
+                    className="text-stone-400 hover:text-stone-900 p-1.5 rounded-lg hover:bg-stone-200/50 cursor-pointer"
+                    aria-label="Close customer profile"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
               <div className="rounded-xl border border-stone-200/90 bg-white p-4 space-y-2.5 shadow-2xs">
                 <div className="font-bold text-sm text-stone-900">
@@ -1357,7 +1385,8 @@ function WhatsAppPageContent() {
               </p>
             </div>
           </div>
-        )}
+        </>
+      )}
       </div>
       )}
 

@@ -18,6 +18,7 @@ import {
   Sparkles,
   Film,
   Send,
+  X,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -37,7 +38,13 @@ interface NavSection {
 
 export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void }) {
   const pathname = usePathname();
-  const { conversations, leads, appointments, vpsMetrics } = useDashboardStore();
+  const { conversations, leads, appointments, vpsMetrics, mobileMenuOpen, setMobileMenuOpen } = useDashboardStore();
+
+  const isOpen = mobileOpen !== undefined ? mobileOpen : mobileMenuOpen;
+  const handleClose = () => {
+    onCloseMobile?.();
+    setMobileMenuOpen(false);
+  };
 
   const unreadCount = conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const pendingAppointments = appointments.filter((a) => a.status === 'pending').length;
@@ -165,22 +172,22 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
   return (
     <>
       {/* Mobile Backdrop */}
-      {mobileOpen && (
+      {isOpen && (
         <div
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-stone-900/40 backdrop-blur-xs transition-opacity lg:hidden"
+          onClick={handleClose}
+          className="fixed inset-0 z-40 bg-stone-900/50 backdrop-blur-xs transition-opacity lg:hidden"
         />
       )}
 
       {/* Main Sidebar Shell */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col border-r border-[#E6E1D7] bg-[#FAF8F5] transition-transform duration-200 ease-in-out lg:static lg:h-full lg:translate-x-0 shrink-0 ${
-          mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+          isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="flex h-17 items-center justify-between border-b border-[#E6E1D7] px-5 bg-[#FAF8F5]">
-          <Link href="/" className="flex items-center gap-3 group">
+        <div className="flex h-17 items-center justify-between border-b border-[#E6E1D7] px-4 sm:px-5 bg-[#FAF8F5]">
+          <Link href="/" onClick={handleClose} className="flex items-center gap-3 group">
             <div className="relative flex h-9.5 w-9.5 items-center justify-center rounded-xl bg-gradient-to-br from-stone-900 to-stone-800 text-white shadow-xs ring-1 ring-white/10 group-hover:scale-102 transition-transform">
               <span className="font-bold text-xs tracking-wider font-mono">TBW</span>
               <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
@@ -198,6 +205,16 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
               </div>
             </div>
           </Link>
+
+          {/* Close button for Mobile */}
+          <button
+            type="button"
+            onClick={handleClose}
+            className="lg:hidden p-2 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 cursor-pointer transition-colors active:scale-95"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Grouped Navigation */}
@@ -218,7 +235,7 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={onCloseMobile}
+                    onClick={handleClose}
                     className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150 ${
                       isActive
                         ? 'bg-stone-900 text-white shadow-xs'

@@ -10,16 +10,12 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const { error, refreshData } = useDashboardStore();
 
   return (
     <div className="flex h-screen h-[100dvh] overflow-hidden bg-[#F8F7F4]">
       {/* Sidebar (Desktop fixed/static + Mobile slide-over) */}
-      <Sidebar
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
+      <Sidebar />
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0 h-full overflow-hidden">

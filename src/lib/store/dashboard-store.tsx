@@ -71,6 +71,11 @@ interface DashboardStoreContextType {
   toggleReelAutomation: (id: string) => void;
   updateReelAutomation: (id: string, keyword: string, message: string) => void;
 
+  // Mobile Navigation Drawer State
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (open: boolean) => void;
+  toggleMobileMenu: () => void;
+
   // Demo Data Management (Disabled in Production)
   removeDemoData: () => void;
 }
@@ -229,6 +234,8 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
   const [error, setError] = useState<string | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'fallback_polling' | 'disconnected'>('connecting');
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const toggleMobileMenu = useCallback(() => setMobileMenuOpen((prev) => !prev), []);
 
   // Google Sheets synchronization states and trigger
   const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
@@ -1350,6 +1357,9 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         updateQuotationStatus,
         toggleReelAutomation,
         updateReelAutomation,
+        mobileMenuOpen,
+        setMobileMenuOpen,
+        toggleMobileMenu,
         removeDemoData,
       }}
     >

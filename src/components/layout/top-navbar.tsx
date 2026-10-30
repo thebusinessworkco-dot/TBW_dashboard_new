@@ -13,18 +13,19 @@ export function TopNavbar({
   subtitle?: string;
   onOpenMobile?: () => void;
 }) {
-  const { timeFilter, setTimeFilter, integrationStatuses, vpsMetrics } = useDashboardStore();
+  const { timeFilter, setTimeFilter, integrationStatuses, vpsMetrics, setMobileMenuOpen } = useDashboardStore();
 
+  const handleOpenMobile = onOpenMobile || (() => setMobileMenuOpen(true));
   const hasIssues = integrationStatuses.some((i) => i.status === 'error') || vpsMetrics.status === 'critical';
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E6E1D7] bg-white/85 px-4 sm:px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E6E1D7] bg-white/85 px-3 sm:px-6 backdrop-blur-md">
       {/* Left: Mobile hamburger & Titles */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           type="button"
-          onClick={onOpenMobile}
-          className="rounded-xl p-2 text-stone-600 hover:bg-stone-100 lg:hidden cursor-pointer transition-colors"
+          onClick={handleOpenMobile}
+          className="rounded-xl p-2.5 -ml-1 text-stone-700 hover:bg-stone-100 hover:text-stone-900 lg:hidden cursor-pointer transition-colors active:scale-95 shrink-0"
           aria-label="Open navigation menu"
         >
           <Menu className="h-5 w-5" />

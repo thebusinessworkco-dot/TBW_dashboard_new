@@ -143,33 +143,33 @@ export default function TelegramAlertsPage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
       <TopNavbar title="Telegram Alerts" subtitle="Real-time Admin Notifications" />
 
-      <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+      <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full space-y-5 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-5 sm:pb-6">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
                 <Send className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex flex-wrap items-center gap-2">
                   Telegram Admin Alerts
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="text-[11px] sm:text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     Free • 0-Delay • 24/7
                   </span>
                 </h1>
-                <p className="text-sm text-neutral-400 mt-0.5">
+                <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
                   Real-time push notifications for customer messages, appointments, leads, and human support.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <button
               onClick={handleSyncChatId}
               disabled={syncing}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-200 transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-200 transition-colors disabled:opacity-50 flex-1 sm:flex-none cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Checking...' : 'Sync Connection'}
@@ -177,7 +177,7 @@ export default function TelegramAlertsPage() {
             <button
               onClick={handleTestAlert}
               disabled={testing || !config?.chat_id}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors disabled:opacity-50 shadow-lg shadow-sky-500/20"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors disabled:opacity-50 shadow-lg shadow-sky-500/20 flex-1 sm:flex-none cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
               {testing ? 'Sending...' : 'Send Test Alert'}
