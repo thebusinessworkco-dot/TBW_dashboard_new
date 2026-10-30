@@ -25,7 +25,13 @@ import { useDashboardStore } from '@/lib/store/dashboard-store';
 
 export default function SettingsPage() {
   const { theme, setTheme } = useDashboardStore();
-  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tbw_wa_business_phone') || '917972020292';
+    }
+    return '917972020292';
+  });
+  const [isPhoneLoaded, setIsPhoneLoaded] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [testLink, setTestLink] = useState('');
@@ -37,7 +43,12 @@ export default function SettingsPage() {
         if (data.success && data.whatsapp_business_phone) {
           setWhatsappPhone(data.whatsapp_business_phone);
           setTestLink(data.test_url || '');
+          try { localStorage.setItem('tbw_wa_business_phone', data.whatsapp_business_phone); } catch {}
+        } else if (data.success && !data.whatsapp_business_phone) {
+          setWhatsappPhone('');
+          try { localStorage.removeItem('tbw_wa_business_phone'); } catch {}
         }
+        setIsPhoneLoaded(true);
       })
       .catch(() => {});
   }, []);
@@ -354,7 +365,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {!whatsappPhone && (
+          {isPhoneLoaded && !whatsappPhone && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <div>

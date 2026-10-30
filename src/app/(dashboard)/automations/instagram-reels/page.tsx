@@ -52,7 +52,13 @@ export default function InstagramReelsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [sortBy, setSortBy] = useState<SortOrder>('newest');
-  const [whatsappPhone, setWhatsappPhone] = useState<string | null>(null);
+  const [whatsappPhone, setWhatsappPhone] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tbw_wa_business_phone') || '917972020292';
+    }
+    return '917972020292';
+  });
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
   // Modal States
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -69,6 +75,24 @@ export default function InstagramReelsPage() {
 
   // Live Simulator States
   const [simulatorFollower, setSimulatorFollower] = useState(true);
+
+
+  // Fast independent check for WhatsApp phone so it never blocks or flashes
+  useEffect(() => {
+    fetch('/api/instagram/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.whatsapp_business_phone) {
+          setWhatsappPhone(data.whatsapp_business_phone);
+          try { localStorage.setItem('tbw_wa_business_phone', data.whatsapp_business_phone); } catch {}
+        } else if (data.success && !data.whatsapp_business_phone) {
+          setWhatsappPhone(null);
+          try { localStorage.removeItem('tbw_wa_business_phone'); } catch {}
+        }
+        setIsSettingsLoaded(true);
+      })
+      .catch(() => setIsSettingsLoaded(true));
+  }, []);
 
   // 1. Initial Load of Rules, Synced Reels & Settings
   const loadData = async (forceSync = false, selectedRange = timeRange) => {
@@ -91,7 +115,12 @@ export default function InstagramReelsPage() {
       const dataSettings = await resSettings.json();
       if (dataSettings.success && dataSettings.whatsapp_business_phone) {
         setWhatsappPhone(dataSettings.whatsapp_business_phone);
+        try { localStorage.setItem('tbw_wa_business_phone', dataSettings.whatsapp_business_phone); } catch {}
+      } else if (dataSettings.success && !dataSettings.whatsapp_business_phone) {
+        setWhatsappPhone(null);
+        try { localStorage.removeItem('tbw_wa_business_phone'); } catch {}
       }
+      setIsSettingsLoaded(true);
 
       const dataSync = await resSync.json();
       if (dataSync.success && dataSync.store) {
@@ -495,7 +524,7 @@ export default function InstagramReelsPage() {
         )}
 
         {/* WHATSAPP WARNING BANNER IF PHONE UNCONFIGURED */}
-        {!whatsappPhone && (
+        {isSettingsLoaded && !whatsappPhone && (
           <div className="rounded-2xl border border-amber-300/80 bg-amber-50/80 p-4.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="rounded-xl bg-amber-100 p-2 text-amber-800 shrink-0 mt-0.5">
