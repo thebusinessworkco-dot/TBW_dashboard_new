@@ -4,6 +4,16 @@ export const DEFAULT_TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN || '9108406918:AAGXPoeN0OF9dk3cSoptoRIO9ZP6ILnhqgg';
 export const DEFAULT_TELEGRAM_BOT_USERNAME = 'TBW_Admin_Alerts_Bot';
 
+/**
+ * Personal & admin numbers for which automated alerts are completely suppressed
+ * (e.g. testing numbers, owner phone, bot WABA phone).
+ */
+export const DEFAULT_EXCLUDED_ALERT_PHONES = [
+  '7821840347', // Aman personal testing number
+  '8604600292', // Aman Rajbhar (Owner)
+  '7972020292', // Bot WABA number
+];
+
 export interface TelegramAlertConfig {
   bot_token: string;
   bot_username: string;
@@ -14,6 +24,7 @@ export interface TelegramAlertConfig {
   notify_new_leads: boolean;
   notify_appointments: boolean;
   notify_human_support: boolean;
+  excluded_phones?: string[];
   updated_at: string;
 }
 
@@ -52,6 +63,7 @@ export async function getTelegramConfig(): Promise<TelegramAlertConfig> {
     notify_new_leads: true,
     notify_appointments: true,
     notify_human_support: true,
+    excluded_phones: DEFAULT_EXCLUDED_ALERT_PHONES,
     updated_at: new Date().toISOString(),
   };
 
@@ -222,6 +234,17 @@ export async function sendTelegramAdminAlert(params: SendAlertParams): Promise<{
   }
 
   const cleanPhone = (params.phone || '').replace(/\D/g, '');
+
+  // Suppress alerts for personal test numbers and admin phones
+  const excludedList = (config.excluded_phones && config.excluded_phones.length > 0)
+    ? config.excluded_phones
+    : DEFAULT_EXCLUDED_ALERT_PHONES;
+
+  if (cleanPhone && excludedList.some((p) => cleanPhone.endsWith(p.replace(/\D/g, '')))) {
+    console.log(`[Telegram Alert] Suppressed personal/admin number alert for phone: ${cleanPhone}`);
+    return { success: true };
+  }
+
   const phoneFormatted = cleanPhone ? `+${cleanPhone}` : 'N/A';
   const name = (params.customerName || '').trim() || 'Visitor';
 

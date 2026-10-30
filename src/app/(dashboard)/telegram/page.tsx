@@ -16,6 +16,7 @@ import {
   Smartphone,
   Copy,
   Check,
+  BellOff,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 
@@ -424,6 +425,19 @@ export default function TelegramAlertsPage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Muted Numbers Notice */}
+          <div className="mt-4 pt-4 border-t border-neutral-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-neutral-300">
+              <BellOff className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong className="text-white">Personal Numbers Muted:</strong> Automated alerts are disabled for personal test numbers (<code>+91 7821840347</code>, <code>+91 8604600292</code>, <code>+91 7972020292</code>) to keep your Telegram inbox clean during testing.
+              </span>
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+              Test Spam Protection Active
+            </span>
           </div>
         </div>
 
