@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Sparkles,
   Film,
+  Send,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -60,6 +61,13 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
           href: '/whatsapp',
           icon: MessageSquare,
           badge: unreadCount > 0 ? unreadCount : undefined,
+          badgeVariant: 'emerald',
+        },
+        {
+          name: 'Telegram Alerts',
+          href: '/telegram',
+          icon: Send,
+          badge: 'Active',
           badgeVariant: 'emerald',
         },
         {

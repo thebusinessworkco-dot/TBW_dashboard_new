@@ -1,4 +1,5 @@
 import { createAdminClient } from '../supabase/admin';
+import { sendTelegramAdminAlert } from '../telegram/telegram-service';
 import {
   CustomerClassification,
   WaAdminNotificationRecord,
@@ -135,6 +136,19 @@ export async function sendAdminWhatsAppNotification(
     // If no direct token in dashboard env, route through n8n outbox webhook or mark queued
     record.status = 'queued';
     record.last_error_code = 'N8N_DISPATCH_FALLBACK';
+  }
+
+  // Dispatch parallel alert via Telegram Bot (bypasses Meta 24-hr restriction)
+  try {
+    sendTelegramAdminAlert({
+      title: payload.classification === 'RETURNING_CUSTOMER' ? '🔄 Returning Customer Alert' : '🔔 New Customer Alert',
+      text: alertBody,
+      phone: payload.customerPhone,
+      customerName: payload.customerName || undefined,
+      type: payload.classification === 'RETURNING_CUSTOMER' ? 'returning_customer' : 'new_customer',
+    }).catch(err => console.error('Telegram background alert error:', err));
+  } catch (tgErr) {
+    console.error('Failed to dispatch telegram admin alert:', tgErr);
   }
 
   dispatchedAlertsBySession.set(payload.sessionId, record);
