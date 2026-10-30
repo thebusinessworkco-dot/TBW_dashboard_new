@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Menu, AlertTriangle, Sun, Moon } from 'lucide-react';
+import { Menu, AlertTriangle } from 'lucide-react';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
 
 export function TopNavbar({
@@ -13,15 +13,7 @@ export function TopNavbar({
   subtitle?: string;
   onOpenMobile?: () => void;
 }) {
-  const {
-    timeFilter,
-    setTimeFilter,
-    integrationStatuses,
-    vpsMetrics,
-    setMobileMenuOpen,
-    theme,
-    toggleTheme,
-  } = useDashboardStore();
+  const { timeFilter, setTimeFilter, integrationStatuses, vpsMetrics, setMobileMenuOpen } = useDashboardStore();
 
   const handleOpenMobile = onOpenMobile || (() => setMobileMenuOpen(true));
   const hasIssues = integrationStatuses.some((i) => i.status === 'error') || vpsMetrics.status === 'critical';
@@ -89,21 +81,6 @@ export function TopNavbar({
             30D
           </button>
         </div>
-
-        {/* Theme Toggle (Dark / Light Mode) */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-stone-200/80 bg-stone-100/80 text-stone-700 hover:bg-stone-200/80 hover:text-stone-900 transition-all shadow-2xs cursor-pointer active:scale-95"
-        >
-          {theme === 'dark' ? (
-            <Sun className="h-4 w-4 text-amber-400" />
-          ) : (
-            <Moon className="h-4 w-4 text-stone-600" />
-          )}
-        </button>
 
         {/* Integration Status Badge */}
         <div className="hidden md:flex items-center gap-1.5 rounded-full border border-stone-200/80 bg-white px-3 py-1 text-xs text-stone-600 shadow-2xs">

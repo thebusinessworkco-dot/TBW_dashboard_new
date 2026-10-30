@@ -76,11 +76,6 @@ interface DashboardStoreContextType {
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
 
-  // Theme State
-  theme: 'light' | 'dark' | 'system';
-  setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  toggleTheme: () => void;
-
   // Demo Data Management (Disabled in Production)
   removeDemoData: () => void;
 }
@@ -241,61 +236,6 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const toggleMobileMenu = useCallback(() => setMobileMenuOpen((prev) => !prev), []);
-
-  // Theme management (Light / Dark / System)
-  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('light');
-
-  const applyThemeToDOM = useCallback((t: 'light' | 'dark' | 'system') => {
-    if (typeof window === 'undefined') return;
-    const isDark =
-      t === 'dark' ||
-      (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('tbw_theme') as 'light' | 'dark' | 'system' | null;
-      const initial = saved || 'light';
-      setThemeState(initial);
-      applyThemeToDOM(initial);
-    } catch {
-      // Ignore localStorage errors
-    }
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleMediaChange = () => {
-      try {
-        const current = localStorage.getItem('tbw_theme');
-        if (current === 'system') {
-          applyThemeToDOM('system');
-        }
-      } catch {}
-    };
-    media.addEventListener('change', handleMediaChange);
-    return () => media.removeEventListener('change', handleMediaChange);
-  }, [applyThemeToDOM]);
-
-  const setTheme = useCallback(
-    (newTheme: 'light' | 'dark' | 'system') => {
-      setThemeState(newTheme);
-      try {
-        localStorage.setItem('tbw_theme', newTheme);
-      } catch {}
-      applyThemeToDOM(newTheme);
-    },
-    [applyThemeToDOM]
-  );
-
-  const toggleTheme = useCallback(() => {
-    const isCurrentlyDark = document.documentElement.classList.contains('dark');
-    const targetTheme = isCurrentlyDark ? 'light' : 'dark';
-    setTheme(targetTheme);
-  }, [setTheme]);
 
   // Google Sheets synchronization states and trigger
   const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
@@ -1420,9 +1360,6 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         mobileMenuOpen,
         setMobileMenuOpen,
         toggleMobileMenu,
-        theme,
-        setTheme,
-        toggleTheme,
         removeDemoData,
       }}
     >

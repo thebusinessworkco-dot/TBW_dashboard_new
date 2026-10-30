@@ -16,27 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var t = localStorage.getItem('tbw_theme');
-                  var isDark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                  if (isDark) {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
-      </head>
-      <body className="min-h-full flex flex-col antialiased bg-[#F8F7F4] text-stone-900">
+    <html lang="en" className="h-full">
+      <body className="min-h-full flex flex-col antialiased bg-[#F8F7F3] text-[#141413]">
         <DashboardStoreProvider>
           {children}
         </DashboardStoreProvider>
