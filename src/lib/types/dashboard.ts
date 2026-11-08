@@ -318,6 +318,7 @@ export interface InstagramReelRule {
   initial_dm_text: string;
   details_text: string;
   follow_required: boolean;
+  require_follow?: boolean;
   follow_instructions_text?: string | null;
   follow_button_label?: string | null;
   post_unlock_primary_action?: string | null;
@@ -416,6 +417,7 @@ export interface InstagramCampaignPayload {
   initial_message: string;
   details_text: string;
   follow_required: boolean;
+  require_follow?: boolean;
   follow_instructions_text?: string | null;
   follow_button_label?: string | null;
   first_interactive_followup?: string | null;
