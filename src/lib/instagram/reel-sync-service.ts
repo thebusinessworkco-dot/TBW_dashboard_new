@@ -242,9 +242,46 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
 
   const adminSupabase = createAdminClient();
 
-  // Attach rule status to confirmed published reels
+  // Attach rule status to confirmed published reels or auto-create rule if not present
   for (const reel of fetchedReels) {
-    const r = ruleMap.get(reel.media_id);
+    let r = ruleMap.get(reel.media_id);
+    if (!r && adminSupabase) {
+      // Auto-create active rule so any newly published reel or post is automated immediately!
+      try {
+        const cleanTitle = (reel.caption ? reel.caption.replace(/\n/g, ' ').slice(0, 50) : 'Instagram Reel') + '...';
+        const autoRulePayload = {
+          media_id: reel.media_id,
+          permalink: reel.permalink,
+          thumbnail_url: reel.thumbnail_url || null,
+          title: cleanTitle,
+          is_enabled: true,
+          trigger_mode: 'any_comment' as const,
+          keywords: [],
+          initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨',
+          details_text: 'Here are the details you requested! Explore our complete range of automation services or reach out for custom setup.',
+          follow_required: true,
+          whatsapp_prefill_text: 'Hi! I saw your Instagram Reel and would like more details.',
+          auto_comment_reply_enabled: true,
+          auto_comment_reply_text: 'Thanks! 👋 Check your DM for the details.',
+          auto_comment_reply_variations: [],
+          is_available: true,
+          availability_status: 'published',
+          updated_at: new Date().toISOString(),
+        };
+        const { data: createdRule } = await adminSupabase
+          .from('instagram_reel_rules')
+          .upsert(autoRulePayload, { onConflict: 'media_id' })
+          .select()
+          .single();
+        if (createdRule) {
+          r = createdRule as InstagramReelRule;
+          ruleMap.set(reel.media_id, r);
+        }
+      } catch (autoErr) {
+        console.warn('Auto rule creation skipped for', reel.media_id, autoErr);
+      }
+    }
+
     if (r) {
       reel.rule_id = r.id;
       reel.rule_enabled = r.is_enabled;
