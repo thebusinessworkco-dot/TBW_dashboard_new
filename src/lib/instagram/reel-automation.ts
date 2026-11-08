@@ -129,7 +129,7 @@ export async function checkUserFollows(igUserId: string): Promise<boolean> {
   }
 
   try {
-    const url = `https://graph.instagram.com/v26.0/${cleanId}?fields=is_user_follow_business&access_token=${token}`;
+    const url = `https://graph.facebook.com/v21.0/${cleanId}?fields=is_user_follow_business&access_token=${token}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(url, { signal: controller.signal });
@@ -1232,7 +1232,7 @@ export async function sendInstagramPublicCommentReply(
   }
 
   try {
-    const res = await fetch(`https://graph.instagram.com/v26.0/${commentId}/replies`, {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${commentId}/replies`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

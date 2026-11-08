@@ -77,7 +77,7 @@ export async function getMetaInstagramCredentials(): Promise<MetaConfig | null> 
         if (val.access_token) {
           return {
             accessToken: val.access_token,
-            accountId: val.account_id || '29081127174886627',
+            accountId: val.account_id || '17841434357046300',
             username: val.username || 'thebusinesswork.co',
             name: val.name,
             profilePictureUrl: val.profile_picture_url,
@@ -120,7 +120,7 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
   };
 
   try {
-    const accRes = await fetch('https://graph.instagram.com/v26.0/me?fields=id,username,name,profile_picture_url', {
+    const accRes = await fetch(`https://graph.facebook.com/v21.0/${metaConfig.accountId}?fields=id,username,name,profile_picture_url`, {
       headers: {
         Authorization: `Bearer ${metaConfig.accessToken}`,
         Accept: 'application/json',
@@ -159,7 +159,7 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
   const maxPages = options.maxPages || 5;
   const fetchedReels: SyncedReelItem[] = [];
   let nextUrl: string | null =
-    `https://graph.instagram.com/v26.0/me/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count,like_count&limit=50`;
+    `https://graph.facebook.com/v21.0/${metaConfig.accountId}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count,like_count&limit=50`;
 
   let pagesFetched = 0;
   let syncFailed = false;
