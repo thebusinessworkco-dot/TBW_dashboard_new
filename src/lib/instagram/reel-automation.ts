@@ -122,6 +122,24 @@ export async function checkUserFollows(igUserId: string): Promise<boolean> {
   const cleanId = String(igUserId || '').trim();
   if (!cleanId || !/^\d{5,40}$/.test(cleanId)) return false;
 
+  // 1. Check if already verified in database
+  const adminSupabase = createAdminClient();
+  if (adminSupabase) {
+    try {
+      const { data } = await adminSupabase
+        .from('instagram_customer_context')
+        .select('follow_status, follow_verified_at')
+        .eq('ig_user_id', cleanId)
+        .maybeSingle();
+
+      if (data && (data.follow_status === 'follows' || data.follow_verified_at)) {
+        return true;
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
   const token = process.env.INSTAGRAM_GRAPH_API_ACCESS_TOKEN;
   if (!token) {
     console.warn('[checkUserFollows] INSTAGRAM_GRAPH_API_ACCESS_TOKEN missing');
@@ -140,7 +158,22 @@ export async function checkUserFollows(igUserId: string): Promise<boolean> {
       return false;
     }
     const data = (await res.json()) as { is_user_follow_business?: boolean };
-    return data.is_user_follow_business === true;
+    const follows = data.is_user_follow_business === true;
+
+    if (follows && adminSupabase) {
+      try {
+        await adminSupabase.from('instagram_customer_context').upsert({
+          ig_user_id: cleanId,
+          follow_status: 'follows',
+          follow_verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'ig_user_id' });
+      } catch {
+        // Non-blocking
+      }
+    }
+
+    return follows;
   } catch (err: unknown) {
     console.warn(`[checkUserFollows] Verification failed for user ${cleanId}:`, err);
     return false;
@@ -816,6 +849,7 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
         initial_message: cleanInitial,
         details_text: rule.details_text,
         follow_required: rule.follow_required,
+        require_follow: rule.follow_required,
         follow_instructions_text: rule.follow_instructions_text || 'Follow our Instagram page to unlock the details! 👋',
         follow_button_label: rule.follow_button_label || "I've Followed",
         first_interactive_followup: rule.first_interactive_followup || 'Tap below to get instant details or explore our services:',
