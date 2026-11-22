@@ -365,6 +365,10 @@ export interface InstagramSyncedReel {
   media_product_type?: string;
   comments_count?: number;
   like_count?: number;
+  views_count?: number;
+  shares_count?: number;
+  reach_count?: number;
+  saves_count?: number;
   rule_id?: string | null;
   rule_enabled?: boolean;
   is_available?: boolean;
@@ -496,7 +500,22 @@ export interface InstagramAutomationAnalytics {
   total_historical_verified_follows: number;
   test_events_count: number;
   verified_follow_rate?: string;
-  per_reel?: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }>;
+  total_likes?: number;
+  total_views?: number;
+  total_shares?: number;
+  total_reach?: number;
+  total_saves?: number;
+  per_reel?: Record<string, {
+    comments_count: number;
+    private_replies_count: number;
+    public_replies_count: number;
+    verified_follows_count: number;
+    like_count?: number;
+    views_count?: number;
+    shares_count?: number;
+    reach_count?: number;
+    saves_count?: number;
+  }>;
 }
 
 

@@ -27,13 +27,18 @@ import {
   Video,
   Archive,
   Image as ImageIcon,
+  Heart,
+  Share2,
+  Eye,
+  Bookmark,
+  Send,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { InstagramReelRule, InstagramSyncedReel, InstagramAutomationAnalytics } from '@/lib/types/dashboard';
 
 type FilterStatus = 'all' | 'active' | 'inactive' | 'unconfigured' | 'archived';
-type SortOrder = 'newest' | 'oldest' | 'comments';
+type SortOrder = 'newest' | 'oldest' | 'comments' | 'likes' | 'views';
 type ModalTab = 'sync' | 'select' | 'paste';
 
 
@@ -470,9 +475,19 @@ export default function InstagramReelsPage() {
     // Apply Sorting
     const sorted = [...target].sort((a, b) => {
       if (sortBy === 'comments') {
-        const cA = a.rule?.comments_count || a.reel.comments_count || 0;
-        const cB = b.rule?.comments_count || b.reel.comments_count || 0;
+        const cA = Math.max(a.rule?.comments_count || 0, a.reel.comments_count || 0);
+        const cB = Math.max(b.rule?.comments_count || 0, b.reel.comments_count || 0);
         return cB - cA;
+      }
+      if (sortBy === 'likes') {
+        const lA = a.reel.like_count || 0;
+        const lB = b.reel.like_count || 0;
+        return lB - lA;
+      }
+      if (sortBy === 'views') {
+        const vA = a.reel.views_count || 0;
+        const vB = b.reel.views_count || 0;
+        return vB - vA;
       }
       const tA = new Date(a.reel.timestamp || 0).getTime();
       const tB = new Date(b.reel.timestamp || 0).getTime();
@@ -486,6 +501,11 @@ export default function InstagramReelsPage() {
   const totalComments = rules.reduce((acc, r) => acc + (r.comments_count || 0), 0);
   const totalPrivateReplies = rules.reduce((acc, r) => acc + (r.private_replies_count || 0), 0);
   const totalFollows = rules.reduce((acc, r) => acc + (r.verified_follows_count || 0), 0);
+  const totalLikes = syncedReels.reduce((acc, r) => acc + (r.like_count || 0), 0);
+  const totalViews = syncedReels.reduce((acc, r) => acc + (r.views_count || 0), 0);
+  const totalShares = syncedReels.reduce((acc, r) => acc + (r.shares_count || 0), 0);
+  const totalReach = syncedReels.reduce((acc, r) => acc + (r.reach_count || 0), 0);
+  const totalSaves = syncedReels.reduce((acc, r) => acc + (r.saves_count || 0), 0);
 
   // Live WhatsApp CTA URL preview
   const previewWaUrl = whatsappPhone
@@ -650,6 +670,64 @@ export default function InstagramReelsPage() {
           </div>
         </div>
 
+        {/* LIVE ORGANIC INSTAGRAM ENGAGEMENT STRIP */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-50/60 to-white p-3.5 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-800 flex items-center gap-1">
+                <Heart className="h-3 w-3 text-rose-500 fill-rose-500" /> Total Likes
+              </span>
+              <span className="text-[10px] text-rose-500 font-mono">Live Meta</span>
+            </div>
+            <div className="text-2xl font-bold text-stone-900">
+              {(analytics?.total_likes ?? totalLikes).toLocaleString()}
+            </div>
+            <p className="text-[10px] text-stone-500">Organic likes across published media</p>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/60 to-white p-3.5 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                <Eye className="h-3 w-3 text-amber-600" /> Total Video Views
+              </span>
+              <span className="text-[10px] text-amber-600 font-mono">Insights</span>
+            </div>
+            <div className="text-2xl font-bold text-stone-900">
+              {(analytics?.total_views ?? totalViews).toLocaleString()}
+            </div>
+            <p className="text-[10px] text-stone-500">Lifetime video plays & impressions</p>
+          </div>
+
+          <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/60 to-white p-3.5 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-800 flex items-center gap-1">
+                <Share2 className="h-3 w-3 text-sky-600" /> Total Shares
+              </span>
+              <span className="text-[10px] text-sky-600 font-mono">Virality</span>
+            </div>
+            <div className="text-2xl font-bold text-stone-900">
+              {(analytics?.total_shares ?? totalShares).toLocaleString()}
+            </div>
+            <p className="text-[10px] text-stone-500">Organic shares to DMs & stories</p>
+          </div>
+
+          <div className="rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50/60 to-white p-3.5 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-800 flex items-center gap-1">
+                <Bookmark className="h-3 w-3 text-violet-600" /> Saves & Reach
+              </span>
+              <span className="text-[10px] text-violet-600 font-mono">High Intent</span>
+            </div>
+            <div className="text-2xl font-bold text-stone-900">
+              {(analytics?.total_saves ?? totalSaves).toLocaleString()}
+              <span className="text-xs font-normal text-stone-400 ml-1.5">
+                ({(analytics?.total_reach ?? totalReach).toLocaleString()} reach)
+              </span>
+            </div>
+            <p className="text-[10px] text-stone-500">Bookmarks and total unique accounts</p>
+          </div>
+        </div>
+
         {/* NAVIGATION TABS & ACTIONS HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200/80 gap-4 pb-2">
           <div className="flex gap-6">
@@ -764,6 +842,8 @@ export default function InstagramReelsPage() {
                   <option value="newest">Newest First</option>
                   <option value="oldest">Oldest First</option>
                   <option value="comments">Most Comments</option>
+                  <option value="likes">Most Likes</option>
+                  <option value="views">Most Views</option>
                 </select>
 
                 {lastSyncedAt && (
@@ -837,7 +917,22 @@ export default function InstagramReelsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {unifiedLibraryItems.map(({ reel, rule, status }) => (
+                {unifiedLibraryItems.map(({ reel, rule, status }) => {
+                  const reelStats = analytics?.per_reel?.[reel.media_id];
+                  const liveComments = Math.max(
+                    reel.comments_count || 0,
+                    reelStats?.comments_count || 0,
+                    rule?.comments_count || 0
+                  );
+                  const liveLikes = reel.like_count ?? reelStats?.like_count ?? 0;
+                  const liveShares = reel.shares_count ?? reelStats?.shares_count ?? 0;
+                  const liveViews = reel.views_count ?? reelStats?.views_count ?? 0;
+                  const liveSaves = reel.saves_count ?? reelStats?.saves_count ?? 0;
+                  const liveReach = reel.reach_count ?? reelStats?.reach_count ?? 0;
+                  const liveDmsSent = reelStats?.private_replies_count ?? rule?.private_replies_count ?? 0;
+                  const liveFollows = reelStats?.verified_follows_count ?? rule?.verified_follows_count ?? 0;
+
+                  return (
                   <div
                     key={reel.media_id}
                     className="group flex flex-col justify-between rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs transition-all hover:shadow-md hover:border-stone-300"
@@ -930,40 +1025,77 @@ export default function InstagramReelsPage() {
 
                       {/* AUTOMATION DETAILS (IF CONFIGURED) */}
                       {rule && (
-                        <div className="space-y-2 pt-1 border-t border-stone-100">
-                          <div className="flex flex-wrap items-center gap-1">
-                            <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-700 uppercase">
-                              {rule.trigger_mode === 'any_comment' ? '⚡ Any Comment' : '🔑 Keywords'}
+                        <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-stone-100">
+                          <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-700 uppercase">
+                            {rule.trigger_mode === 'any_comment' ? '⚡ Any Comment' : '🔑 Keywords'}
+                          </span>
+                          {rule.follow_required && (
+                            <span className="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                              🛡️ Follow Gated
                             </span>
-                            {rule.follow_required && (
-                              <span className="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
-                                🛡️ Follow Gated
-                              </span>
-                            )}
-                            {rule.whatsapp_prefill_text && (
-                              <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                💬 WhatsApp
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Quick Metrics */}
-                          <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-50 p-2 text-center text-[10px]">
-                            <div>
-                              <span className="block text-stone-400">Comments</span>
-                              <span className="font-bold text-stone-800">{rule.comments_count || 0}</span>
-                            </div>
-                            <div>
-                              <span className="block text-stone-400">DMs Sent</span>
-                              <span className="font-bold text-stone-800">{rule.private_replies_count || 0}</span>
-                            </div>
-                            <div>
-                              <span className="block text-stone-400">Follows</span>
-                              <span className="font-bold text-emerald-700">{rule.verified_follows_count || 0}</span>
-                            </div>
-                          </div>
+                          )}
+                          {rule.whatsapp_prefill_text && (
+                            <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              💬 WhatsApp
+                            </span>
+                          )}
                         </div>
                       )}
+
+                      {/* LIVE SOCIAL & AUTOMATION METRICS */}
+                      <div className="rounded-xl bg-stone-50/90 border border-stone-200/70 p-2.5 space-y-2 text-[10px]">
+                        {/* Row 1: Real Instagram Stats from Meta Graph API */}
+                        <div className="grid grid-cols-4 gap-1 text-center border-b border-stone-200/60 pb-1.5">
+                          <div title={`${liveLikes} Organic Likes on Instagram`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <Heart className="h-2.5 w-2.5 text-rose-500 fill-rose-500/20" /> Likes
+                            </span>
+                            <span className="font-bold text-stone-800">{liveLikes}</span>
+                          </div>
+                          <div title={`${liveComments} Total Comments on Instagram`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <MessageCircle className="h-2.5 w-2.5 text-stone-500" /> Comments
+                            </span>
+                            <span className="font-bold text-stone-800">{liveComments}</span>
+                          </div>
+                          <div title={`${liveShares} Shares on Instagram`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <Share2 className="h-2.5 w-2.5 text-sky-500" /> Shares
+                            </span>
+                            <span className="font-bold text-stone-800">{liveShares}</span>
+                          </div>
+                          <div title={liveViews ? `${liveViews.toLocaleString()} Video Views` : `${liveReach} Accounts Reached`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <Eye className="h-2.5 w-2.5 text-amber-600" /> Views
+                            </span>
+                            <span className="font-bold text-stone-800">
+                              {liveViews > 0 ? liveViews.toLocaleString() : (liveReach > 0 ? `${liveReach}` : '0')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Live Automation Funnel */}
+                        <div className="grid grid-cols-3 gap-1 text-center pt-0.5">
+                          <div title={`${liveDmsSent} Private Replies / Outbound DMs sent`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <Send className="h-2.5 w-2.5 text-indigo-500" /> DMs Sent
+                            </span>
+                            <span className="font-bold text-indigo-700">{liveDmsSent}</span>
+                          </div>
+                          <div title={`${liveFollows} Verified Instagram Followers via Gate`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <UserCheck className="h-2.5 w-2.5 text-emerald-600" /> Follows
+                            </span>
+                            <span className="font-bold text-emerald-700">{liveFollows}</span>
+                          </div>
+                          <div title={`${liveSaves} Saves / Bookmarks on Instagram`}>
+                            <span className="block text-stone-400 flex items-center justify-center gap-0.5">
+                              <Bookmark className="h-2.5 w-2.5 text-violet-500" /> Saves
+                            </span>
+                            <span className="font-bold text-violet-700">{liveSaves}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* CARD ACTIONS */}
@@ -1007,7 +1139,8 @@ export default function InstagramReelsPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             )}
           </div>

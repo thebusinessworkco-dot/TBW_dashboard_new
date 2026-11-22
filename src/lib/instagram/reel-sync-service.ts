@@ -15,6 +15,10 @@ export interface SyncedReelItem {
   media_product_type?: string;
   comments_count?: number;
   like_count?: number;
+  views_count?: number;
+  shares_count?: number;
+  reach_count?: number;
+  saves_count?: number;
   rule_id?: string | null;
   rule_enabled?: boolean;
   is_available?: boolean;
@@ -236,6 +240,37 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
     syncErrorMessage = err instanceof Error ? err.message : 'Network error during media sync';
   }
 
+  // 2b. Enrich with live Meta insights (reach, saves, shares, views) in parallel
+  if (fetchedReels.length > 0) {
+    await Promise.all(
+      fetchedReels.map(async (reel) => {
+        try {
+          const isVideo = reel.media_type === 'VIDEO';
+          const metricStr = isVideo
+            ? 'reach,saved,shares,total_interactions,views'
+            : 'reach,saved,shares,total_interactions';
+          const iRes = await fetch(
+            `https://graph.facebook.com/v21.0/${reel.media_id}/insights?metric=${metricStr}&access_token=${metaConfig.accessToken}`
+          );
+          if (iRes.ok) {
+            const iData = (await iRes.json()) as { data?: Array<{ name: string; values?: Array<{ value: number }> }> };
+            if (Array.isArray(iData.data)) {
+              for (const m of iData.data) {
+                const val = m.values?.[0]?.value ?? 0;
+                if (m.name === 'views') reel.views_count = val;
+                else if (m.name === 'shares') reel.shares_count = val;
+                else if (m.name === 'saved') reel.saves_count = val;
+                else if (m.name === 'reach') reel.reach_count = val;
+              }
+            }
+          }
+        } catch {
+          // Insights fail gracefully
+        }
+      })
+    );
+  }
+
   // 3. SAFETY GUARD: If API call failed or timed out, do NOT mark any reels as deleted!
   if (syncFailed && pagesFetched === 1 && fetchedReels.length === 0) {
     const cached = await getCachedSyncedReels();
@@ -300,6 +335,22 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
       reel.rule_enabled = r.is_enabled;
       reel.is_available = true;
       reel.availability_status = 'published';
+
+      // Reconcile real comments_count into Supabase rule if out of sync
+      if (adminSupabase && reel.comments_count !== undefined && reel.comments_count !== r.comments_count) {
+        try {
+          await adminSupabase
+            .from('instagram_reel_rules')
+            .update({
+              comments_count: reel.comments_count,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('media_id', reel.media_id);
+        } catch {
+          // Non-blocking update
+        }
+        r.comments_count = reel.comments_count;
+      }
     }
   }
 
@@ -432,6 +483,7 @@ export async function getCachedSyncedReels(): Promise<SyncedReelsStore> {
       item.rule_enabled = r.is_enabled;
       item.is_available = r.is_available !== false;
       item.availability_status = r.availability_status || 'published';
+      item.comments_count = Math.max(item.comments_count || 0, r.comments_count || 0);
     } else {
       item.rule_id = null;
       item.rule_enabled = false;

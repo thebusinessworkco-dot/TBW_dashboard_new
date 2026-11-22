@@ -1055,7 +1055,23 @@ export async function getInstagramAutomationAnalytics(options?: {
   let publicRepliesSent = 0;
   let verifiedFollows = 0;
   let totalHistoricalVerifiedFollows = 0;
-  const perReel: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }> = {};
+  let totalLikes = 0;
+  let totalViews = 0;
+  let totalShares = 0;
+  let totalReach = 0;
+  let totalSaves = 0;
+
+  const perReel: Record<string, {
+    comments_count: number;
+    private_replies_count: number;
+    public_replies_count: number;
+    verified_follows_count: number;
+    like_count?: number;
+    views_count?: number;
+    shares_count?: number;
+    reach_count?: number;
+    saves_count?: number;
+  }> = {};
 
   for (const r of rules) {
     perReel[r.media_id] = {
@@ -1064,6 +1080,35 @@ export async function getInstagramAutomationAnalytics(options?: {
       public_replies_count: r.public_replies_count || 0,
       verified_follows_count: r.verified_follows_count || 0,
     };
+  }
+
+  // Populate live Instagram engagement metrics from synced catalog
+  if (syncStore?.reels) {
+    for (const sr of syncStore.reels) {
+      totalLikes += (sr.like_count || 0);
+      totalViews += (sr.views_count || 0);
+      totalShares += (sr.shares_count || 0);
+      totalReach += (sr.reach_count || 0);
+      totalSaves += (sr.saves_count || 0);
+
+      if (!perReel[sr.media_id]) {
+        perReel[sr.media_id] = {
+          comments_count: sr.comments_count || 0,
+          private_replies_count: 0,
+          public_replies_count: 0,
+          verified_follows_count: 0,
+        };
+      }
+      perReel[sr.media_id].like_count = sr.like_count || 0;
+      perReel[sr.media_id].views_count = sr.views_count || 0;
+      perReel[sr.media_id].shares_count = sr.shares_count || 0;
+      perReel[sr.media_id].reach_count = sr.reach_count || 0;
+      perReel[sr.media_id].saves_count = sr.saves_count || 0;
+      perReel[sr.media_id].comments_count = Math.max(
+        perReel[sr.media_id].comments_count || 0,
+        sr.comments_count || 0
+      );
+    }
   }
 
   // Calculate cutoff for date filtering
@@ -1110,13 +1155,22 @@ export async function getInstagramAutomationAnalytics(options?: {
         commentsSkipped = realIntents.filter((i) => i.private_reply_state === 'skipped').length;
         publicRepliesSent = realIntents.filter((i) => (i as Record<string, unknown>).public_reply_status === 'sent').length;
 
-        // Group real counts by media_id
+        // Group real counts by media_id and attribute private replies & public replies
         const mediaIntentCounts: Record<string, number> = {};
         for (const intent of realIntents) {
           if (intent.media_id) {
             mediaIntentCounts[intent.media_id] = (mediaIntentCounts[intent.media_id] || 0) + 1;
             if (perReel[intent.media_id]) {
-              perReel[intent.media_id].comments_count = Math.max(perReel[intent.media_id].comments_count, mediaIntentCounts[intent.media_id]);
+              perReel[intent.media_id].comments_count = Math.max(
+                perReel[intent.media_id].comments_count,
+                mediaIntentCounts[intent.media_id]
+              );
+              if (intent.private_reply_state === 'sent' || intent.private_reply_state === 'approved') {
+                perReel[intent.media_id].private_replies_count++;
+              }
+              if ((intent as Record<string, unknown>).public_reply_status === 'sent') {
+                perReel[intent.media_id].public_replies_count++;
+              }
             }
           }
         }
@@ -1125,12 +1179,18 @@ export async function getInstagramAutomationAnalytics(options?: {
       // 2. Verified follows from instagram_customer_context
       const { data: contexts } = await adminSupabase
         .from('instagram_customer_context')
-        .select('id, ig_user_id, follow_status, follow_verified_at, created_at');
+        .select('id, ig_user_id, pending_media_id, follow_status, follow_verified_at, created_at');
 
       if (contexts && contexts.length > 0) {
         const followerContexts = contexts.filter((c) => c.follow_status === 'follows');
         totalHistoricalVerifiedFollows = followerContexts.length;
         verifiedFollows = followerContexts.filter((c) => isWithinRange(c.follow_verified_at || c.created_at)).length;
+
+        for (const c of followerContexts) {
+          if (c.pending_media_id && perReel[c.pending_media_id]) {
+            perReel[c.pending_media_id].verified_follows_count++;
+          }
+        }
       }
     } catch {
       // Fallback
@@ -1140,6 +1200,10 @@ export async function getInstagramAutomationAnalytics(options?: {
       totalHistoricalVerifiedFollows = verifiedFollows;
     }
   }
+
+  // Ensure real comments includes all Meta catalog comments
+  const totalCatalogComments = syncStore?.reels?.reduce((sum, r) => sum + (r.comments_count || 0), 0) || 0;
+  realCommentsCount = Math.max(realCommentsCount, totalCatalogComments);
 
   // Ensure historical count preserves verified follows even if outside range filter
   if (totalHistoricalVerifiedFollows < 2) {
@@ -1169,6 +1233,11 @@ export async function getInstagramAutomationAnalytics(options?: {
     verified_follows: verifiedFollows,
     total_historical_verified_follows: totalHistoricalVerifiedFollows,
     verified_follow_rate: followRate,
+    total_likes: totalLikes,
+    total_views: totalViews,
+    total_shares: totalShares,
+    total_reach: totalReach,
+    total_saves: totalSaves,
     per_reel: perReel,
   };
 }
