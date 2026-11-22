@@ -44,7 +44,6 @@ import { TopNavbar } from '@/components/layout/top-navbar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SearchInput } from '@/components/ui/search-input';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QuickRepliesManager } from '@/components/whatsapp/quick-replies-manager';
 import { CustomerInfoSidebar } from '@/components/whatsapp/customer-info-sidebar';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
@@ -309,7 +308,6 @@ function WhatsAppInboxContent() {
   // Modals & Drawers
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
   const [isCustomerInfoOpen, setIsCustomerInfoOpen] = useState(true);
-  const [isConfirmTakeoverOpen, setIsConfirmTakeoverOpen] = useState(false);
 
   // Auto-sync polling toggle
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
@@ -758,12 +756,13 @@ function WhatsAppInboxContent() {
                   variant={activeConversation.manual_takeover ? 'secondary' : 'primary'}
                   size="xs"
                   onClick={() => {
-                    if (!activeConversation.manual_takeover) {
-                      setIsConfirmTakeoverOpen(true);
-                    } else {
-                      toggleManualTakeover(activeConversation.id);
-                      showToast('AI Bot resumed ✓');
-                    }
+                    const willTakeover = !activeConversation.manual_takeover;
+                    toggleManualTakeover(activeConversation.id);
+                    showToast(
+                      willTakeover
+                        ? 'Human takeover activated. AI bot paused.'
+                        : 'AI Bot resumed ✓'
+                    );
                   }}
                   leftIcon={activeConversation.manual_takeover ? <Bot className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                 >
@@ -982,21 +981,6 @@ function WhatsAppInboxContent() {
         }}
       />
 
-      {/* CONFIRM HUMAN TAKEOVER DIALOG */}
-      <ConfirmDialog
-        isOpen={isConfirmTakeoverOpen}
-        onClose={() => setIsConfirmTakeoverOpen(false)}
-        onConfirm={() => {
-          if (activeConversation) {
-            toggleManualTakeover(activeConversation.id);
-            showToast('Human agent takeover activated. AI bot paused.');
-          }
-          setIsConfirmTakeoverOpen(false);
-        }}
-        title="Activate Human Takeover"
-        description="Taking over will pause the autonomous AI bot for this customer. Any incoming message will wait for your manual reply."
-        confirmLabel="Take Over Chat"
-      />
     </div>
   );
 }

@@ -982,6 +982,13 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     setConversations((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status, updated_at } : c))
     );
+    // Reliable server-side update with service role admin client
+    fetch('/api/whatsapp/takeover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId: id, status }),
+    }).catch(() => {});
+
     const supabase = createClient();
     if (supabase) {
       supabase.from('admin_conversations').update({ status, updated_at }).eq('id', id).then();
@@ -1004,6 +1011,13 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         return c;
       })
     );
+    // Reliable server-side update with service role admin client
+    fetch('/api/whatsapp/takeover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId: id, automationPaused: nextVal }),
+    }).catch(() => {});
+
     const supabase = createClient();
     if (supabase) {
       supabase.from('admin_conversations').update({ automation_paused: nextVal, updated_at }).eq('id', id).then();
@@ -1030,20 +1044,31 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
           return {
             ...c,
             manual_takeover: nextTakeover,
-            automation_paused: nextTakeover ? true : c.automation_paused,
+            automation_paused: nextTakeover ? true : false,
             updated_at,
           };
         }
         return c;
       })
     );
+    // Reliable server-side update with service role admin client
+    fetch('/api/whatsapp/takeover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: id,
+        takeover: nextTakeover,
+        automationPaused: nextTakeover,
+      }),
+    }).catch(() => {});
+
     const supabase = createClient();
     if (supabase) {
       supabase
         .from('admin_conversations')
         .update({
           manual_takeover: nextTakeover,
-          automation_paused: nextTakeover ? true : undefined,
+          automation_paused: nextTakeover,
           updated_at,
         })
         .eq('id', id)
