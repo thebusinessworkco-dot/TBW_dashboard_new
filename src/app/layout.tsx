@@ -36,7 +36,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col antialiased bg-[#F8F7F4] text-stone-900">
+      <body className="min-h-full flex flex-col antialiased bg-[#F8F7F4] text-stone-900 dark:bg-[#0D1217] dark:text-[#FCFBF8]">
         <DashboardStoreProvider>
           {children}
         </DashboardStoreProvider>

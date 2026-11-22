@@ -303,6 +303,7 @@ function WhatsAppInboxContent() {
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [isSyncingCurrent, setIsSyncingCurrent] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modals & Drawers
@@ -465,8 +466,13 @@ function WhatsAppInboxContent() {
 
   // Sync all chats master handler
   const handleSyncAll = async () => {
-    const res = await syncAllMessages();
-    showToast(`Synced ${res.count} messages across all chats ✓`);
+    setIsSyncingAll(true);
+    try {
+      const res = await syncAllMessages();
+      showToast(`Synced ${res.count} messages across all chats ✓`);
+    } finally {
+      setIsSyncingAll(false);
+    }
   };
 
   // Linked entities
@@ -547,6 +553,7 @@ function WhatsAppInboxContent() {
                   variant="secondary"
                   size="xs"
                   onClick={handleSyncAll}
+                  isLoading={isSyncingAll}
                   title="Master Sync All Conversations"
                   iconOnly
                 >

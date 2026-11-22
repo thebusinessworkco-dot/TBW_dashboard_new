@@ -59,7 +59,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseClasses =
-      'inline-flex items-center justify-center transition-all duration-150 cursor-pointer select-none outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98]';
+      'inline-flex items-center justify-center transition-all duration-150 cursor-pointer select-none outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98] shrink-0';
     const variantClass = variantStyles[variant];
     const sizeClass = iconOnly ? iconOnlySizeStyles[size] : sizeStyles[size];
 
@@ -72,11 +72,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        ) : iconOnly ? (
+          <span className="shrink-0 inline-flex items-center justify-center">
+            {children ?? leftIcon ?? rightIcon}
+          </span>
         ) : (
-          leftIcon && <span className="shrink-0">{leftIcon}</span>
+          <>
+            {leftIcon && <span className="shrink-0 inline-flex items-center justify-center">{leftIcon}</span>}
+            {children}
+            {rightIcon && <span className="shrink-0 inline-flex items-center justify-center">{rightIcon}</span>}
+          </>
         )}
-        {!iconOnly && children}
-        {!isLoading && rightIcon && <span className="shrink-0">{rightIcon}</span>}
       </button>
     );
   }
