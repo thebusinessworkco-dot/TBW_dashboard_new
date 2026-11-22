@@ -187,34 +187,45 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
       const dataList: Array<Record<string, unknown>> = Array.isArray(body.data) ? body.data : [];
 
       for (const item of dataList) {
+        if (!item.id) continue;
         const permalink = String(item.permalink || '');
         const shortcode = permalink.match(/(?:reel|p|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || '';
 
-        // Filter: ensure it is a video/reel
         const mediaProductType = String(item.media_product_type || '').toUpperCase();
-        const mediaType = String(item.media_type || '').toUpperCase();
+        const rawMediaType = String(item.media_type || '').toUpperCase();
+        const mediaType: 'VIDEO' | 'IMAGE' | 'CAROUSEL_ALBUM' =
+          rawMediaType === 'IMAGE'
+            ? 'IMAGE'
+            : rawMediaType === 'CAROUSEL_ALBUM'
+            ? 'CAROUSEL_ALBUM'
+            : 'VIDEO';
+
+        const thumb = (item.thumbnail_url || item.media_url || '') as string;
+        const mediaUrl = (item.media_url || item.thumbnail_url || '') as string;
         const isReel =
           mediaProductType === 'REELS' ||
-          mediaType === 'VIDEO' ||
+          rawMediaType === 'VIDEO' ||
           permalink.includes('/reel/');
 
-        if (isReel && item.id) {
-          fetchedReels.push({
-            media_id: String(item.id),
-            shortcode,
-            caption: String(item.caption || ''),
-            permalink: permalink || (shortcode ? `https://www.instagram.com/reel/${shortcode}/` : ''),
-            thumbnail_url: (item.thumbnail_url || item.media_url || '') as string,
-            media_url: (item.media_url || item.thumbnail_url || '') as string,
-            timestamp: String(item.timestamp || new Date().toISOString()),
-            media_type: (mediaType as 'VIDEO' | 'IMAGE') || 'VIDEO',
-            media_product_type: mediaProductType || 'REELS',
-            comments_count: Number(item.comments_count) || 0,
-            like_count: Number(item.like_count) || 0,
-            is_available: true,
-            availability_status: 'published',
-          });
-        }
+        const defaultPermalink = isReel
+          ? `https://www.instagram.com/reel/${shortcode}/`
+          : `https://www.instagram.com/p/${shortcode}/`;
+
+        fetchedReels.push({
+          media_id: String(item.id),
+          shortcode,
+          caption: String(item.caption || ''),
+          permalink: permalink || (shortcode ? defaultPermalink : ''),
+          thumbnail_url: thumb,
+          media_url: mediaUrl,
+          timestamp: String(item.timestamp || new Date().toISOString()),
+          media_type: mediaType,
+          media_product_type: mediaProductType || (isReel ? 'REELS' : 'FEED'),
+          comments_count: Number(item.comments_count) || 0,
+          like_count: Number(item.like_count) || 0,
+          is_available: true,
+          availability_status: 'published',
+        });
       }
 
       nextUrl = (body.paging?.next as string) || null;
@@ -248,7 +259,9 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
     if (!r && adminSupabase) {
       // Auto-create active rule so any newly published reel or post is automated immediately!
       try {
-        const cleanTitle = (reel.caption ? reel.caption.replace(/\n/g, ' ').slice(0, 50) : 'Instagram Reel') + '...';
+        const isVideo = reel.media_type === 'VIDEO';
+        const mediaLabel = isVideo ? 'Instagram Reel' : reel.media_type === 'CAROUSEL_ALBUM' ? 'Instagram Carousel' : 'Instagram Post';
+        const cleanTitle = (reel.caption ? reel.caption.replace(/\n/g, ' ').slice(0, 50) : mediaLabel) + '...';
         const autoRulePayload = {
           media_id: reel.media_id,
           permalink: reel.permalink,
@@ -257,10 +270,10 @@ export async function syncReelsFromMeta(options: { maxPages?: number } = {}): Pr
           is_enabled: true,
           trigger_mode: 'any_comment' as const,
           keywords: [],
-          initial_dm_text: 'Thanks for commenting on our Reel! 👋\nReply Hi to get the details ✨',
+          initial_dm_text: `Thanks for commenting on our ${isVideo ? 'Reel' : 'post'}! 👋\nReply Hi to get the details ✨`,
           details_text: 'Here are the details you requested! Explore our complete range of automation services or reach out for custom setup.',
           follow_required: true,
-          whatsapp_prefill_text: 'Hi! I saw your Instagram Reel and would like more details.',
+          whatsapp_prefill_text: `Hi! I saw your ${mediaLabel} and would like more details.`,
           auto_comment_reply_enabled: true,
           auto_comment_reply_text: 'Thanks! 👋 Check your DM for the details.',
           auto_comment_reply_variations: [],

@@ -26,6 +26,7 @@ import {
   Clock,
   Video,
   Archive,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
@@ -497,7 +498,7 @@ export default function InstagramReelsPage() {
     <div className="min-h-full pb-20">
       <TopNavbar
         title="Instagram Reels Automation"
-        subtitle="Connected: @thebusinesswork.co · Auto-sync published Reels, browse visually, or paste link to automate DMs."
+        subtitle="Connected: @thebusinesswork.co · Auto-sync published Posts & Reels, browse visually, or paste link to automate DMs."
       />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
@@ -585,7 +586,7 @@ export default function InstagramReelsPage() {
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                Connected Reels
+                Connected Posts & Reels
               </span>
               <Film className="h-4 w-4 text-stone-400" />
             </div>
@@ -661,7 +662,7 @@ export default function InstagramReelsPage() {
               }`}
             >
               <Film className="h-4 w-4" />
-              Reels Library & Automations ({publishedItems.length > 0 ? publishedItems.length : archivedItems.length})
+              Posts & Reels Library ({publishedItems.length > 0 ? publishedItems.length : archivedItems.length})
             </button>
             <button
               onClick={() => setActiveTab('faq')}
@@ -692,7 +693,7 @@ export default function InstagramReelsPage() {
               onClick={() => loadData(true)}
               disabled={isSyncing}
               className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition-colors shadow-2xs disabled:opacity-60"
-              title="Fetch newly published Reels from @thebusinesswork.co via Meta Graph API"
+              title="Fetch newly published Posts & Reels from @thebusinesswork.co via Meta Graph API"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin text-stone-900' : 'text-stone-500'}`} />
               {isSyncing ? 'Syncing...' : 'Sync Reels'}
@@ -720,7 +721,7 @@ export default function InstagramReelsPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search Reels by caption, title, or media ID..."
+                    placeholder="Search by caption, title, or media ID..."
                     className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-stone-200 focus:outline-hidden focus:border-stone-400 transition-colors bg-stone-50/60"
                   />
                   {searchQuery && (
@@ -859,8 +860,22 @@ export default function InstagramReelsPage() {
                         {/* Top Badges */}
                         <div className="absolute top-2 left-2 flex items-center gap-1.5">
                           <span className="flex items-center gap-1 rounded-md bg-stone-900/80 backdrop-blur-xs px-2 py-0.5 text-[10px] font-medium text-white">
-                            <Video className="h-2.5 w-2.5" />
-                            Reel
+                            {reel.media_type === 'CAROUSEL_ALBUM' ? (
+                              <>
+                                <Layers className="h-2.5 w-2.5" />
+                                Carousel
+                              </>
+                            ) : reel.media_type === 'IMAGE' ? (
+                              <>
+                                <ImageIcon className="h-2.5 w-2.5" />
+                                Post
+                              </>
+                            ) : (
+                              <>
+                                <Video className="h-2.5 w-2.5" />
+                                Reel
+                              </>
+                            )}
                           </span>
                         </div>
 
