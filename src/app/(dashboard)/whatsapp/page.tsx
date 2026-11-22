@@ -757,7 +757,7 @@ function WhatsAppInboxContent() {
                   size="xs"
                   onClick={() => {
                     const willTakeover = !activeConversation.manual_takeover;
-                    toggleManualTakeover(activeConversation.id);
+                    toggleManualTakeover(activeConversation.id, willTakeover);
                     showToast(
                       willTakeover
                         ? 'Human takeover activated. AI bot paused.'

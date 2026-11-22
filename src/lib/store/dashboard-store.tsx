@@ -41,8 +41,8 @@ interface DashboardStoreContextType {
 
   // Actions
   updateConversationStatus: (id: string, status: ConversationStatus) => void;
-  toggleAutomationPaused: (id: string) => void;
-  toggleManualTakeover: (id: string) => void;
+  toggleAutomationPaused: (id: string, explicitVal?: boolean) => void;
+  toggleManualTakeover: (id: string, explicitTakeover?: boolean) => void;
   updateInternalNotes: (id: string, notes: string) => void;
   updateContactName: (contactId: string, name: string) => Promise<boolean>;
   createContact: (data: {
@@ -995,13 +995,14 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     }
   };
 
-  const toggleAutomationPaused = (id: string) => {
-    let nextVal = false;
+  const toggleAutomationPaused = (id: string, explicitVal?: boolean) => {
+    const targetConv = conversations.find((c) => c.id === id);
+    const nextVal = typeof explicitVal === 'boolean' ? explicitVal : (targetConv ? !targetConv.automation_paused : true);
     const updated_at = new Date().toISOString();
+
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          nextVal = !c.automation_paused;
           return {
             ...c,
             automation_paused: nextVal,
@@ -1034,23 +1035,25 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     }).catch(() => {});
   };
 
-  const toggleManualTakeover = (id: string) => {
-    let nextTakeover = false;
+  const toggleManualTakeover = (id: string, explicitTakeover?: boolean) => {
+    const targetConv = conversations.find((c) => c.id === id);
+    const nextTakeover = typeof explicitTakeover === 'boolean' ? explicitTakeover : (targetConv ? !targetConv.manual_takeover : true);
     const updated_at = new Date().toISOString();
+
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          nextTakeover = !c.manual_takeover;
           return {
             ...c,
             manual_takeover: nextTakeover,
-            automation_paused: nextTakeover ? true : false,
+            automation_paused: nextTakeover,
             updated_at,
           };
         }
         return c;
       })
     );
+
     // Reliable server-side update with service role admin client
     fetch('/api/whatsapp/takeover', {
       method: 'POST',
