@@ -1,0 +1,15 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      mtu: 1400
+      dhcp4: false
+      dhcp6: false
+      addresses:
+        - 222.167.207.127/24
+      routes:
+        - to: 0.0.0.0/0
+          via: 222.167.207.1
+      nameservers:
+        addresses: [1.1.1.1]

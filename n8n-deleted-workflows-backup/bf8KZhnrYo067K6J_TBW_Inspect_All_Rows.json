@@ -1,0 +1,171 @@
+{
+  "id": "bf8KZhnrYo067K6J",
+  "name": "TBW Inspect All Rows",
+  "description": null,
+  "active": true,
+  "activeVersionId": "68cb98d6-ec58-4c69-8632-5b86e73b5aaf",
+  "createdAt": "2026-10-24T16:54:23.608Z",
+  "updatedAt": "2026-10-24T16:54:23.608Z",
+  "isArchived": false,
+  "versionId": "68cb98d6-ec58-4c69-8632-5b86e73b5aaf",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-inspect-rows-1792860856215",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "fb872784-8035-4c44-a01f-08b7295f9f4b"
+    },
+    {
+      "id": "http-wa",
+      "name": "Get WA Rows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values/%27WhatsApp%20Leads%27!A1:Z",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get WA Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "bf8KZhnrYo067K6J",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:54:23.612Z",
+      "updatedAt": "2026-10-24T16:54:23.612Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "68cb98d6-ec58-4c69-8632-5b86e73b5aaf",
+    "workflowId": "bf8KZhnrYo067K6J",
+    "nodes": [
+      {
+        "id": "wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-inspect-rows-1792860856215",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "fb872784-8035-4c44-a01f-08b7295f9f4b"
+      },
+      {
+        "id": "http-wa",
+        "name": "Get WA Rows",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          420,
+          300
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values/%27WhatsApp%20Leads%27!A1:Z",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "googleSheetsOAuth2Api",
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Get WA Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:54:23.614Z",
+    "updatedAt": "2026-10-24T16:54:23.614Z",
+    "workflowPublishHistory": [
+      {
+        "id": 91,
+        "workflowId": "bf8KZhnrYo067K6J",
+        "versionId": "68cb98d6-ec58-4c69-8632-5b86e73b5aaf",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:54:25.061Z"
+      }
+    ]
+  }
+}

@@ -123,13 +123,18 @@ export interface AdminMessage {
 export interface AdminContact {
   id: string;
   name: string;
+  custom_name?: string;
   phone?: string;
   instagram_username?: string;
   instagram_scoped_id?: string;
   email?: string;
   avatar_url?: string;
   company_name?: string;
+  notes?: string;
+  tags?: string[];
+  last_activity_at?: string;
   created_at: string;
+  updated_at?: string;
   is_demo?: boolean;
 }
 
@@ -139,6 +144,11 @@ export interface AdminConversation {
   contact: AdminContact;
   platform: ConversationPlatform;
   status: ConversationStatus;
+  session_customer_name?: string;
+  session_number?: number;
+  selected_language?: string;
+  closed_at?: string;
+  session_data?: Record<string, unknown>;
   last_message: string;
   last_message_at: string;
   unread_count: number;
@@ -243,6 +253,7 @@ export interface AdminCommentAutomation {
   matching_comments_count: number;
   successful_replies_count: number;
   failed_replies_count: number;
+  require_follow?: boolean;
   is_demo?: boolean;
   created_at: string;
 }
@@ -486,4 +497,74 @@ export interface InstagramAutomationAnalytics {
   test_events_count: number;
   verified_follow_rate?: string;
   per_reel?: Record<string, { comments_count: number; private_replies_count: number; public_replies_count: number; verified_follows_count: number }>;
+}
+
+
+export interface AdminAuditLog {
+  id: string;
+  admin_user_id?: string | null;
+  admin_email: string;
+  action: string;
+  target_entity: string;
+  target_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+  ip_address?: string | null;
+  created_at: string;
+}
+
+export type TeamRole = 'superadmin' | 'admin' | 'manager' | 'agent' | 'observer';
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: TeamRole;
+  avatar?: string;
+  phone?: string;
+  added_at: string;
+  last_active_at?: string;
+  status: 'active' | 'invited' | 'suspended';
+  permissions: {
+    can_manage_contacts: boolean;
+    can_manage_chats: boolean;
+    can_takeover_bot: boolean;
+    can_manage_leads: boolean;
+    can_manage_appointments: boolean;
+    can_manage_quotations: boolean;
+    can_manage_automations: boolean;
+    can_manage_settings: boolean;
+    can_view_audit_logs: boolean;
+  };
+}
+
+export interface GeneralSettings {
+  company_name: string;
+  tagline: string;
+  support_email: string;
+  support_phone: string;
+  website_url: string;
+  timezone: string;
+  business_hours: string;
+  address: string;
+}
+
+export interface BrandSettings {
+  brand_name: string;
+  tagline: string;
+  primary_color: string;
+  accent_sage: string;
+  neutral_ivory: string;
+  logo_url?: string;
+  favicon_url?: string;
+}
+
+export interface NotificationSettings {
+  suppressed_testing_numbers: string[];
+  enable_telegram_alerts: boolean;
+  enable_whatsapp_admin_alerts: boolean;
+  alert_on_new_lead: boolean;
+  alert_on_appointment: boolean;
+  alert_on_human_takeover: boolean;
+  alert_on_workflow_failure: boolean;
+  alert_on_vps_high_load: boolean;
 }

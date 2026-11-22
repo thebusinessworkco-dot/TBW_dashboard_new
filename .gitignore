@@ -44,7 +44,9 @@ yarn-error.log*
 next-env.d.ts
 
 # backups & local operational artifacts
+/backups/
 /supabase/backups/
+/supabase/.temp/
 /scratch/
 /scripts/*.json
 /scripts/backup_*

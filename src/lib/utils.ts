@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { ConversationStatus, LeadStatus, AppointmentStatus, WorkflowStatus } from './types/dashboard';
+import { ConversationStatus, LeadStatus, AppointmentStatus, WorkflowStatus, QuotationStatus } from './types/dashboard';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -19,6 +19,7 @@ export function formatDate(dateString: string | undefined): string {
   try {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -33,6 +34,7 @@ export function formatDateTime(dateString: string | undefined): string {
   try {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -49,6 +51,7 @@ export function formatRelativeTime(dateString: string | undefined): string {
   try {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -165,5 +168,22 @@ export function getWorkflowStatusBadge(status: WorkflowStatus) {
       return { label: 'Failed', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' };
     default:
       return { label: 'Unknown', bg: 'bg-stone-50', text: 'text-stone-600', border: 'border-stone-200' };
+  }
+}
+
+export function getQuotationStatusBadge(status: QuotationStatus) {
+  switch (status) {
+    case 'accepted':
+      return { label: 'Accepted', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' };
+    case 'sent':
+      return { label: 'Sent', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' };
+    case 'draft':
+      return { label: 'Draft', bg: 'bg-stone-100', text: 'text-stone-700', border: 'border-stone-200' };
+    case 'rejected':
+      return { label: 'Rejected', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' };
+    case 'expired':
+      return { label: 'Expired', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' };
+    default:
+      return { label: status, bg: 'bg-stone-100', text: 'text-stone-700', border: 'border-stone-200' };
   }
 }

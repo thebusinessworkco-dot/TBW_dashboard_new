@@ -134,3 +134,4 @@ settings = settings.replace(
 fs.writeFileSync('src/app/(dashboard)/settings/page.tsx', settings, 'utf8');
 console.log('✅ Updated src/app/(dashboard)/settings/page.tsx');
 console.log('Banner flash fix complete!');
+

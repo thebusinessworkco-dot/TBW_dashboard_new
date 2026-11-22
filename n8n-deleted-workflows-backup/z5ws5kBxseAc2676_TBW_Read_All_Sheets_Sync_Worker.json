@@ -1,0 +1,427 @@
+{
+  "id": "z5ws5kBxseAc2676",
+  "name": "TBW Read All Sheets Sync Worker",
+  "description": null,
+  "active": true,
+  "activeVersionId": "22e83c30-11ba-406f-af0c-18bd94b78929",
+  "createdAt": "2026-10-24T16:46:23.595Z",
+  "updatedAt": "2026-10-24T16:46:23.595Z",
+  "isArchived": false,
+  "versionId": "22e83c30-11ba-406f-af0c-18bd94b78929",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh-in",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-read-all-sheets-1792860381230",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "baf7a412-0319-4d35-8077-6053cf3f3b0d"
+    },
+    {
+      "id": "read-leads",
+      "name": "Read Website Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        420,
+        160
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1811340286,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "read-wa",
+      "name": "Read WhatsApp Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 671996512,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "read-appts",
+      "name": "Read Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        420,
+        440
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "combine",
+      "name": "Combine Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n            const leads = $('Read Website Leads').all().map(i => i.json);\n            const wa = $('Read WhatsApp Leads').all().map(i => i.json);\n            const appts = $('Read Appointments').all().map(i => i.json);\n            return [{\n              json: {\n                success: true,\n                websiteLeads: leads,\n                whatsappLeads: wa,\n                appointments: appts\n              }\n            }];\n          "
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Website Leads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read WhatsApp Leads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Website Leads": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read WhatsApp Leads": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Appointments": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "z5ws5kBxseAc2676",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:46:23.598Z",
+      "updatedAt": "2026-10-24T16:46:23.598Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "22e83c30-11ba-406f-af0c-18bd94b78929",
+    "workflowId": "z5ws5kBxseAc2676",
+    "nodes": [
+      {
+        "id": "wh-in",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-read-all-sheets-1792860381230",
+          "httpMethod": "POST",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "webhookId": "baf7a412-0319-4d35-8077-6053cf3f3b0d"
+      },
+      {
+        "id": "read-leads",
+        "name": "Read Website Leads",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          420,
+          160
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1811340286,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "read-wa",
+        "name": "Read WhatsApp Leads",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          420,
+          300
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 671996512,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "read-appts",
+        "name": "Read Appointments",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          420,
+          440
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 949713765,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "combine",
+        "name": "Combine Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          680,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\n            const leads = $('Read Website Leads').all().map(i => i.json);\n            const wa = $('Read WhatsApp Leads').all().map(i => i.json);\n            const appts = $('Read Appointments').all().map(i => i.json);\n            return [{\n              json: {\n                success: true,\n                websiteLeads: leads,\n                whatsappLeads: wa,\n                appointments: appts\n              }\n            }];\n          "
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Read Website Leads",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Read WhatsApp Leads",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Read Appointments",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Website Leads": {
+        "main": [
+          [
+            {
+              "node": "Combine Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read WhatsApp Leads": {
+        "main": [
+          [
+            {
+              "node": "Combine Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Appointments": {
+        "main": [
+          [
+            {
+              "node": "Combine Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:46:23.600Z",
+    "updatedAt": "2026-10-24T16:46:23.600Z",
+    "workflowPublishHistory": [
+      {
+        "id": 81,
+        "workflowId": "z5ws5kBxseAc2676",
+        "versionId": "22e83c30-11ba-406f-af0c-18bd94b78929",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:46:24.179Z"
+      }
+    ]
+  }
+}

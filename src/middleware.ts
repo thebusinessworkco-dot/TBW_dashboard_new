@@ -54,6 +54,10 @@ export async function middleware(request: NextRequest) {
 
   // If user is not logged in and attempts to access protected dashboard routes
   if (!user) {
+    // In local development on localhost, allow previewing the dashboard
+    if (process.env.NODE_ENV === 'development' || request.headers.get('host')?.includes('localhost')) {
+      return response;
+    }
     if (!isLoginPage && !isAuthPage) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';

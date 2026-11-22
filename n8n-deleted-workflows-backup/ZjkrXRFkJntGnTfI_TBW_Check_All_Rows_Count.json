@@ -1,0 +1,405 @@
+{
+  "id": "ZjkrXRFkJntGnTfI",
+  "name": "TBW Check All Rows Count",
+  "description": null,
+  "active": true,
+  "activeVersionId": "5fced4bf-8eb8-43fe-8742-c91567378e16",
+  "createdAt": "2026-10-24T16:49:13.345Z",
+  "updatedAt": "2026-10-24T16:49:13.345Z",
+  "isArchived": false,
+  "versionId": "5fced4bf-8eb8-43fe-8742-c91567378e16",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-check-rows-1792860550354",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "a780a0bc-7adc-4607-b755-fbf567ded24f"
+    },
+    {
+      "id": "read-leads",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        400,
+        200
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1811340286,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "read-wa",
+      "name": "Read WhatsApp",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        400,
+        360
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 671996512,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "read-appts",
+      "name": "Read Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "continueOnFail": true,
+      "position": [
+        400,
+        520
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "code-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n            function getCleanRows(nodeName) {\n              try {\n                const items = $(nodeName).all();\n                if (!items || items.length === 0) return [];\n                return items.map(i => i.json).filter(j => !j.error && Object.keys(j).length > 0 && !j.message?.includes('No item to return'));\n              } catch(e) {\n                return [];\n              }\n            }\n            return [{\n              json: {\n                leads: getCleanRows('Read Leads'),\n                whatsappLeads: getCleanRows('Read WhatsApp'),\n                appointments: getCleanRows('Read Appointments')\n              }\n            }];\n          "
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Read WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Read Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Appointments": {
+      "main": [
+        [
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "ZjkrXRFkJntGnTfI",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:49:13.349Z",
+      "updatedAt": "2026-10-24T16:49:13.349Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "5fced4bf-8eb8-43fe-8742-c91567378e16",
+    "workflowId": "ZjkrXRFkJntGnTfI",
+    "nodes": [
+      {
+        "id": "wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-check-rows-1792860550354",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "a780a0bc-7adc-4607-b755-fbf567ded24f"
+      },
+      {
+        "id": "read-leads",
+        "name": "Read Leads",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          400,
+          200
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1811340286,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "read-wa",
+        "name": "Read WhatsApp",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          400,
+          360
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 671996512,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "read-appts",
+        "name": "Read Appointments",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "continueOnFail": true,
+        "position": [
+          400,
+          520
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 949713765,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "code-summary",
+        "name": "Format Summary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          680,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\n            function getCleanRows(nodeName) {\n              try {\n                const items = $(nodeName).all();\n                if (!items || items.length === 0) return [];\n                return items.map(i => i.json).filter(j => !j.error && Object.keys(j).length > 0 && !j.message?.includes('No item to return'));\n              } catch(e) {\n                return [];\n              }\n            }\n            return [{\n              json: {\n                leads: getCleanRows('Read Leads'),\n                whatsappLeads: getCleanRows('Read WhatsApp'),\n                appointments: getCleanRows('Read Appointments')\n              }\n            }];\n          "
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Read Leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Leads": {
+        "main": [
+          [
+            {
+              "node": "Read WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "Read Appointments",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Appointments": {
+        "main": [
+          [
+            {
+              "node": "Format Summary",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:49:13.352Z",
+    "updatedAt": "2026-10-24T16:49:13.352Z",
+    "workflowPublishHistory": [
+      {
+        "id": 85,
+        "workflowId": "ZjkrXRFkJntGnTfI",
+        "versionId": "5fced4bf-8eb8-43fe-8742-c91567378e16",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:49:15.735Z"
+      }
+    ]
+  }
+}

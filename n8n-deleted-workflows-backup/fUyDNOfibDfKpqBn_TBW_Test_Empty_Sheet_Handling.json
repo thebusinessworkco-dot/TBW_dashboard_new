@@ -1,0 +1,279 @@
+{
+  "id": "fUyDNOfibDfKpqBn",
+  "name": "TBW Test Empty Sheet Handling",
+  "description": null,
+  "active": true,
+  "activeVersionId": "9bb312d2-9580-402f-ab6d-d45d5b17ee76",
+  "createdAt": "2026-10-24T16:52:32.756Z",
+  "updatedAt": "2026-10-24T16:52:32.756Z",
+  "isArchived": false,
+  "versionId": "9bb312d2-9580-402f-ab6d-d45d5b17ee76",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-empty-opt-1792860749488",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "ac1a8276-3770-45fe-93cd-d0e2949e8c35"
+    },
+    {
+      "id": "read-appts",
+      "name": "Read Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "onError": "continueErrorOutput",
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 949713765,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "code-success",
+      "name": "Handle Success Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: { success: true, count: $input.all().length, items: $input.all().map(i => i.json) } }];"
+      }
+    },
+    {
+      "id": "code-empty",
+      "name": "Handle Empty Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: { success: true, count: 0, items: [], note: \"empty_sheet\" } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Appointments": {
+      "main": [
+        [
+          {
+            "node": "Handle Success Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Empty Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "fUyDNOfibDfKpqBn",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:52:32.831Z",
+      "updatedAt": "2026-10-24T16:52:32.831Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "9bb312d2-9580-402f-ab6d-d45d5b17ee76",
+    "workflowId": "fUyDNOfibDfKpqBn",
+    "nodes": [
+      {
+        "id": "wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-empty-opt-1792860749488",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "ac1a8276-3770-45fe-93cd-d0e2949e8c35"
+      },
+      {
+        "id": "read-appts",
+        "name": "Read Appointments",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "onError": "continueErrorOutput",
+        "position": [
+          400,
+          300
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 949713765,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "code-success",
+        "name": "Handle Success Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          650,
+          200
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return [{ json: { success: true, count: $input.all().length, items: $input.all().map(i => i.json) } }];"
+        }
+      },
+      {
+        "id": "code-empty",
+        "name": "Handle Empty Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          650,
+          400
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return [{ json: { success: true, count: 0, items: [], note: \"empty_sheet\" } }];"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Read Appointments",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Appointments": {
+        "main": [
+          [
+            {
+              "node": "Handle Success Output",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Handle Empty Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:52:32.872Z",
+    "updatedAt": "2026-10-24T16:52:32.872Z",
+    "workflowPublishHistory": [
+      {
+        "id": 87,
+        "workflowId": "fUyDNOfibDfKpqBn",
+        "versionId": "9bb312d2-9580-402f-ab6d-d45d5b17ee76",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:52:34.380Z"
+      }
+    ]
+  }
+}

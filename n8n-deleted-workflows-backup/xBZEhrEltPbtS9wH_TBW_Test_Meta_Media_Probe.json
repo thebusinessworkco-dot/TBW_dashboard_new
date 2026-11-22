@@ -1,0 +1,98 @@
+{
+  "id": "xBZEhrEltPbtS9wH",
+  "name": "TBW Test Meta Media Probe",
+  "description": null,
+  "active": false,
+  "activeVersionId": null,
+  "createdAt": "2026-10-23T17:02:59.130Z",
+  "updatedAt": "2026-10-23T17:02:59.130Z",
+  "isArchived": false,
+  "versionId": "0aba9c28-c8fa-4d9b-bfb1-1fcf190dbbba",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "probe-wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-meta-media-1792774978508",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "491dfbdb-8dc0-4de7-9f38-2528978804ca"
+    },
+    {
+      "id": "probe-http",
+      "name": "GetMe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.instagram.com/v26.0/me?fields=id,username,account_type,media_count",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "7sIHDKGWFf4OToxy",
+          "name": "Instagram Meta Send Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "GetMe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {},
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "xBZEhrEltPbtS9wH",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-23T17:02:59.136Z",
+      "updatedAt": "2026-10-23T17:02:59.136Z"
+    }
+  ],
+  "activeVersion": null
+}

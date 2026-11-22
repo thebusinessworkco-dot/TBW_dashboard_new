@@ -1,0 +1,171 @@
+{
+  "id": "g5Wnuw2iME02TjBV",
+  "name": "TBW Test Batch Sheets",
+  "description": null,
+  "active": true,
+  "activeVersionId": "bd5173d9-a1c1-4af5-95cf-9feda2cb1080",
+  "createdAt": "2026-10-24T16:53:33.937Z",
+  "updatedAt": "2026-10-24T16:53:33.937Z",
+  "isArchived": false,
+  "versionId": "bd5173d9-a1c1-4af5-95cf-9feda2cb1080",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-batch-sheets-1792860811531",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "b08cdb35-f4fe-41cd-b06c-1c60ba1530f1"
+    },
+    {
+      "id": "http-batch",
+      "name": "Batch Get All Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values:batchGet?ranges=Leads!A1:Z&ranges=WhatsApp%20Leads!A1:Z&ranges=Instagram%20Leads!A1:Z&ranges=Appointments!A1:Z",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Batch Get All Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "g5Wnuw2iME02TjBV",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:53:33.942Z",
+      "updatedAt": "2026-10-24T16:53:33.942Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "bd5173d9-a1c1-4af5-95cf-9feda2cb1080",
+    "workflowId": "g5Wnuw2iME02TjBV",
+    "nodes": [
+      {
+        "id": "wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-batch-sheets-1792860811531",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "b08cdb35-f4fe-41cd-b06c-1c60ba1530f1"
+      },
+      {
+        "id": "http-batch",
+        "name": "Batch Get All Sheets",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          420,
+          300
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values:batchGet?ranges=Leads!A1:Z&ranges=WhatsApp%20Leads!A1:Z&ranges=Instagram%20Leads!A1:Z&ranges=Appointments!A1:Z",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "googleSheetsOAuth2Api",
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Batch Get All Sheets",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:53:33.950Z",
+    "updatedAt": "2026-10-24T16:53:33.950Z",
+    "workflowPublishHistory": [
+      {
+        "id": 89,
+        "workflowId": "g5Wnuw2iME02TjBV",
+        "versionId": "bd5173d9-a1c1-4af5-95cf-9feda2cb1080",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:53:34.526Z"
+      }
+    ]
+  }
+}

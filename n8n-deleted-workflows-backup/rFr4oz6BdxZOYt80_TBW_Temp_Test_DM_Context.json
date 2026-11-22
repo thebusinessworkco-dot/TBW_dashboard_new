@@ -1,0 +1,181 @@
+{
+  "id": "rFr4oz6BdxZOYt80",
+  "name": "TBW Temp Test DM Context",
+  "description": null,
+  "active": true,
+  "activeVersionId": "cc08c6e7-1bf1-4fa3-8551-4322c555b9fd",
+  "createdAt": "2026-10-23T14:55:45.270Z",
+  "updatedAt": "2026-10-23T14:55:45.270Z",
+  "isArchived": false,
+  "versionId": "cc08c6e7-1bf1-4fa3-8551-4322c555b9fd",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "probe-wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-dm-context-1792767344709",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "be91e673-f9b1-4446-9c4b-7b579043e0fb"
+    },
+    {
+      "id": "probe-http",
+      "name": "Probe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/instagram/dm-context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"customer_ig_sid\":\"1234567890\",\"reel_media_id\":\"test_media_123\"}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Probe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {},
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "rFr4oz6BdxZOYt80",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-23T14:55:45.275Z",
+      "updatedAt": "2026-10-23T14:55:45.275Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "cc08c6e7-1bf1-4fa3-8551-4322c555b9fd",
+    "workflowId": "rFr4oz6BdxZOYt80",
+    "nodes": [
+      {
+        "id": "probe-wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-dm-context-1792767344709",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "be91e673-f9b1-4446-9c4b-7b579043e0fb"
+      },
+      {
+        "id": "probe-http",
+        "name": "Probe",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          400,
+          300
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/dm-context",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\"customer_ig_sid\":\"1234567890\",\"reel_media_id\":\"test_media_123\"}",
+          "options": {
+            "timeout": 8000
+          }
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "xhQiNoV6sd96wDLZ",
+            "name": "TBW Dashboard API Auth"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Probe",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-23T14:55:45.277Z",
+    "updatedAt": "2026-10-23T14:55:45.277Z",
+    "workflowPublishHistory": [
+      {
+        "id": 51,
+        "workflowId": "rFr4oz6BdxZOYt80",
+        "versionId": "cc08c6e7-1bf1-4fa3-8551-4322c555b9fd",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-23T14:55:45.767Z"
+      }
+    ]
+  }
+}

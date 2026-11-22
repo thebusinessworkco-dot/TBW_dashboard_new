@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Plus,
   Trash2,
@@ -11,13 +12,28 @@ import {
   CheckCircle2,
   X,
   Receipt,
+  Eye,
+  Edit2,
+  Copy,
+  Calendar,
+  Building2,
+  Phone,
+  Sparkles,
+  ArrowRight,
+  TrendingUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { InstagramIcon as Instagram } from '@/components/ui/icons';
 import { TopNavbar } from '@/components/layout/top-navbar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { QuotationPreviewModal } from '@/components/quotations/quotation-preview-modal';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
 import {
   formatINR,
   formatDate,
+  getQuotationStatusBadge,
 } from '@/lib/utils';
 import { AdminQuotation, QuotationLineItem, QuotationStatus } from '@/lib/types/dashboard';
 import { generateQuotationPdf } from '@/lib/pdf-generator';
@@ -60,15 +76,24 @@ const SERVICE_PRESETS = [
   },
 ];
 
-export default function QuotationsPage() {
-  const { quotations, saveQuotation, updateQuotationStatus } = useDashboardStore();
+function QuotationsContent() {
+  const searchParams = useSearchParams();
+  const {
+    quotations,
+    saveQuotation,
+    updateQuotationStatus,
+    deleteQuotation,
+    duplicateQuotation,
+  } = useDashboardStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isCreating, setIsCreating] = useState(false);
   const [editingQuotation, setEditingQuotation] = useState<AdminQuotation | null>(null);
 
-  // Send Modals
+  // Modals
+  const [previewQuotation, setPreviewQuotation] = useState<AdminQuotation | null>(null);
+  const [deleteTargetQuotation, setDeleteTargetQuotation] = useState<AdminQuotation | null>(null);
   const [sendWhatsAppModal, setSendWhatsAppModal] = useState<AdminQuotation | null>(null);
   const [sendIgModal, setSendIgModal] = useState<AdminQuotation | null>(null);
   const [customPhone, setCustomPhone] = useState('');
@@ -76,57 +101,165 @@ export default function QuotationsPage() {
   const [sendSuccessNotice, setSendSuccessNotice] = useState<string | null>(null);
   const [isSendingApi, setIsSendingApi] = useState(false);
 
-  // New/Editing Quotation State
-  const [qNumber, setQNumber] = useState(`TBW-2026-${(100 + quotations.length + 1).toString().padStart(4, '0')}`);
+  // Form State
+  const [qNumber, setQNumber] = useState('');
   const [custName, setCustName] = useState('');
   const [bizName, setBizName] = useState('');
   const [phone, setPhone] = useState('');
   const [igUser, setIgUser] = useState('');
-  const [qDate, setQDate] = useState('2026-10-21');
-  const [validUntil, setValidUntil] = useState('2026-11-04');
-  const [items, setItems] = useState<QuotationLineItem[]>([
-    {
-      id: 'item-1',
-      service_category: SERVICE_PRESETS[0].category,
-      service_name: SERVICE_PRESETS[0].name,
-      description: SERVICE_PRESETS[0].description,
-      quantity: 1,
-      setup_charge: SERVICE_PRESETS[0].setup,
-      monthly_recurring_charge: SERVICE_PRESETS[0].monthly,
-    },
-  ]);
+  const [qDate, setQDate] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [items, setItems] = useState<QuotationLineItem[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [taxRate, setTaxRate] = useState(18);
   const [notes, setNotes] = useState('Includes setup on self-hosted n8n VPS and official Meta WhatsApp Cloud API.');
   const [terms, setTerms] = useState('50% advance before project commencement, 50% upon deployment handover. Official Meta API message fees billed directly by Meta.');
 
-  // Calculation helpers
-  const setupSubtotal = items.reduce((acc, item) => acc + (item.setup_charge * (item.quantity || 1)), 0);
-  const monthlySubtotal = items.reduce((acc, item) => acc + (item.monthly_recurring_charge * (item.quantity || 1)), 0);
-  const taxableSetup = Math.max(0, setupSubtotal - discountAmount);
-  const taxAmount = (taxableSetup * taxRate) / 100;
+  // Initialize or handle query params
+  useEffect(() => {
+    const isNew = searchParams?.get('new') === 'true';
+    const leadName = searchParams?.get('leadName');
+    const leadPhone = searchParams?.get('phone');
+    const business = searchParams?.get('business');
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 14);
+    const validUntilStr = expiry.toISOString().split('T')[0];
+
+    if (isNew || leadName) {
+      setIsCreating(true);
+      setEditingQuotation(null);
+      setQNumber(`TBW-2026-${(100 + quotations.length + 1).toString().padStart(4, '0')}`);
+      setCustName(leadName || '');
+      setBizName(business || '');
+      setPhone(leadPhone || '');
+      setQDate(todayStr);
+      setValidUntil(validUntilStr);
+      setItems([
+        {
+          id: `item-${Date.now()}`,
+          service_category: SERVICE_PRESETS[0].category,
+          service_name: SERVICE_PRESETS[0].name,
+          description: SERVICE_PRESETS[0].description,
+          quantity: 1,
+          setup_charge: SERVICE_PRESETS[0].setup,
+          monthly_recurring_charge: SERVICE_PRESETS[0].monthly,
+        },
+      ]);
+    }
+  }, [searchParams, quotations.length]);
+
+  // Pricing calculations
+  const setupSubtotal = useMemo(() => {
+    return items.reduce((acc, item) => acc + (Number(item.setup_charge) || 0) * (Number(item.quantity) || 1), 0);
+  }, [items]);
+
+  const monthlySubtotal = useMemo(() => {
+    return items.reduce((acc, item) => acc + (Number(item.monthly_recurring_charge) || 0) * (Number(item.quantity) || 1), 0);
+  }, [items]);
+
+  const taxableSetup = Math.max(0, setupSubtotal - Number(discountAmount));
+  const taxAmount = (taxableSetup * Number(taxRate)) / 100;
   const grandTotalSetup = taxableSetup + taxAmount;
 
-  const filteredQuotations = quotations.filter((q) => {
-    const matchesSearch =
-      q.quotation_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (q.business_name && q.business_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filtered quotations
+  const filteredQuotations = useMemo(() => {
+    return quotations.filter((q) => {
+      const qLower = searchQuery.toLowerCase().trim();
+      const numMatch = q.quotation_number.toLowerCase().includes(qLower);
+      const nameMatch = q.customer_name.toLowerCase().includes(qLower);
+      const bizMatch = q.business_name && q.business_name.toLowerCase().includes(qLower);
 
-    const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+      const matchesSearch = !qLower || numMatch || nameMatch || bizMatch;
+      const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [quotations, searchQuery, statusFilter]);
 
-  const handleAddItem = (presetIndex = 0) => {
+  // KPI calculations
+  const totalCount = quotations.length;
+  const acceptedQuotations = quotations.filter((q) => q.status === 'accepted');
+  const acceptedValue = acceptedQuotations.reduce((acc, q) => {
+    const totalSetup = (q.items || []).reduce((s, it) => s + (it.setup_charge || 0) * (it.quantity || 1), 0);
+    return acc + totalSetup;
+  }, 0);
+  const totalPipelineValue = quotations.reduce((acc, q) => {
+    const totalSetup = (q.items || []).reduce((s, it) => s + (it.setup_charge || 0) * (it.quantity || 1), 0);
+    return acc + totalSetup;
+  }, 0);
+  const pendingCount = quotations.filter((q) => q.status === 'draft' || q.status === 'sent').length;
+
+  const handleStartNew = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 14);
+    const validUntilStr = expiry.toISOString().split('T')[0];
+
+    setEditingQuotation(null);
+    setQNumber(`TBW-2026-${(100 + quotations.length + 1).toString().padStart(4, '0')}`);
+    setCustName('');
+    setBizName('');
+    setPhone('');
+    setIgUser('');
+    setQDate(todayStr);
+    setValidUntil(validUntilStr);
+    setDiscountAmount(0);
+    setTaxRate(18);
+    setItems([
+      {
+        id: `item-${Date.now()}`,
+        service_category: SERVICE_PRESETS[0].category,
+        service_name: SERVICE_PRESETS[0].name,
+        description: SERVICE_PRESETS[0].description,
+        quantity: 1,
+        setup_charge: SERVICE_PRESETS[0].setup,
+        monthly_recurring_charge: SERVICE_PRESETS[0].monthly,
+      },
+    ]);
+    setIsCreating(true);
+  };
+
+  const handleStartEdit = (quotation: AdminQuotation) => {
+    setEditingQuotation(quotation);
+    setQNumber(quotation.quotation_number);
+    setCustName(quotation.customer_name);
+    setBizName(quotation.business_name || '');
+    setPhone(quotation.phone || '');
+    setIgUser(quotation.instagram_username || '');
+    setQDate(quotation.quotation_date);
+    setValidUntil(quotation.valid_until);
+    setItems(quotation.items || []);
+    setDiscountAmount(quotation.discount_amount || 0);
+    setTaxRate(quotation.tax_rate ?? 18);
+    setNotes(quotation.notes || '');
+    setTerms(quotation.terms_and_conditions || '');
+    setIsCreating(true);
+  };
+
+  const handleAddItemFromPreset = (presetIndex = 0) => {
     const preset = SERVICE_PRESETS[presetIndex];
     const newItem: QuotationLineItem = {
-      id: `item-${Date.now()}`,
+      id: `item-${Date.now()}-${items.length}`,
       service_category: preset.category,
       service_name: preset.name,
       description: preset.description,
       quantity: 1,
       setup_charge: preset.setup,
       monthly_recurring_charge: preset.monthly,
+    };
+    setItems((prev) => [...prev, newItem]);
+  };
+
+  const handleAddCustomItem = () => {
+    const newItem: QuotationLineItem = {
+      id: `item-${Date.now()}-${items.length}`,
+      service_category: 'Custom Automation Solutions',
+      service_name: 'Custom Tailored Automation Architecture',
+      description: 'Bespoke automation workflow designed around specific business operational requirements.',
+      quantity: 1,
+      setup_charge: 25000,
+      monthly_recurring_charge: 2000,
     };
     setItems((prev) => [...prev, newItem]);
   };
@@ -151,7 +284,7 @@ export default function QuotationsPage() {
     );
   };
 
-  const handleSaveQuotation = (status: QuotationStatus = 'draft') => {
+  const handleSaveQuotation = async (status: QuotationStatus = 'draft') => {
     if (!custName.trim()) {
       alert('Please enter client customer name');
       return;
@@ -177,14 +310,36 @@ export default function QuotationsPage() {
       updated_at: new Date().toISOString(),
     };
 
-    saveQuotation(newQuotation);
+    await saveQuotation(newQuotation);
     setIsCreating(false);
     setEditingQuotation(null);
+    setSendSuccessNotice(`Quotation ${newQuotation.quotation_number} saved successfully`);
+    setTimeout(() => setSendSuccessNotice(null), 3000);
+  };
+
+  const handleDuplicate = async (quotation: AdminQuotation) => {
+    const res = await duplicateQuotation(quotation.id);
+    if (res.success) {
+      setSendSuccessNotice(`Quotation duplicated as new draft.`);
+      setTimeout(() => setSendSuccessNotice(null), 3000);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetQuotation) return;
+    await deleteQuotation(deleteTargetQuotation.id);
+    setDeleteTargetQuotation(null);
+    setSendSuccessNotice('Quotation deleted successfully');
+    setTimeout(() => setSendSuccessNotice(null), 3000);
   };
 
   const handleDownloadPdf = (quotation: AdminQuotation) => {
-    const pdf = generateQuotationPdf(quotation);
-    pdf.save(`Quotation_${quotation.quotation_number}_TheBusinessWork.pdf`);
+    try {
+      const pdf = generateQuotationPdf(quotation);
+      pdf.save(`Quotation_${quotation.quotation_number}_TheBusinessWork.pdf`);
+    } catch (err) {
+      console.error('PDF error:', err);
+    }
   };
 
   const handleSendViaWhatsApp = async () => {
@@ -193,7 +348,6 @@ export default function QuotationsPage() {
 
     const recipient = customPhone || sendWhatsAppModal.phone || '+91 98201 12345';
 
-    // Call official WhatsApp Cloud API route
     try {
       await fetch('/api/whatsapp/send', {
         method: 'POST',
@@ -213,8 +367,8 @@ export default function QuotationsPage() {
     updateQuotationStatus(sendWhatsAppModal.id, 'sent', 'whatsapp');
     setIsSendingApi(false);
     setSendWhatsAppModal(null);
-    setSendSuccessNotice(`Quotation ${sendWhatsAppModal.quotation_number} sent successfully to ${recipient} via Official WhatsApp Cloud API.`);
-    setTimeout(() => setSendSuccessNotice(null), 5000);
+    setSendSuccessNotice(`Quotation ${sendWhatsAppModal.quotation_number} sent to ${recipient} via WhatsApp.`);
+    setTimeout(() => setSendSuccessNotice(null), 4000);
   };
 
   const handleSendViaInstagram = async () => {
@@ -223,7 +377,6 @@ export default function QuotationsPage() {
 
     const recipient = customIgUser || sendIgModal.instagram_username || 'client_account';
 
-    // Call official Instagram Graph API route
     try {
       await fetch('/api/instagram/send', {
         method: 'POST',
@@ -242,315 +395,316 @@ export default function QuotationsPage() {
     updateQuotationStatus(sendIgModal.id, 'sent', 'instagram');
     setIsSendingApi(false);
     setSendIgModal(null);
-    setSendSuccessNotice(`Quotation link for ${sendIgModal.quotation_number} sent to @${recipient} via Instagram Direct.`);
-    setTimeout(() => setSendSuccessNotice(null), 5000);
+    setSendSuccessNotice(`Quotation link for ${sendIgModal.quotation_number} sent to @${recipient} via Instagram.`);
+    setTimeout(() => setSendSuccessNotice(null), 4000);
   };
 
   return (
-    <div className="min-h-full pb-16">
+    <div className="min-h-full pb-16 bg-[#F4F2EC]">
       <TopNavbar
-        title="Quotation Builder (INR ₹)"
-        subtitle="Generate premium branded PDFs for The Business Work services and dispatch to WhatsApp or Instagram."
+        title="Quotation Studio"
+        subtitle="Create, customize, preview, and dispatch official TBW pricing proposals."
       />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Success feedback alert */}
         {sendSuccessNotice && (
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 shadow-xs">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-2xl flex items-center gap-2 shadow-2xs">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
             <span>{sendSuccessNotice}</span>
           </div>
         )}
 
-        {/* Builder View or Table View */}
+        {/* KPI Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Total Quotations</span>
+            <div className="text-xl font-bold font-mono text-[#202B35] mt-1">{totalCount}</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Total Proposed Value</span>
+            <div className="text-lg font-bold font-mono text-[#202B35] mt-1 truncate" title={formatINR(totalPipelineValue)}>
+              {formatINR(totalPipelineValue)}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Accepted Value</span>
+            </div>
+            <div className="text-lg font-bold font-mono text-emerald-700 mt-1 truncate" title={formatINR(acceptedValue)}>
+              {formatINR(acceptedValue)}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Pending Proposals</span>
+            <div className="text-xl font-bold font-mono text-amber-700 mt-1">{pendingCount}</div>
+          </div>
+        </div>
+
+        {/* CREATE / EDIT QUOTATION WORKSPACE */}
         {isCreating ? (
-          /* INTERACTIVE QUOTATION BUILDER */
-          <div className="space-y-6">
-            {/* Top action bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-stone-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="rounded-2xl border border-[#DDD9D0] bg-white p-6 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
-                <h2 className="text-base font-bold text-stone-900">
-                  {editingQuotation ? `Edit Quotation ${qNumber}` : 'Create New Quotation'}
-                </h2>
+                <h3 className="text-base font-bold text-[#202B35]">
+                  {editingQuotation ? `Edit Quotation: ${editingQuotation.quotation_number}` : 'Create New Service Quotation'}
+                </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  All prices and terms are completely customizable in Indian Rupees (₹).
+                  Configure client coordinates, service deliverables, setup fees, and recurring maintenance
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setIsCreating(false)}
-                  className="rounded-xl border border-stone-200 px-3.5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition-colors"
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setEditingQuotation(null);
+                  }}
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => handleSaveQuotation('draft')}
-                  className="rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-semibold text-stone-900 hover:bg-stone-50 transition-colors shadow-2xs"
                 >
                   Save as Draft
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
                   onClick={() => handleSaveQuotation('sent')}
-                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-all shadow-sm shadow-stone-950/10 active:scale-[0.98] cursor-pointer"
                 >
                   Save & Finalize
-                </button>
+                </Button>
               </div>
             </div>
 
-            {/* Form & Calculations Grid */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Left 2 Cols: Form */}
-              <div className="space-y-6 lg:col-span-2">
-                {/* Client & Metadata Card */}
-                <div className="rounded-2xl border border-stone-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4 text-xs">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600 border-b border-stone-100 pb-2">
-                    Client & Quotation Details
-                  </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left 2 Cols: Form Fields */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Client & Metadata Box */}
+                <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                    Client & Proposal Details
+                  </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
-                        Client Customer Name *
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                        Client / Customer Name *
                       </label>
                       <input
                         type="text"
                         required
                         value={custName}
                         onChange={(e) => setCustName(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                        placeholder="e.g. Sunita Sharma"
+                        placeholder="e.g. Rajesh Singhal"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
-                        Business / Organization Name
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                        Business / Company Name
                       </label>
                       <input
                         type="text"
                         value={bizName}
                         onChange={(e) => setBizName(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                        placeholder="e.g. Artisan Living Decor"
+                        placeholder="e.g. Singhal Logistics"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
                         Phone (WhatsApp)
                       </label>
                       <input
                         type="text"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 font-mono text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                        placeholder="+91 98200 00000"
+                        placeholder="+91 98765 43210"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
-                        Instagram Username
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                        Instagram Handle
                       </label>
                       <input
                         type="text"
                         value={igUser}
-                        onChange={(e) => setIgUser(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                        placeholder="e.g. artisan_living"
+                        onChange={(e) => setIgUser(e.target.value.replace(/^@/, ''))}
+                        placeholder="username"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
                         Quotation Number
                       </label>
                       <input
                         type="text"
                         value={qNumber}
                         onChange={(e) => setQNumber(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 font-mono text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
-                        Quotation Date
-                      </label>
-                      <input
-                        type="date"
-                        value={qDate}
-                        onChange={(e) => setQDate(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
-                        Valid Until
+                      <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                        Valid Until (Expiry)
                       </label>
                       <input
                         type="date"
                         value={validUntil}
                         onChange={(e) => setValidUntil(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono cursor-pointer"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Service Line Items */}
-                <div className="rounded-2xl border border-stone-200/80 bg-white p-5 lg:p-6 shadow-xs space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                        Service Line Items
-                      </h3>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-700">
-                        {items.length}
-                      </span>
-                    </div>
+                {/* Line Items Editor */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                      Deliverable Line Items ({items.length})
+                    </h4>
 
-                    {/* Quick Add Preset dropdown */}
                     <div className="flex items-center gap-2">
                       <select
                         onChange={(e) => {
-                          if (e.target.value !== '') {
-                            handleAddItem(Number(e.target.value));
-                            e.target.value = '';
-                          }
+                          const idx = parseInt(e.target.value, 10);
+                          if (!isNaN(idx)) handleAddItemFromPreset(idx);
                         }}
-                        className="rounded-xl border border-stone-200 bg-stone-50/70 px-3 py-1.5 text-xs text-stone-800 focus:border-stone-900 focus:bg-white focus:outline-none transition-all cursor-pointer"
                         defaultValue=""
+                        className="text-xs rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 text-stone-700 cursor-pointer"
                       >
-                        <option value="" disabled>
-                          + Add Service Preset...
-                        </option>
+                        <option value="" disabled>+ Add from Presets</option>
                         {SERVICE_PRESETS.map((p, idx) => (
-                          <option key={p.name} value={idx}>
-                            {p.category}: {p.name}
+                          <option key={idx} value={idx}>
+                            {p.name.slice(0, 32)}...
                           </option>
                         ))}
                       </select>
 
-                      <button
+                      <Button
                         type="button"
-                        onClick={() => handleAddItem(0)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition-colors shadow-2xs"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddCustomItem}
+                        leftIcon={<Plus className="h-3.5 w-3.5" />}
                       >
-                        <Plus className="h-3.5 w-3.5 text-stone-500" />
-                        <span>Custom Item</span>
-                      </button>
+                        Add Custom
+                      </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    {items.map((item, idx) => (
+                  <div className="space-y-3">
+                    {items.map((item, index) => (
                       <div
-                        key={item.id}
-                        className="rounded-xl border border-stone-200/90 bg-stone-50/50 p-4 lg:p-5 space-y-3.5 text-xs transition-all hover:border-stone-300"
+                        key={item.id || index}
+                        className="p-4 rounded-xl border border-stone-200 bg-stone-50/60 space-y-3 text-xs"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-semibold text-stone-600">
-                            #{idx + 1} · {item.service_category}
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-[10px] uppercase font-bold text-stone-600 bg-stone-200/80 px-2 py-0.5 rounded-md">
+                            Item #{index + 1}
                           </span>
                           {items.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveItem(item.id)}
-                              className="rounded-lg p-1 text-stone-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                              title="Remove item"
+                              className="text-stone-400 hover:text-rose-600 transition-colors p-1"
+                              title="Delete Item"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <div>
-                            <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                              Service / Solution Name
+                            <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
+                              Service / Solution Title
                             </label>
                             <input
                               type="text"
                               value={item.service_name}
                               onChange={(e) => handleUpdateItem(item.id, 'service_name', e.target.value)}
-                              className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs font-medium text-stone-900 focus:border-stone-900 focus:outline-none transition-all"
+                              className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                            <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
                               Category
                             </label>
-                            <select
+                            <input
+                              type="text"
                               value={item.service_category}
                               onChange={(e) => handleUpdateItem(item.id, 'service_category', e.target.value)}
-                              className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none transition-all cursor-pointer"
-                            >
-                              {SERVICE_PRESETS.map((p) => (
-                                <option key={p.category} value={p.category}>
-                                  {p.category}
-                                </option>
-                              ))}
-                            </select>
+                              className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none"
+                            />
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                            Scope & Description
+                          <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
+                            Description / Scope of Work
                           </label>
                           <textarea
                             rows={2}
                             value={item.description}
                             onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
-                            className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none transition-all"
+                            className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none"
                           />
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-2.5">
                           <div>
-                            <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                              Qty
+                            <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
+                              Quantity
                             </label>
                             <input
                               type="number"
                               min={1}
-                              value={item.quantity}
-                              onChange={(e) => handleUpdateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                              className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 focus:outline-none transition-all"
+                              value={item.quantity || 1}
+                              onChange={(e) => handleUpdateItem(item.id, 'quantity', parseInt(e.target.value, 10) || 1)}
+                              className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                              Setup Charge (INR ₹)
+                            <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
+                              Setup Charge (INR)
                             </label>
                             <input
                               type="number"
                               value={item.setup_charge}
                               onChange={(e) => handleUpdateItem(item.id, 'setup_charge', parseFloat(e.target.value) || 0)}
-                              className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 focus:outline-none transition-all"
+                              className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                              Monthly Retainer (₹/mo)
+                            <label className="block text-[10px] uppercase font-semibold text-stone-600 mb-1">
+                              Monthly Recurring (INR)
                             </label>
                             <input
                               type="number"
                               value={item.monthly_recurring_charge}
                               onChange={(e) => handleUpdateItem(item.id, 'monthly_recurring_charge', parseFloat(e.target.value) || 0)}
-                              className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 focus:outline-none transition-all"
+                              className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs text-stone-900 focus:border-[#202B35] focus:outline-none font-mono"
                             />
                           </div>
                         </div>
@@ -559,256 +713,270 @@ export default function QuotationsPage() {
                   </div>
                 </div>
 
-                {/* Notes & Terms */}
-                <div className="rounded-2xl border border-stone-200/80 bg-white p-5 lg:p-6 shadow-xs space-y-4 text-xs">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 border-b border-stone-100 pb-2">
-                    Notes & Terms
-                  </h3>
+                {/* Scope Notes & Terms */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                      Scope Notes & Deliverable Details
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:bg-white focus:outline-none"
+                    />
+                  </div>
 
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1.5">
-                        Technical Notes (Appears on PDF)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-3 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1.5">
-                        Terms & Conditions
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={terms}
-                        onChange={(e) => setTerms(e.target.value)}
-                        className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-3 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                      Payment Terms & Handover Conditions
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={terms}
+                      onChange={(e) => setTerms(e.target.value)}
+                      className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 focus:border-[#202B35] focus:bg-white focus:outline-none"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Right Col: Live Pricing Breakdown */}
-              <div className="space-y-6">
-                <div className="sticky top-20 rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xs space-y-5">
-                  <div className="border-b border-stone-100 pb-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-stone-900">
-                        Investment Summary
-                      </h3>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 font-mono">
-                        INR (₹)
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Calculated automatically from your deliverables.
-                    </p>
-                  </div>
+              {/* Right Column: Live Calculation Summary Card */}
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-[#DDD9D0] bg-stone-50/80 p-5 space-y-4 sticky top-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-700 border-b border-stone-200 pb-2">
+                    Pricing & Tax Breakdown
+                  </h4>
 
-                  <div className="space-y-3.5 text-xs text-stone-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-stone-600">One-Time Setup Subtotal:</span>
-                      <strong className="text-stone-900 font-mono text-sm font-semibold">
-                        {formatINR(setupSubtotal)}
-                      </strong>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Setup Subtotal ({items.length} items):</span>
+                      <span className="font-mono font-semibold text-stone-900">{formatINR(setupSubtotal)}</span>
                     </div>
 
-                    {/* Discount Input */}
-                    <div className="flex items-center justify-between gap-3 pt-1">
-                      <span className="text-stone-600">Discount (INR ₹):</span>
-                      <div className="w-28">
-                        <input
-                          type="number"
-                          value={discountAmount}
-                          onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
-                          className="w-full rounded-xl border border-stone-200 bg-stone-50/70 p-1.5 text-right font-mono text-xs text-rose-600 font-semibold focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                        />
+                    <div>
+                      <div className="flex justify-between text-stone-600 mb-1">
+                        <span>Discount (INR):</span>
+                        <span className="font-mono text-emerald-700">- {formatINR(discountAmount)}</span>
                       </div>
+                      <input
+                        type="number"
+                        value={discountAmount}
+                        onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs font-mono text-stone-900 focus:border-[#202B35] focus:outline-none"
+                      />
                     </div>
 
-                    {/* Tax Rate */}
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-stone-600">Applicable GST (%):</span>
-                      <div className="w-28">
-                        <select
-                          value={taxRate}
-                          onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
-                          className="w-full rounded-xl border border-stone-200 bg-stone-50/70 p-1.5 text-right text-xs text-stone-800 focus:border-stone-900 focus:bg-white focus:outline-none transition-all cursor-pointer"
-                        >
-                          <option value={0}>0% (Exempt)</option>
-                          <option value={18}>18% (Standard GST)</option>
-                        </select>
-                      </div>
+                    <div className="pt-2 border-t border-stone-200/60 flex justify-between text-stone-600">
+                      <span>Taxable Setup Value:</span>
+                      <span className="font-mono font-semibold text-stone-900">{formatINR(taxableSetup)}</span>
                     </div>
 
-                    {taxRate > 0 && (
-                      <div className="flex items-center justify-between text-[11px] text-stone-500">
-                        <span>GST Amount:</span>
-                        <span className="font-mono">{formatINR(taxAmount)}</span>
+                    <div>
+                      <div className="flex justify-between text-stone-600 mb-1">
+                        <span>GST Tax Rate (%):</span>
+                        <span className="font-mono font-semibold text-stone-900">{taxRate}%</span>
                       </div>
-                    )}
+                      <select
+                        value={taxRate}
+                        onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                        className="w-full rounded-xl border border-stone-200 bg-white p-2 text-xs font-mono text-stone-900 focus:border-[#202B35] focus:outline-none"
+                      >
+                        <option value={18}>18% GST (Standard Services)</option>
+                        <option value={0}>0% Tax (Exempt / Export)</option>
+                        <option value={12}>12% GST</option>
+                      </select>
+                    </div>
 
-                    {/* Grand Total Highlight */}
-                    <div className="rounded-xl bg-stone-900 p-4.5 text-white space-y-1.5 shadow-xs">
-                      <div className="text-[11px] font-medium uppercase tracking-wider text-stone-300">
-                        Total One-Time Charges:
-                      </div>
-                      <div className="text-2xl font-bold tracking-tight font-mono">
-                        {formatINR(grandTotalSetup)}
-                      </div>
+                    <div className="flex justify-between text-stone-600">
+                      <span>GST Amount:</span>
+                      <span className="font-mono font-semibold text-stone-900">{formatINR(taxAmount)}</span>
+                    </div>
+
+                    <div className="pt-3 border-t border-stone-200 flex justify-between text-sm font-bold text-[#202B35]">
+                      <span>Grand Total Setup:</span>
+                      <span className="font-mono">{formatINR(grandTotalSetup)}</span>
                     </div>
 
                     {monthlySubtotal > 0 && (
-                      <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-4 text-emerald-950 shadow-2xs">
-                        <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
-                          Monthly Retainer (SLA / Maintenance):
-                        </div>
-                        <div className="text-base font-bold text-emerald-700 font-mono mt-0.5">
-                          {formatINR(monthlySubtotal)} / month
-                        </div>
+                      <div className="p-3 rounded-xl bg-white border border-stone-200/80 flex justify-between text-xs font-bold text-stone-800 mt-3 shadow-2xs">
+                        <span>Monthly Recurring:</span>
+                        <span className="font-mono text-emerald-700">{formatINR(monthlySubtotal)}/mo</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="pt-4 border-t border-stone-100 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSaveQuotation('draft')}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-900 py-3 text-xs font-medium text-white hover:bg-stone-800 active:scale-[0.99] transition-all shadow-xs cursor-pointer"
+                  <div className="pt-2 space-y-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => handleSaveQuotation('sent')}
                     >
-                      <Receipt className="h-4 w-4" />
-                      <span>Save & Generate PDF</span>
-                    </button>
+                      Save & Complete Quotation
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        const previewObj: AdminQuotation = {
+                          id: editingQuotation ? editingQuotation.id : 'preview-temp',
+                          quotation_number: qNumber,
+                          customer_name: custName.trim() || 'Valued Client',
+                          business_name: bizName.trim() || undefined,
+                          phone: phone.trim() || undefined,
+                          instagram_username: igUser.trim() || undefined,
+                          quotation_date: qDate,
+                          valid_until: validUntil,
+                          items,
+                          discount_amount: Number(discountAmount) || 0,
+                          tax_rate: Number(taxRate) || 0,
+                          notes,
+                          terms_and_conditions: terms,
+                          status: 'draft',
+                          created_at: new Date().toISOString(),
+                          updated_at: new Date().toISOString(),
+                        };
+                        setPreviewQuotation(previewObj);
+                      }}
+                      leftIcon={<Eye className="h-3.5 w-3.5" />}
+                    >
+                      Preview Invoice PDF
+                    </Button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          /* QUOTATIONS LIST TABLE */
+          /* QUOTATION LISTING & DASHBOARD TABLE */
           <div className="space-y-4">
-            {/* Top Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-2xl border border-stone-200/80 bg-white p-4 shadow-xs">
-              <div className="relative flex-1 max-w-md">
-                <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  placeholder="Search quotations by client name, business, or number..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-stone-200 bg-stone-50/70 py-2 pl-9.5 pr-4 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                />
-              </div>
+            <div className="rounded-2xl border border-[#DDD9D0] bg-white p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="pointer-events-none absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by quotation number, client name, business..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-[#DDD9D0] bg-stone-50/60 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#202B35] focus:bg-white focus:outline-none transition-all"
+                  />
+                </div>
 
-              <div className="flex items-center gap-2.5">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="rounded-xl border border-stone-200 bg-stone-50/70 px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:bg-white focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="all">All Quotations</option>
-                  <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="expired">Expired</option>
-                </select>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-stone-500 font-medium">Status:</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="rounded-xl border border-[#DDD9D0] bg-stone-50/60 px-3 py-1.5 text-xs font-medium text-stone-800 focus:border-[#202B35] focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="all">All Statuses ({quotations.length})</option>
+                      <option value="draft">Draft</option>
+                      <option value="sent">Sent</option>
+                      <option value="accepted">Accepted</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="expired">Expired</option>
+                    </select>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingQuotation(null);
-                    setCustName('');
-                    setBizName('');
-                    setPhone('');
-                    setIgUser('');
-                    setIsCreating(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-medium text-white hover:bg-stone-800 shadow-xs cursor-pointer active:scale-[0.99] transition-all"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Create Quotation</span>
-                </button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleStartNew}
+                    leftIcon={<Plus className="h-4 w-4" />}
+                  >
+                    New Quotation
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {/* Quotations List */}
-            <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-xs">
+            {/* Quotations Table */}
+            <div className="overflow-hidden rounded-2xl border border-[#DDD9D0] bg-white shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-stone-200/80 bg-stone-50/80 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                      <th className="py-3 px-4">Quotation #</th>
-                      <th className="py-3 px-4">Client</th>
-                      <th className="py-3 px-4">Deliverables</th>
-                      <th className="py-3 px-4">Total Amount (₹)</th>
-                      <th className="py-3 px-4">Status</th>
+                    <tr className="border-b border-stone-200/70 bg-stone-50 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                      <th className="py-3 px-4">Quotation No</th>
+                      <th className="py-3 px-4">Customer & Business</th>
+                      <th className="py-3 px-4">Issue Date</th>
                       <th className="py-3 px-4">Valid Until</th>
+                      <th className="py-3 px-4">Items</th>
+                      <th className="py-3 px-4">Setup Total (INR)</th>
+                      <th className="py-3 px-4">Monthly Recurring</th>
+                      <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100 text-xs">
                     {filteredQuotations.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-14 text-center text-xs text-stone-500">
-                          <Receipt className="mx-auto h-8 w-8 text-stone-300 mb-2 stroke-1" />
-                          <p className="font-medium text-stone-600">No quotations found</p>
-                          <p className="text-[11px] text-stone-400 mt-0.5">Click &quot;Create Quotation&quot; to start drafting deliverables.</p>
+                        <td colSpan={9} className="py-16 text-center text-xs text-stone-500">
+                          <Receipt className="h-8 w-8 mx-auto text-stone-300 mb-2" />
+                          <p className="font-medium text-stone-700">No quotations found</p>
+                          <p className="text-[11px] text-stone-400 mt-0.5">
+                            Click &quot;New Quotation&quot; above to draft a commercial proposal.
+                          </p>
                         </td>
                       </tr>
                     ) : (
-                      filteredQuotations.map((q) => {
-                        const sub = q.items.reduce((s, it) => s + (it.setup_charge * (it.quantity || 1)), 0);
-                        const disc = q.discount_amount || 0;
-                        const tax = ((sub - disc) * (q.tax_rate || 0)) / 100;
-                        const grandTotal = Math.max(0, sub - disc) + tax;
+                      filteredQuotations.map((quotation) => {
+                        const statusBadge = getQuotationStatusBadge(quotation.status);
+                        const qItems = quotation.items || [];
+                        const qSetupTotal = qItems.reduce((acc, it) => acc + (it.setup_charge || 0) * (it.quantity || 1), 0);
+                        const qTaxable = Math.max(0, qSetupTotal - (quotation.discount_amount || 0));
+                        const qTax = (qTaxable * (quotation.tax_rate ?? 18)) / 100;
+                        const grandSetup = qTaxable + qTax;
+                        const grandMonthly = qItems.reduce((acc, it) => acc + (it.monthly_recurring_charge || 0) * (it.quantity || 1), 0);
 
                         return (
-                          <tr key={q.id} className="hover:bg-stone-50/50 transition-colors">
-                            <td className="py-3.5 px-4 font-mono font-semibold text-stone-900">
-                              {q.quotation_number}
+                          <tr key={quotation.id} className="hover:bg-stone-50/70 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-stone-900 whitespace-nowrap">
+                              {quotation.quotation_number}
                             </td>
 
                             <td className="py-3.5 px-4">
-                              <div className="font-semibold text-stone-900">
-                                {q.customer_name}
-                              </div>
-                              <div className="text-[11px] text-stone-500">
-                                {q.business_name || q.phone || `@${q.instagram_username}`}
-                              </div>
-                            </td>
-
-                            <td className="py-3.5 px-4">
-                              <div className="line-clamp-1 font-medium text-stone-800">
-                                {q.items.map((i) => i.service_name).join(', ')}
-                              </div>
-                              <div className="text-[10px] text-stone-400">
-                                {q.items.length} service line item(s)
+                              <div className="font-bold text-stone-900">{quotation.customer_name}</div>
+                              <div className="text-[11px] text-stone-500 flex items-center gap-1.5 mt-0.5">
+                                {quotation.business_name && (
+                                  <span className="font-medium text-stone-700">{quotation.business_name}</span>
+                                )}
+                                {quotation.phone && (
+                                  <span className="font-mono text-stone-400">· {quotation.phone}</span>
+                                )}
                               </div>
                             </td>
 
+                            <td className="py-3.5 px-4 font-medium text-stone-700 whitespace-nowrap">
+                              {formatDate(quotation.quotation_date)}
+                            </td>
+
+                            <td className="py-3.5 px-4 font-medium text-stone-500 whitespace-nowrap">
+                              {formatDate(quotation.valid_until)}
+                            </td>
+
                             <td className="py-3.5 px-4">
-                              <div className="font-semibold text-stone-900 font-mono">
-                                {formatINR(grandTotal)}
-                              </div>
-                              {q.sent_via && (
-                                <div className="text-[10px] font-medium text-emerald-700 capitalize">
-                                  via {q.sent_via}
-                                </div>
-                              )}
+                              <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 font-mono text-[10px]">
+                                {qItems.length} items
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4 font-mono font-bold text-stone-900 whitespace-nowrap">
+                              {formatINR(grandSetup)}
+                            </td>
+
+                            <td className="py-3.5 px-4 font-mono font-bold text-emerald-700 whitespace-nowrap">
+                              {grandMonthly > 0 ? `${formatINR(grandMonthly)}/mo` : '—'}
                             </td>
 
                             <td className="py-3.5 px-4">
                               <select
-                                value={q.status}
-                                onChange={(e) => updateQuotationStatus(q.id, e.target.value as QuotationStatus)}
-                                className="rounded-lg border border-stone-200 bg-stone-50/70 px-2.5 py-1 text-xs font-semibold capitalize text-stone-800 focus:outline-none cursor-pointer"
+                                value={quotation.status}
+                                onChange={(e) => updateQuotationStatus(quotation.id, e.target.value as QuotationStatus)}
+                                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} focus:outline-none cursor-pointer transition-all`}
                               >
                                 <option value="draft">Draft</option>
                                 <option value="sent">Sent</option>
@@ -818,48 +986,57 @@ export default function QuotationsPage() {
                               </select>
                             </td>
 
-                            <td className="py-3.5 px-4 text-stone-500 font-mono text-[11px]">
-                              {formatDate(q.valid_until)}
-                            </td>
-
-                            <td className="py-3.5 px-4 text-right">
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
-                                {/* Download PDF */}
                                 <button
-                                  type="button"
-                                  onClick={() => handleDownloadPdf(q)}
-                                  className="rounded-lg border border-stone-200 bg-white p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors shadow-2xs"
-                                  title="Download Official PDF"
+                                  onClick={() => setPreviewQuotation(quotation)}
+                                  title="Preview Quotation"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors cursor-pointer"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => handleDownloadPdf(quotation)}
+                                  title="Download PDF"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors cursor-pointer"
                                 >
                                   <Download className="h-3.5 w-3.5" />
                                 </button>
 
-                                {/* Send to WhatsApp */}
                                 <button
-                                  type="button"
                                   onClick={() => {
-                                    setSendWhatsAppModal(q);
-                                    setCustomPhone(q.phone || '');
+                                    setSendWhatsAppModal(quotation);
+                                    setCustomPhone(quotation.phone || '');
                                   }}
-                                  className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-2.5 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 transition-colors flex items-center gap-1 shadow-2xs"
-                                  title="Send through Official WhatsApp Cloud API"
+                                  title="Send via WhatsApp"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
                                 >
-                                  <MessageSquare className="h-3 w-3 text-emerald-600" />
-                                  <span>Send WA</span>
+                                  <MessageSquare className="h-3.5 w-3.5" />
                                 </button>
 
-                                {/* Send to Instagram */}
                                 <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSendIgModal(q);
-                                    setCustomIgUser(q.instagram_username || '');
-                                  }}
-                                  className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-2.5 py-1 text-[11px] font-medium text-rose-800 hover:bg-rose-100 transition-colors flex items-center gap-1 shadow-2xs"
-                                  title="Send link through Instagram API"
+                                  onClick={() => handleStartEdit(quotation)}
+                                  title="Edit Quotation"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors cursor-pointer"
                                 >
-                                  <Instagram className="h-3 w-3 text-rose-600" />
-                                  <span>Send IG</span>
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => handleDuplicate(quotation)}
+                                  title="Duplicate Quotation"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors cursor-pointer"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => setDeleteTargetQuotation(quotation)}
+                                  title="Delete Quotation"
+                                  className="rounded-lg border border-stone-200 p-1.5 text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             </td>
@@ -875,157 +1052,101 @@ export default function QuotationsPage() {
         )}
       </div>
 
-      {/* MODAL 1: SEND TO WHATSAPP */}
+      {/* QUOTATION PREVIEW MODAL */}
+      <QuotationPreviewModal
+        quotation={previewQuotation}
+        isOpen={!!previewQuotation}
+        onClose={() => setPreviewQuotation(null)}
+        onSendWhatsApp={(q) => {
+          setSendWhatsAppModal(q);
+          setCustomPhone(q.phone || '');
+        }}
+      />
+
+      {/* WHATSAPP SEND MODAL */}
       {sendWhatsAppModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xl space-y-4">
+          <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <MessageSquare className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-stone-900">
-                    Send Quotation via WhatsApp
-                  </h3>
-                  <p className="text-[11px] text-stone-500">Official WhatsApp Cloud API</p>
-                </div>
+                <MessageSquare className="h-4 w-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-stone-900">
+                  Send Quotation via WhatsApp Cloud API
+                </h3>
               </div>
               <button
                 onClick={() => setSendWhatsAppModal(null)}
-                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 text-stone-700 cursor-pointer"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
+            <div className="space-y-3 text-xs">
+              <p className="text-stone-600">
+                Dispatches quotation <strong>{sendWhatsAppModal.quotation_number}</strong> to client directly via official Meta WhatsApp Cloud API.
+              </p>
+
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1.5">
-                  Recipient Phone (WhatsApp Number)
+                <label className="block text-[11px] font-semibold uppercase text-stone-600 mb-1">
+                  Recipient Phone Number
                 </label>
                 <input
                   type="text"
-                  required
                   value={customPhone}
                   onChange={(e) => setCustomPhone(e.target.value)}
-                  className="w-full rounded-xl border border-stone-200 bg-stone-50/70 p-2.5 font-mono text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                  placeholder="+91 98200 00000"
+                  placeholder="+91 98765 43210"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 text-xs text-stone-900 font-mono focus:border-stone-900 focus:bg-white focus:outline-none"
                 />
               </div>
 
-              {/* Message Preview */}
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-4 space-y-2 text-stone-900">
-                <div className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
-                  Approved WhatsApp Cloud Message Preview:
-                </div>
-                <p className="font-mono text-[11px] whitespace-pre-wrap leading-relaxed text-stone-800">
-                  {`Hello ${sendWhatsAppModal.customer_name},\n\nHere is your requested service quotation *${sendWhatsAppModal.quotation_number}* from The Business Work.\n\nDeliverables:\n${sendWhatsAppModal.items.map((i) => `• ${i.service_name}`).join('\n')}\n\nYou can review your branded PDF quotation directly here:\nhttps://thebusinesswork.com/quotations/${sendWhatsAppModal.quotation_number}.pdf\n\nBest regards,\nAman Rajbhar · The Business Work`}
-                </p>
-              </div>
-
-              <div className="text-[11px] text-stone-500">
-                Dispatched securely through Meta WhatsApp Cloud API Endpoint using verified system token.
+              <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 text-stone-600 text-[11px] space-y-1">
+                <div>Client: <strong>{sendWhatsAppModal.customer_name}</strong></div>
+                <div>Amount: <strong>{formatINR(grandTotalSetup)}</strong></div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
-              <button
-                type="button"
+            <div className="flex justify-end gap-2 border-t border-stone-100 pt-3">
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setSendWhatsAppModal(null)}
-                className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors"
+                disabled={isSendingApi}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isSendingApi}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
                 onClick={handleSendViaWhatsApp}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 shadow-xs cursor-pointer active:scale-[0.99] transition-all disabled:opacity-60"
+                isLoading={isSendingApi}
+                className="bg-emerald-700 hover:bg-emerald-800"
               >
-                <Send className="h-3.5 w-3.5" />
-                <span>{isSendingApi ? 'Dispatching...' : 'Confirm & Dispatch via WhatsApp'}</span>
-              </button>
+                Send via WhatsApp
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: SEND TO INSTAGRAM */}
-      {sendIgModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl border border-stone-200/80 bg-white p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-[#E1306C]">
-                  <Instagram className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-stone-900">
-                    Send Quotation Link to Instagram DM
-                  </h3>
-                  <p className="text-[11px] text-stone-500">Meta Instagram Graph Messaging</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSendIgModal(null)}
-                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1.5">
-                  Recipient Instagram Username
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={customIgUser}
-                  onChange={(e) => setCustomIgUser(e.target.value)}
-                  className="w-full rounded-xl border border-stone-200 bg-stone-50/70 p-2.5 font-mono text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none transition-all"
-                  placeholder="e.g. priya_k_designs"
-                />
-              </div>
-
-              {/* Message Preview */}
-              <div className="rounded-xl border border-rose-200/80 bg-rose-50/50 p-4 space-y-2 text-stone-900">
-                <div className="text-[10px] font-semibold text-[#E1306C] uppercase tracking-wider">
-                  Instagram DM Preview:
-                </div>
-                <p className="font-mono text-[11px] whitespace-pre-wrap leading-relaxed text-stone-800">
-                  {`Hey @${customIgUser || 'client'}! Here is your requested service quotation ${sendIgModal.quotation_number} from The Business Work:\n\nhttps://thebusinesswork.com/quotations/${sendIgModal.quotation_number}.pdf\n\nLet us know if you would like to proceed or schedule an onboarding walkthrough!`}
-                </p>
-              </div>
-
-              <div className="text-[11px] text-stone-500">
-                Note: In compliance with Meta policies, Instagram DMs are sent only to accounts with an active recent interaction.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
-              <button
-                type="button"
-                onClick={() => setSendIgModal(null)}
-                className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isSendingApi}
-                onClick={handleSendViaInstagram}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-medium text-white hover:bg-stone-800 shadow-xs cursor-pointer active:scale-[0.99] transition-all disabled:opacity-60"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>{isSendingApi ? 'Dispatching...' : 'Confirm & Dispatch via Instagram'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* DELETE QUOTATION CONFIRMATION DIALOG */}
+      <ConfirmDialog
+        isOpen={!!deleteTargetQuotation}
+        onClose={() => setDeleteTargetQuotation(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Service Quotation"
+        description={`Are you sure you want to delete quotation ${deleteTargetQuotation?.quotation_number} for ${deleteTargetQuotation?.customer_name}? This action removes the saved quote and its deliverables.`}
+        confirmLabel="Yes, Delete Quotation"
+        isDestructive={true}
+      />
     </div>
+  );
+}
+
+export default function QuotationsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-stone-500">Loading Quotation Studio...</div>}>
+      <QuotationsContent />
+    </Suspense>
   );
 }

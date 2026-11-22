@@ -1,0 +1,200 @@
+{
+  "cleanupDate": "2026-10-26T06:05:16.692Z",
+  "originalCount": 26,
+  "candidatesAttempted": 24,
+  "successfullyDeletedCount": 24,
+  "skippedOrFailedCount": 0,
+  "remainingCount": 2,
+  "protectedWorkflows": [
+    {
+      "id": "VBrjbhPeDypXt12q",
+      "name": "TBW V4 PRO - IG REEL CAMPAIGNS + FAQ (IMPORT INACTIVE - WA PRESERVED)",
+      "active": true
+    },
+    {
+      "id": "odtJnhwngB1l8Ku2",
+      "name": "TBW Master Google Sheets & Calendar Sync Engine",
+      "active": true
+    }
+  ],
+  "detailedResults": [
+    {
+      "id": "0aYZyqrP4dYgulhC",
+      "name": "TBW Test Read WhatsApp Leads",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "17ukovr5UvCcwG67",
+      "name": "TBW Temp Probe /comment-check",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "5I7rGHXYB5pKy2AU",
+      "name": "TBW Test Read Google Sheets",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "7NY05K2fUbq6ciEr",
+      "name": "TBW Test Batch Sheets",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "9Zsax7fi7tTMhjKj",
+      "name": "TBW Temp Probe Body",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "IQsphtyHswlKd7Y7",
+      "name": "TBW Temp Probe /dm-context",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "Iz72B0wWyErYTpC9",
+      "name": "TBW Read All Sheets Sync Worker",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "OrZEKScnTvqn3adP",
+      "name": "TBW Clear Test Appt",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "SQo9OF5zMxDEcLj3",
+      "name": "TBW Temp Test Comment Check",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "U1QYr1FgFucx9vFp",
+      "name": "TBW Test Read Google Sheets",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "VoJR4UOAmBwMMAbL",
+      "name": "TBW Temp Probe /register",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "ZBY3cQzYrTKzzUEn",
+      "name": "TBW Temp Probe Port 3002 Check",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "ZjkrXRFkJntGnTfI",
+      "name": "TBW Check All Rows Count",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "bf8KZhnrYo067K6J",
+      "name": "TBW Inspect All Rows",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "cPhj00c8iU4t4M1a",
+      "name": "TBW Temp Probe /log",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "fUyDNOfibDfKpqBn",
+      "name": "TBW Test Empty Sheet Handling",
+      "status": "DELETE_FAILED",
+      "error": "HTTP 409"
+    },
+    {
+      "id": "g5Wnuw2iME02TjBV",
+      "name": "TBW Test Batch Sheets",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "rFr4oz6BdxZOYt80",
+      "name": "TBW Temp Test DM Context",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "u6iSVz34yvk7ombc",
+      "name": "TBW Temp Probe Port 3002",
+      "status": "DELETE_FAILED",
+      "error": "HTTP 409"
+    },
+    {
+      "id": "wMKO75WXkD6FdhSN",
+      "name": "TBW Test Read Appointments",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "xAHSRbgZW7wLjrjS",
+      "name": "TBW Test HTTP Sheets",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "xBZEhrEltPbtS9wH",
+      "name": "TBW Test Meta Media Probe",
+      "wasActive": false,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "z5ws5kBxseAc2676",
+      "name": "TBW Read All Sheets Sync Worker",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    },
+    {
+      "id": "z6X4L8c1zgVjimnC",
+      "name": "TBW Check All Rows Count",
+      "wasActive": true,
+      "status": "SUCCESSFULLY_DELETED",
+      "verified404": true
+    }
+  ],
+  "remainingWorkflows": [
+    {
+      "id": "VBrjbhPeDypXt12q",
+      "name": "TBW V4 PRO - IG REEL CAMPAIGNS + FAQ (IMPORT INACTIVE - WA PRESERVED)",
+      "active": true
+    },
+    {
+      "id": "odtJnhwngB1l8Ku2",
+      "name": "TBW Master Google Sheets & Calendar Sync Engine",
+      "active": true
+    }
+  ]
+}

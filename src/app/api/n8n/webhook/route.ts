@@ -4,6 +4,13 @@ import { evaluateCommentCheck, evaluateDmContext } from '@/lib/instagram/reel-au
 import { verifyIncomingN8nWebhook } from '@/lib/auth/webhook-auth';
 import { resolveSessionForInbound, recordBotMessage } from '@/lib/whatsapp/session-manager';
 import { sendAdminWhatsAppNotification } from '@/lib/whatsapp/admin-alert';
+import {
+  encodeSessionNotes,
+  extractSessionMetadata,
+  isSessionExpired,
+  INACTIVITY_TIMEOUT_MS,
+  SessionMetadata,
+} from '@/lib/whatsapp/session-identity';
 
 /**
  * SELF-HOSTED n8n INTEGRATION WEBHOOK ENDPOINT
@@ -851,14 +858,8 @@ export async function POST(request: Request) {
       if (contactsByPhone && contactsByPhone.length > 0 && !isContactSoftDeleted) {
         existingContact = contactsByPhone[0];
         contactId = existingContact.id;
-
-        // If contact had default name but real customer_name now provided, update name
-        if (customerName && (existingContact.name.startsWith('+') || existingContact.name.startsWith('WhatsApp Contact'))) {
-          await adminSupabase
-            .from('admin_contacts')
-            .update({ name: customerName, updated_at: nowIso })
-            .eq('id', contactId);
-        }
+        // PART 05: Persistent Contact Identity Rule
+        // Admin-defined contact name is NEVER overwritten by customer onboarding self-identification!
       }
 
       // Create contact if new (concurrency-safe with conflict retry)
@@ -902,65 +903,78 @@ export async function POST(request: Request) {
       }
 
       // C. Resolve or Create WhatsApp Conversation (Concurrency-safe)
+      // PART 05: Separate session identity. If previous session ended or inactive > 20m, create fresh session.
       let conversationId: string | null = null;
       let manualTakeover = false;
       let automationPaused = false;
 
-      // 1. Check for existing conversation for this specific contact
-      const { data: existingConvs } = await adminSupabase
+      // Fetch conversations for this contact ordered by created_at DESC
+      const { data: convRows } = await adminSupabase
         .from('admin_conversations')
-        .select('id, contact_id, unread_count, manual_takeover, automation_paused')
+        .select('id, contact_id, unread_count, manual_takeover, automation_paused, status, last_message_at, created_at, internal_notes')
         .eq('contact_id', contactId)
         .eq('platform', 'whatsapp')
-        .order('created_at', { ascending: true })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
-      let existingConv = existingConvs?.[0] || null;
+      const latestConv = convRows?.[0] || null;
+      const isLatestExpired = !latestConv
+        ? true
+        : latestConv.status === 'completed' ||
+          latestConv.status === 'failed' ||
+          (latestConv.last_message_at &&
+            Date.now() - new Date(latestConv.last_message_at).getTime() > INACTIVITY_TIMEOUT_MS);
 
-      // 2. If no conversation for this contact_id, check if any conversation exists for contacts with this phone
-      if (!existingConv) {
-        const { data: phoneContacts } = await adminSupabase
-          .from('admin_contacts')
-          .select('id')
-          .or(`phone.eq.${cleanPhone},phone.eq.${formattedPhone}`);
-
-        if (phoneContacts && phoneContacts.length > 0) {
-          const allContactIds = phoneContacts.map((c) => c.id);
-          const { data: phoneConvs } = await adminSupabase
-            .from('admin_conversations')
-            .select('id, contact_id, unread_count, manual_takeover, automation_paused')
-            .in('contact_id', allContactIds)
-            .eq('platform', 'whatsapp')
-            .order('created_at', { ascending: true })
-            .limit(1);
-
-          if (phoneConvs?.[0]) {
-            existingConv = phoneConvs[0];
-            // Link to the primary contact
-            contactId = existingConv.contact_id;
-          }
-        }
-      }
+      const cleanNewName = customerName?.trim();
+      const validSessionName = cleanNewName && !cleanNewName.startsWith('+') && cleanNewName.length >= 2 ? cleanNewName : null;
 
       // Parse message created_at timestamp if provided by n8n (preserves millisecond precision)
       const messageCreatedAt = parseTimestamp(payload.timestamp, nowIso);
 
-      if (existingConv) {
-        conversationId = existingConv.id;
-        manualTakeover = Boolean(existingConv.manual_takeover);
-        automationPaused = Boolean(existingConv.automation_paused);
+      if (latestConv && !isLatestExpired) {
+        conversationId = latestConv.id;
+        manualTakeover = Boolean(latestConv.manual_takeover);
+        automationPaused = Boolean(latestConv.automation_paused);
+
+        const currentMeta = extractSessionMetadata(latestConv);
+        if (validSessionName && !currentMeta.session_customer_name) {
+          currentMeta.session_customer_name = validSessionName;
+        }
 
         await adminSupabase
           .from('admin_conversations')
           .update({
             last_message: content,
             last_message_at: messageCreatedAt,
-            unread_count: (existingConv.unread_count || 0) + 1,
+            unread_count: (latestConv.unread_count || 0) + 1,
             status: 'open',
+            internal_notes: encodeSessionNotes(latestConv.internal_notes, currentMeta),
             updated_at: nowIso,
           })
           .eq('id', conversationId);
       } else {
+        // Previous session ended or expired (>20 minutes). Mark previous session completed if still open.
+        if (latestConv && latestConv.status !== 'completed') {
+          const oldMeta = extractSessionMetadata(latestConv);
+          oldMeta.closed_at = nowIso;
+          oldMeta.close_reason = 'closed_inactivity';
+          await adminSupabase
+            .from('admin_conversations')
+            .update({
+              status: 'completed',
+              internal_notes: encodeSessionNotes(latestConv.internal_notes, oldMeta),
+              updated_at: nowIso,
+            })
+            .eq('id', latestConv.id);
+        }
+
+        // Spin up a brand new session with sequential session number
+        const nextSessionNumber = (convRows?.length || 0) + 1;
+        const newSessionMeta: SessionMetadata = {
+          session_number: nextSessionNumber,
+          session_customer_name: validSessionName || null,
+          selected_language: 'English',
+        };
+
         const { data: newConv, error: createConvErr } = await adminSupabase
           .from('admin_conversations')
           .insert({
@@ -972,6 +986,7 @@ export async function POST(request: Request) {
             unread_count: 1,
             manual_takeover: false,
             automation_paused: false,
+            internal_notes: encodeSessionNotes('', newSessionMeta),
             is_demo: false,
             created_at: nowIso,
             updated_at: nowIso,
@@ -980,13 +995,15 @@ export async function POST(request: Request) {
           .single();
 
         if (createConvErr) {
-          // If race condition: caught by unique index idx_admin_conversations_contact_platform
+          // If race condition: catch by unique index
           if (createConvErr.code === '23505' || createConvErr.message?.includes('duplicate key')) {
             const { data: retryConv } = await adminSupabase
               .from('admin_conversations')
               .select('id, unread_count, manual_takeover, automation_paused')
               .eq('contact_id', contactId)
               .eq('platform', 'whatsapp')
+              .order('created_at', { ascending: false })
+              .limit(1)
               .maybeSingle();
             if (retryConv) {
               conversationId = retryConv.id;

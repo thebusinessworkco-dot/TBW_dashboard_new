@@ -1,0 +1,1609 @@
+{
+  "auditDate": "2026-10-26T05:48:43.761Z",
+  "totalWorkflows": 26,
+  "activeWorkflows": 25,
+  "inactiveWorkflows": 1,
+  "workflows": [
+    {
+      "index": 1,
+      "id": "0aYZyqrP4dYgulhC",
+      "name": "TBW Test Read WhatsApp Leads",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:48:32.816Z",
+      "updatedAt": "2026-10-24T16:48:32.816Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-read-whatsapp-leads-1792860510619"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-read-whatsapp-leads-1792860510619",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "read"
+          }
+        }
+      ],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 2,
+      "id": "17ukovr5UvCcwG67",
+      "name": "TBW Temp Probe /comment-check",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:54:27.744Z",
+      "updatedAt": "2026-10-23T14:54:27.744Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-comment-check"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-comment-check",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/comment-check"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 3,
+      "id": "5I7rGHXYB5pKy2AU",
+      "name": "TBW Test Read Google Sheets",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:45:56.374Z",
+      "updatedAt": "2026-10-24T16:45:56.374Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-read-sheets-1792860353814"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-read-sheets-1792860353814",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Leads Sheet",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 4,
+      "id": "7NY05K2fUbq6ciEr",
+      "name": "TBW Test Batch Sheets",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:53:55.586Z",
+      "updatedAt": "2026-10-24T16:53:55.586Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-batch-sheets-1792860833254"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-batch-sheets-1792860833254",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Batch Get All Sheets",
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values:batchGet?ranges=Leads!A1:Z&ranges=%27WhatsApp%20Leads%27!A1:Z&ranges=Appointments!A1:Z"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 5,
+      "id": "9Zsax7fi7tTMhjKj",
+      "name": "TBW Temp Probe Body",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:53:12.095Z",
+      "updatedAt": "2026-10-23T14:53:12.095Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-body-1792767191266"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-body-1792767191266",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe 3002",
+          "method": "GET",
+          "url": "http://172.18.0.1:3002/healthz"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 6,
+      "id": "IQsphtyHswlKd7Y7",
+      "name": "TBW Temp Probe /dm-context",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:54:30.049Z",
+      "updatedAt": "2026-10-23T14:54:30.049Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-dm-context"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-dm-context",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/dm-context"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 7,
+      "id": "Iz72B0wWyErYTpC9",
+      "name": "TBW Read All Sheets Sync Worker",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 5,
+      "createdAt": "2026-10-24T16:47:36.876Z",
+      "updatedAt": "2026-10-24T16:47:36.876Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-read-all-sheets-1792860454012"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-read-all-sheets-1792860454012",
+          "method": "POST",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Website Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "read"
+          }
+        }
+      ],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 8,
+      "id": "OrZEKScnTvqn3adP",
+      "name": "TBW Clear Test Appt",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:59:28.206Z",
+      "updatedAt": "2026-10-24T16:59:28.206Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-clear-test-appt-1792861165787"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-clear-test-appt-1792861165787",
+          "method": "POST",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Clear Row",
+          "method": "POST",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values/Appointments!A2:Z:clear"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 9,
+      "id": "SQo9OF5zMxDEcLj3",
+      "name": "TBW Temp Test Comment Check",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:55:59.657Z",
+      "updatedAt": "2026-10-23T14:55:59.657Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-comment-check-1792767359172"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-comment-check-1792767359172",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/comment-check"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 10,
+      "id": "U1QYr1FgFucx9vFp",
+      "name": "TBW Test Read Google Sheets",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:45:19.915Z",
+      "updatedAt": "2026-10-24T16:45:19.915Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-read-sheets"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-read-sheets",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Leads Sheet",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 11,
+      "id": "VBrjbhPeDypXt12q",
+      "name": "TBW V4 PRO - IG REEL CAMPAIGNS + FAQ (IMPORT INACTIVE - WA PRESERVED)",
+      "category": "Core Production Monolith",
+      "active": true,
+      "nodeCount": 93,
+      "createdAt": "2026-10-23T13:37:33.869Z",
+      "updatedAt": "2026-10-25T17:57:27.609Z",
+      "triggers": [
+        {
+          "name": "Incoming WhatsApp Message",
+          "type": "n8n-nodes-base.whatsAppTrigger"
+        },
+        {
+          "name": "Every Minute - Appointment Reminders",
+          "type": "n8n-nodes-base.scheduleTrigger"
+        },
+        {
+          "name": "IG - Verified Events In",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-v3-instagram-verified-events"
+        },
+        {
+          "name": "Dashboard - Authenticated Outbox",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-v3-dashboard-outbox"
+        },
+        {
+          "name": "Every 5m - Check n8n Endpoint",
+          "type": "n8n-nodes-base.scheduleTrigger"
+        },
+        {
+          "name": "Workflow Error Trigger (configure error workflow)",
+          "type": "n8n-nodes-base.errorTrigger"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "IG - Verified Events In",
+          "path": "tbw-v3-instagram-verified-events",
+          "method": "POST"
+        },
+        {
+          "name": "Dashboard - Authenticated Outbox",
+          "path": "tbw-v3-dashboard-outbox",
+          "method": "POST"
+        }
+      ],
+      "scheduleNodes": [
+        {
+          "name": "Every Minute - Appointment Reminders",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "params": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "minutes",
+                  "minutesInterval": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Every 5m - Check n8n Endpoint",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "params": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "minutes"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "httpRequests": [
+        {
+          "name": "Send WhatsApp Interactive (Meta Cloud API)",
+          "method": "POST",
+          "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+        },
+        {
+          "name": "Log Inbound to Dashboard",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook"
+        },
+        {
+          "name": "Check AI / Human Mode",
+          "method": "GET",
+          "url": "=https://dashboard.thebusinesswork.com/api/webhook/n8n/mode/{{ $('Language + Name + Business + Purpose').first().json.phone }}"
+        },
+        {
+          "name": "Log AI Reply to Dashboard",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/n8n/webhook"
+        },
+        {
+          "name": "Send WhatsApp 30-Minute Reminder",
+          "method": "POST",
+          "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+        },
+        {
+          "name": "WA - Dashboard State Event",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/event"
+        },
+        {
+          "name": "WA - Dashboard Lead Event",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/lead"
+        },
+        {
+          "name": "WA - Dashboard Appointment Event",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/appointment"
+        },
+        {
+          "name": "IG - Register Event + Idempotency",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/register"
+        },
+        {
+          "name": "IG - Check Reel Comment Rule",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/comment-check"
+        },
+        {
+          "name": "IG - Send via Meta Instagram API",
+          "method": "POST",
+          "url": "https://graph.instagram.com/v26.0/me/messages"
+        },
+        {
+          "name": "IG - Log Outbound / Comment DM",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/log"
+        },
+        {
+          "name": "Dashboard - Send WhatsApp",
+          "method": "POST",
+          "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+        },
+        {
+          "name": "Dashboard - Log WhatsApp Send",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/quotation/send-result"
+        },
+        {
+          "name": "IG - Post Conversation Status",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/log"
+        },
+        {
+          "name": "Monitor - n8n Healthz",
+          "method": "GET",
+          "url": "https://n8n.thebusinesswork.com/healthz"
+        },
+        {
+          "name": "Monitor - Post Health to Dashboard",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/health"
+        },
+        {
+          "name": "Monitor - Send Error to Dashboard",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/error"
+        },
+        {
+          "name": "IG - Resolve Dashboard DM Context",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/dm-context"
+        },
+        {
+          "name": "IG - Meta Check Follows Business",
+          "method": "GET",
+          "url": "=https://graph.instagram.com/v26.0/{{ $json.ig_user_id }}"
+        },
+        {
+          "name": "IG - Post-Send Event & Public Reply",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/send-public-reply"
+        },
+        {
+          "name": "Send Admin WhatsApp Alert (Meta Cloud API)",
+          "method": "POST",
+          "url": "https://graph.facebook.com/v21.0/1392092143987065/messages"
+        },
+        {
+          "name": "Trigger WhatsApp Session Monitor",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/whatsapp/session-monitor"
+        }
+      ],
+      "googleNodes": [
+        {
+          "name": "Save WhatsApp Lead to Google Sheets",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "append"
+        },
+        {
+          "name": "Google Gemini Chat Model",
+          "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini"
+        },
+        {
+          "name": "Google Calendar - Busy Times for Date",
+          "type": "n8n-nodes-base.googleCalendar",
+          "resource": "calendar"
+        },
+        {
+          "name": "Google Calendar - Recheck Selected Slot",
+          "type": "n8n-nodes-base.googleCalendar",
+          "resource": "calendar"
+        },
+        {
+          "name": "Google Calendar - Create Booking",
+          "type": "n8n-nodes-base.googleCalendar"
+        },
+        {
+          "name": "Google Calendar - Upcoming TBW Events",
+          "type": "n8n-nodes-base.googleCalendar",
+          "operation": "getAll"
+        },
+        {
+          "name": "Mark Calendar Reminder as Sent",
+          "type": "n8n-nodes-base.googleCalendar",
+          "operation": "update"
+        },
+        {
+          "name": "Save Booked Appointment to Google Sheets",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "append"
+        },
+        {
+          "name": "IG - Save Lead to Instagram Leads Sheet",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "append"
+        },
+        {
+          "name": "Google Calendar - Fetch Original Event",
+          "type": "n8n-nodes-base.googleCalendar",
+          "operation": "get"
+        },
+        {
+          "name": "Google Calendar - Update Booking",
+          "type": "n8n-nodes-base.googleCalendar",
+          "operation": "update"
+        },
+        {
+          "name": "Google Calendar - Read After Ambiguous Update",
+          "type": "n8n-nodes-base.googleCalendar",
+          "operation": "get"
+        }
+      ],
+      "aiNodes": [
+        {
+          "name": "AI Chat Reply",
+          "type": "@n8n/n8n-nodes-langchain.chainLlm"
+        },
+        {
+          "name": "Google Gemini Chat Model",
+          "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini"
+        },
+        {
+          "name": "IG - Gemini AI Reply",
+          "type": "@n8n/n8n-nodes-langchain.chainLlm"
+        }
+      ],
+      "messagingNodes": [
+        {
+          "name": "Incoming WhatsApp Message",
+          "type": "n8n-nodes-base.whatsAppTrigger",
+          "params": {}
+        },
+        {
+          "name": "New WhatsApp Lead?",
+          "type": "n8n-nodes-base.if",
+          "params": {}
+        },
+        {
+          "name": "Save WhatsApp Lead to Google Sheets",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "append"
+          }
+        },
+        {
+          "name": "SETUP - WhatsApp Bot",
+          "type": "n8n-nodes-base.stickyNote",
+          "params": {}
+        },
+        {
+          "name": "Send WhatsApp Interactive (Meta Cloud API)",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+          }
+        },
+        {
+          "name": "Normalize WhatsApp Reply + Dashboard Log",
+          "type": "n8n-nodes-base.code",
+          "params": {}
+        },
+        {
+          "name": "Prepare Due WhatsApp Template Reminders",
+          "type": "n8n-nodes-base.code",
+          "params": {}
+        },
+        {
+          "name": "Send WhatsApp 30-Minute Reminder",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+          }
+        },
+        {
+          "name": "IG - Save Lead to Instagram Leads Sheet",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "append"
+          }
+        },
+        {
+          "name": "IG - Send via Meta Instagram API",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://graph.instagram.com/v26.0/me/messages"
+          }
+        },
+        {
+          "name": "Dashboard - WhatsApp Outbox?",
+          "type": "n8n-nodes-base.if",
+          "params": {}
+        },
+        {
+          "name": "Dashboard - Send WhatsApp",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://graph.facebook.com/v26.0/1392092143987065/messages"
+          }
+        },
+        {
+          "name": "Dashboard - Log WhatsApp Send",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://dashboard.thebusinesswork.com/api/webhook/n8n/quotation/send-result"
+          }
+        },
+        {
+          "name": "Dashboard - Prepare Instagram Outbox",
+          "type": "n8n-nodes-base.code",
+          "params": {}
+        },
+        {
+          "name": "SETUP - V3 Instagram + Dashboard",
+          "type": "n8n-nodes-base.stickyNote",
+          "params": {}
+        },
+        {
+          "name": "Send Admin WhatsApp Alert (Meta Cloud API)",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://graph.facebook.com/v21.0/1392092143987065/messages"
+          }
+        },
+        {
+          "name": "Trigger WhatsApp Session Monitor",
+          "type": "n8n-nodes-base.httpRequest",
+          "params": {
+            "url": "https://dashboard.thebusinesswork.com/api/whatsapp/session-monitor"
+          }
+        }
+      ],
+      "recentExecCount": 20,
+      "lastExec": {
+        "id": "11153",
+        "status": "error",
+        "startedAt": "2026-10-26T05:41:05.081Z",
+        "mode": "trigger"
+      },
+      "businessPurpose": "Handles all customer conversations on WhatsApp & Instagram, manages booking, FAQs, language selection, and admin alerts.",
+      "whyNeeded": "Central nerve center for lead capture, AI customer replies, appointments, and notifications.",
+      "whereUsed": "WhatsApp Cloud API, Instagram Graph API, Google Calendar, Google Sheets, Dashboard API",
+      "verifiedUsage": "ACTIVE PRODUCTION: Executing every 1 minute for reminders + real-time on incoming customer messages and IG webhooks.",
+      "recommendation": "KEEP & IMPROVE",
+      "recommendationReason": "Critical production backbone. Needs fixing of the 404 session-monitor node and decoupling into modular workflows."
+    },
+    {
+      "index": 12,
+      "id": "VoJR4UOAmBwMMAbL",
+      "name": "TBW Temp Probe /register",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:54:31.977Z",
+      "updatedAt": "2026-10-23T14:54:31.977Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-register"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-register",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/register"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 13,
+      "id": "ZBY3cQzYrTKzzUEn",
+      "name": "TBW Temp Probe Port 3002 Check",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:53:58.571Z",
+      "updatedAt": "2026-10-23T14:53:58.571Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-3002"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-3002",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe 3002",
+          "method": "GET",
+          "url": "http://172.18.0.1:3002/healthz"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 14,
+      "id": "ZjkrXRFkJntGnTfI",
+      "name": "TBW Check All Rows Count",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 5,
+      "createdAt": "2026-10-24T16:49:13.345Z",
+      "updatedAt": "2026-10-24T16:49:13.345Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-check-rows-1792860550354"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-check-rows-1792860550354",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read WhatsApp",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [
+        {
+          "name": "Read WhatsApp",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "read"
+          }
+        }
+      ],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 15,
+      "id": "bf8KZhnrYo067K6J",
+      "name": "TBW Inspect All Rows",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:54:23.608Z",
+      "updatedAt": "2026-10-24T16:54:23.608Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-inspect-rows-1792860856215"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-inspect-rows-1792860856215",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Get WA Rows",
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values/%27WhatsApp%20Leads%27!A1:Z"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 16,
+      "id": "cPhj00c8iU4t4M1a",
+      "name": "TBW Temp Probe /log",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:54:33.824Z",
+      "updatedAt": "2026-10-23T14:54:33.824Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-log"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-log",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "http://172.18.0.1:3002/log"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 17,
+      "id": "fUyDNOfibDfKpqBn",
+      "name": "TBW Test Empty Sheet Handling",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 4,
+      "createdAt": "2026-10-24T16:52:32.756Z",
+      "updatedAt": "2026-10-24T16:52:32.756Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-empty-opt-1792860749488"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-empty-opt-1792860749488",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 18,
+      "id": "g5Wnuw2iME02TjBV",
+      "name": "TBW Test Batch Sheets",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:53:33.937Z",
+      "updatedAt": "2026-10-24T16:53:33.937Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-batch-sheets-1792860811531"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-batch-sheets-1792860811531",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Batch Get All Sheets",
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values:batchGet?ranges=Leads!A1:Z&ranges=WhatsApp%20Leads!A1:Z&ranges=Instagram%20Leads!A1:Z&ranges=Appointments!A1:Z"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 1,
+      "lastExec": {
+        "id": "6691",
+        "status": "error",
+        "startedAt": "2026-10-24T16:53:36.730Z",
+        "mode": "webhook"
+      },
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "Historical test only (1 failed run on Oct 24), no active production traffic.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 19,
+      "id": "odtJnhwngB1l8Ku2",
+      "name": "TBW Master Google Sheets & Calendar Sync Engine",
+      "category": "Integration / Sync Engine",
+      "active": true,
+      "nodeCount": 8,
+      "createdAt": "2026-10-24T16:55:08.317Z",
+      "updatedAt": "2026-10-24T16:58:22.391Z",
+      "triggers": [
+        {
+          "name": "Webhook Inbound",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-google-sheets-sync"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook Inbound",
+          "path": "tbw-google-sheets-sync",
+          "method": "POST",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Batch Get All Sheets",
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values:batchGet?ranges=Leads!A1:Z&ranges=%27WhatsApp%20Leads%27!A1:Z&ranges=Appointments!A1:Z"
+        }
+      ],
+      "googleNodes": [
+        {
+          "name": "Create GCal Event",
+          "type": "n8n-nodes-base.googleCalendar"
+        },
+        {
+          "name": "Append to Appointments Sheet",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "append"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 3,
+      "lastExec": {
+        "id": "11005",
+        "status": "error",
+        "startedAt": "2026-10-26T04:40:14.301Z",
+        "mode": "webhook"
+      },
+      "businessPurpose": "Master sync worker to read Google Sheets leads & appointments and create Google Calendar events.",
+      "whyNeeded": "Intended to synchronize spreadsheet rows and calendar bookings bidirectionally with the dashboard.",
+      "whereUsed": "Dashboard Webhook Inbound, Google Sheets, Google Calendar",
+      "verifiedUsage": "BROKEN / ERRORS: 3 executions recorded (all failed with Google Sheets OAuth credential invalid / expired).",
+      "recommendation": "INVESTIGATE & IMPROVE",
+      "recommendationReason": "Requires reconnection of the Google Sheets OAuth2 credential before it can function."
+    },
+    {
+      "index": 20,
+      "id": "rFr4oz6BdxZOYt80",
+      "name": "TBW Temp Test DM Context",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T14:55:45.270Z",
+      "updatedAt": "2026-10-23T14:55:45.270Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-dm-context-1792767344709"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-dm-context-1792767344709",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe",
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/dm-context"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 21,
+      "id": "u6iSVz34yvk7ombc",
+      "name": "TBW Temp Probe Port 3002",
+      "category": "Development / VPS Network Probe",
+      "active": true,
+      "nodeCount": 3,
+      "createdAt": "2026-10-23T14:52:58.570Z",
+      "updatedAt": "2026-10-23T14:52:58.570Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-temp-probe-1792767176334"
+        },
+        {
+          "name": "Respond",
+          "type": "n8n-nodes-base.respondToWebhook"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-temp-probe-1792767176334",
+          "method": "GET",
+          "responseMode": "responseNode"
+        },
+        {
+          "name": "Respond",
+          "method": "GET"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Probe 3002",
+          "method": "GET",
+          "url": "http://172.18.0.1:3002/healthz"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 22,
+      "id": "wMKO75WXkD6FdhSN",
+      "name": "TBW Test Read Appointments",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:48:37.976Z",
+      "updatedAt": "2026-10-24T16:48:37.976Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-read-appointments-1792860515982"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-read-appointments-1792860515982",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 23,
+      "id": "xAHSRbgZW7wLjrjS",
+      "name": "TBW Test HTTP Sheets",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 2,
+      "createdAt": "2026-10-24T16:52:59.630Z",
+      "updatedAt": "2026-10-24T16:52:59.630Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-http-sheets-1792860777409"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-http-sheets-1792860777409",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "Get Appointments via HTTP",
+          "method": "GET",
+          "url": "https://sheets.googleapis.com/v4/spreadsheets/1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA/values/Appointments!A1:Z"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 24,
+      "id": "xBZEhrEltPbtS9wH",
+      "name": "TBW Test Meta Media Probe",
+      "category": "Development / VPS Network Probe",
+      "active": false,
+      "nodeCount": 2,
+      "createdAt": "2026-10-23T17:02:59.130Z",
+      "updatedAt": "2026-10-23T17:02:59.130Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-test-meta-media-1792774978508"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-test-meta-media-1792774978508",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [
+        {
+          "name": "GetMe",
+          "method": "GET",
+          "url": "https://graph.instagram.com/v26.0/me?fields=id,username,account_type,media_count"
+        }
+      ],
+      "googleNodes": [],
+      "aiNodes": [],
+      "messagingNodes": [],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary network probe created on Oct 23, 2026 to verify container-to-host connectivity (port 3002) and dashboard endpoints.",
+      "whyNeeded": "Debugging network reachability from n8n Docker container to VPS host network.",
+      "whereUsed": "Internal test webhooks.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Diagnostic probe that served its testing purpose during setup. No production system depends on it."
+    },
+    {
+      "index": 25,
+      "id": "z5ws5kBxseAc2676",
+      "name": "TBW Read All Sheets Sync Worker",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 5,
+      "createdAt": "2026-10-24T16:46:23.595Z",
+      "updatedAt": "2026-10-24T16:46:23.595Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-read-all-sheets-1792860381230"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-read-all-sheets-1792860381230",
+          "method": "POST",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Website Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [
+        {
+          "name": "Read WhatsApp Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "read"
+          }
+        }
+      ],
+      "recentExecCount": 1,
+      "lastExec": {
+        "id": "6682",
+        "status": "error",
+        "startedAt": "2026-10-24T16:46:26.568Z",
+        "mode": "webhook"
+      },
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "Historical test only (1 failed run on Oct 24), no active production traffic.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    },
+    {
+      "index": 26,
+      "id": "z6X4L8c1zgVjimnC",
+      "name": "TBW Check All Rows Count",
+      "category": "Development / Sheet Test Probe",
+      "active": true,
+      "nodeCount": 5,
+      "createdAt": "2026-10-24T16:49:49.525Z",
+      "updatedAt": "2026-10-24T16:49:49.525Z",
+      "triggers": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "path": "tbw-check-rows-1792860587283"
+        }
+      ],
+      "webhooks": [
+        {
+          "name": "Webhook",
+          "path": "tbw-check-rows-1792860587283",
+          "method": "GET",
+          "responseMode": "lastNode"
+        }
+      ],
+      "scheduleNodes": [],
+      "httpRequests": [],
+      "googleNodes": [
+        {
+          "name": "Read Leads",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read WhatsApp",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        },
+        {
+          "name": "Read Appointments",
+          "type": "n8n-nodes-base.googleSheets",
+          "operation": "read"
+        }
+      ],
+      "aiNodes": [],
+      "messagingNodes": [
+        {
+          "name": "Read WhatsApp",
+          "type": "n8n-nodes-base.googleSheets",
+          "params": {
+            "operation": "read"
+          }
+        }
+      ],
+      "recentExecCount": 0,
+      "lastExec": null,
+      "businessPurpose": "Temporary test webhook created during development on Oct 24, 2026 to verify reading/writing specific Google Sheets ranges.",
+      "whyNeeded": "Used only for debugging sheet connectivity and batch read performance during initial development.",
+      "whereUsed": "Internal dev test scripts via HTTP GET/POST webhook.",
+      "verifiedUsage": "NOT VERIFIED: 0 executions recorded.",
+      "recommendation": "REMOVE CANDIDATE (Safe Deactivate First)",
+      "recommendationReason": "Duplicate/one-off diagnostic workflow. All live sheet operations are handled directly inside the core engine."
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "id": "9Zsax7fi7tTMhjKj",
+  "name": "TBW Temp Probe Body",
+  "description": null,
+  "active": true,
+  "activeVersionId": "de151ecf-8d9b-4cd6-9736-fdd31b0d8620",
+  "createdAt": "2026-10-23T14:53:12.095Z",
+  "updatedAt": "2026-10-23T14:53:12.095Z",
+  "isArchived": false,
+  "versionId": "de151ecf-8d9b-4cd6-9736-fdd31b0d8620",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "probe-wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-temp-probe-body-1792767191266",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "dcaaac98-5ff3-428e-bf9a-2ebc180761c9"
+    },
+    {
+      "id": "probe-http",
+      "name": "Probe 3002",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://172.18.0.1:3002/healthz",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Probe 3002",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {},
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "9Zsax7fi7tTMhjKj",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-23T14:53:12.103Z",
+      "updatedAt": "2026-10-23T14:53:12.103Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "de151ecf-8d9b-4cd6-9736-fdd31b0d8620",
+    "workflowId": "9Zsax7fi7tTMhjKj",
+    "nodes": [
+      {
+        "id": "probe-wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-temp-probe-body-1792767191266",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "dcaaac98-5ff3-428e-bf9a-2ebc180761c9"
+      },
+      {
+        "id": "probe-http",
+        "name": "Probe 3002",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          400,
+          300
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "http://172.18.0.1:3002/healthz",
+          "options": {
+            "timeout": 5000
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Probe 3002",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-23T14:53:12.105Z",
+    "updatedAt": "2026-10-23T14:53:12.105Z",
+    "workflowPublishHistory": [
+      {
+        "id": 45,
+        "workflowId": "9Zsax7fi7tTMhjKj",
+        "versionId": "de151ecf-8d9b-4cd6-9736-fdd31b0d8620",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-23T14:53:12.942Z"
+      }
+    ]
+  }
+}

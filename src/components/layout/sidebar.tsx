@@ -5,40 +5,58 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Zap,
+  Sparkles,
   MessageSquare,
+  Send,
+  Film,
   Users,
   Calendar,
   FileText,
   Workflow,
   Server,
   Settings,
-  LogOut,
-  ExternalLink,
-  ShieldCheck,
-  Sparkles,
-  Film,
-  Send,
+  Shield,
+  ChevronLeft,
+  ChevronRight,
   X,
+  Radio,
 } from 'lucide-react';
-import { InstagramIcon as Instagram } from '@/components/ui/icons';
+import { InstagramIcon } from '@/components/ui/icons';
 import { useDashboardStore } from '@/lib/store/dashboard-store';
+import { Tooltip } from '@/components/ui/tooltip';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string | number;
-  badgeVariant?: 'emerald' | 'amber' | 'rose' | 'neutral';
+  badgeVariant?: 'sage' | 'amber' | 'rose' | 'neutral';
 }
 
 interface NavSection {
-  title?: string;
+  title: string;
   items: NavItem[];
 }
 
-export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void }) {
+export function Sidebar({
+  mobileOpen,
+  onCloseMobile,
+}: {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const pathname = usePathname();
-  const { conversations, leads, appointments, vpsMetrics, mobileMenuOpen, setMobileMenuOpen } = useDashboardStore();
+  const {
+    conversations,
+    leads,
+    appointments,
+    vpsMetrics,
+    mobileMenuOpen,
+    setMobileMenuOpen,
+    sidebarCollapsed,
+    toggleSidebarCollapse,
+  } = useDashboardStore();
 
   const isOpen = mobileOpen !== undefined ? mobileOpen : mobileMenuOpen;
   const handleClose = () => {
@@ -52,122 +70,119 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
 
   const sections: NavSection[] = [
     {
+      title: 'COMMAND CENTER',
       items: [
-        {
-          name: 'Overview',
-          href: '/',
-          icon: LayoutDashboard,
-        },
+        { name: 'Executive Overview', href: '/', icon: LayoutDashboard },
+        { name: 'Live Operations', href: '/live', icon: Zap, badge: 'Live', badgeVariant: 'sage' },
+        { name: 'Analytics & Reports', href: '/analytics', icon: Sparkles },
       ],
     },
     {
-      title: 'Inbox & Channels',
+      title: 'COMMUNICATION',
       items: [
         {
           name: 'WhatsApp Inbox',
           href: '/whatsapp',
           icon: MessageSquare,
           badge: unreadCount > 0 ? unreadCount : undefined,
-          badgeVariant: 'emerald',
+          badgeVariant: 'sage',
         },
         {
           name: 'Telegram Alerts',
           href: '/telegram',
           icon: Send,
-          badge: 'Active',
-          badgeVariant: 'emerald',
+          badge: 'Online',
+          badgeVariant: 'sage',
         },
-        {
-          name: 'Instagram Control',
-          href: '/instagram',
-          icon: Instagram,
-        },
+        { name: 'Instagram Control', href: '/instagram', icon: InstagramIcon },
         {
           name: 'Instagram Reels',
           href: '/automations/instagram-reels',
           icon: Film,
-          badge: 'V4 Pro',
-          badgeVariant: 'emerald',
+          badge: 'V4',
+          badgeVariant: 'sage',
         },
+        { name: 'Contact Directory', href: '/contacts', icon: Users },
+        { name: 'Conversation History', href: '/conversations', icon: MessageSquare },
       ],
     },
     {
-      title: 'Pipeline & Sales',
+      title: 'SALES & BUSINESS',
       items: [
         {
-          name: 'Leads (Google Sheets)',
+          name: 'Leads CRM',
           href: '/leads',
           icon: Users,
           badge: newLeads > 0 ? newLeads : undefined,
           badgeVariant: 'neutral',
         },
         {
-          name: 'Appointments',
+          name: 'Bookings & Calendar',
           href: '/appointments',
           icon: Calendar,
           badge: pendingAppointments > 0 ? pendingAppointments : undefined,
           badgeVariant: 'amber',
         },
-        {
-          name: 'Quotation Builder',
-          href: '/quotations',
-          icon: FileText,
-        },
+        { name: 'Quotation Studio', href: '/quotations', icon: FileText },
+        { name: 'Customer Profiles', href: '/customers', icon: Users },
       ],
     },
     {
-      title: 'System & Automation',
+      title: 'AUTOMATION & INFRA',
       items: [
+        { name: 'n8n Engine', href: '/n8n', icon: Workflow, badge: 'v5.5', badgeVariant: 'neutral' },
+        { name: 'Workflow Executions', href: '/n8n/executions', icon: Workflow },
         {
-          name: 'n8n Workflows',
-          href: '/n8n',
-          icon: Workflow,
-        },
-        {
-          name: 'VPS Health',
+          name: 'VPS Infrastructure',
           href: '/vps',
           icon: Server,
           badge:
             vpsMetrics.status === 'healthy'
-              ? 'OK'
+              ? '99.9%'
               : vpsMetrics.status === 'warning'
-              ? 'Warning'
+              ? 'Warn'
               : vpsMetrics.status === 'not_connected'
-              ? 'Offline'
+              ? 'Off'
               : 'Alert',
           badgeVariant:
             vpsMetrics.status === 'healthy'
-              ? 'emerald'
+              ? 'sage'
               : vpsMetrics.status === 'warning'
               ? 'amber'
               : vpsMetrics.status === 'not_connected'
               ? 'neutral'
               : 'rose',
         },
-        {
-          name: 'Settings & Status',
-          href: '/settings',
-          icon: Settings,
-        },
+        { name: 'Integrations & Health', href: '/integrations', icon: Radio },
+      ],
+    },
+    {
+      title: 'ADMINISTRATION',
+      items: [
+        { name: 'Settings', href: '/settings', icon: Settings },
+        { name: 'Team & Permissions', href: '/team', icon: Users },
+        { name: 'Security & Audit Logs', href: '/security', icon: Shield },
       ],
     },
   ];
 
   const getBadgeClasses = (variant: NavItem['badgeVariant'], isActive: boolean) => {
     if (isActive) {
-      return 'bg-white/20 text-white border-transparent';
+      return 'bg-[#FCFBF8] text-[#202B35] font-bold shadow-2xs dark:bg-[#141A22] dark:text-[#FCFBF8]';
     }
     switch (variant) {
-      case 'emerald':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+      case 'sage':
+        return 'bg-[#7D8F82]/20 text-[#4A5D4F] border border-[#7D8F82]/40 font-bold dark:bg-[#7D8F82]/30 dark:text-[#A8BBAE]';
       case 'amber':
-        return 'bg-amber-50 text-amber-700 border-amber-200/80';
+        return 'bg-amber-50 text-amber-800 border border-amber-300 font-bold dark:bg-amber-950/40 dark:text-amber-300';
       case 'rose':
-        return 'bg-rose-50 text-rose-700 border-rose-200/80';
+        return 'bg-rose-50 text-rose-800 border border-rose-300 font-bold dark:bg-rose-950/40 dark:text-rose-300';
       default:
-        return 'bg-stone-100 text-stone-700 border-stone-200';
+        return 'bg-[#ECE9E1] text-[#566573] border border-[#DDD9D0] font-medium dark:bg-[#1E2734] dark:border-[#2B3848] dark:text-[#94A4B4]';
     }
   };
+
+  const isCollapsed = sidebarCollapsed;
 
   return (
     <>
@@ -175,85 +190,95 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
       {isOpen && (
         <div
           onClick={handleClose}
-          className="fixed inset-0 z-40 bg-stone-900/50 backdrop-blur-xs transition-opacity lg:hidden"
+          className="fixed inset-0 z-40 bg-[#202B35]/60 backdrop-blur-xs transition-opacity lg:hidden dark:bg-black/80"
         />
       )}
 
       {/* Main Sidebar Shell */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col border-r border-[#E6E1D7] bg-[#FAF8F5] transition-transform duration-200 ease-in-out lg:static lg:h-full lg:translate-x-0 shrink-0 ${
-          isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 flex h-full flex-col border-r border-[#DDD9D0] bg-[#FCFBF8] transition-all duration-200 ease-in-out lg:static lg:h-full lg:translate-x-0 shrink-0 dark:border-[#232D3B] dark:bg-[#141A22] ${
+          isOpen ? 'translate-x-0 w-68 shadow-2xl' : '-translate-x-full'
+        } ${isCollapsed ? 'lg:w-[72px]' : 'lg:w-68'}`}
       >
         {/* Brand Header */}
-        <div className="flex h-17 items-center justify-between border-b border-[#E6E1D7] px-4 sm:px-5 bg-[#FAF8F5]">
-          <Link href="/" onClick={handleClose} className="flex items-center gap-3 group">
-            <div className="relative flex h-9.5 w-9.5 items-center justify-center rounded-xl bg-gradient-to-br from-stone-900 to-stone-800 text-white shadow-xs ring-1 ring-white/10 group-hover:scale-102 transition-transform">
-              <span className="font-bold text-xs tracking-wider font-mono">TBW</span>
-              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+        <div className="flex h-16 items-center justify-between border-b border-[#DDD9D0] px-4 bg-white dark:border-[#232D3B] dark:bg-[#151C24] shrink-0">
+          <Link
+            href="/"
+            onClick={handleClose}
+            className={`flex items-center gap-3 group min-w-0 ${isCollapsed ? 'justify-center w-full' : ''}`}
+          >
+            <div className="relative flex h-9.5 w-9.5 items-center justify-center rounded-xl bg-[#202B35] text-[#FCFBF8] shadow-xs group-hover:scale-102 transition-transform shrink-0 dark:bg-[#FCFBF8] dark:text-[#202B35]">
+              <span className="font-extrabold text-xs tracking-wider font-mono">TBW</span>
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#7D8F82] ring-2 ring-white dark:ring-[#141A22]" />
             </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs tracking-tight text-stone-900 uppercase font-mono">
+            {!isCollapsed && (
+              <div className="flex flex-col min-w-0">
+                <span className="font-black text-sm text-[#202B35] tracking-tight truncate leading-tight dark:text-[#FCFBF8]">
                   The Business Work
                 </span>
+                <span className="text-[10px] text-[#7D8F82] font-semibold tracking-wider uppercase truncate">
+                  We Make Business Simpler
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-stone-500">
-                <span>Admin Control</span>
-                <span className="text-stone-300">•</span>
-                <span className="rounded bg-stone-200/70 px-1 py-0.2 font-mono text-[9px] text-stone-700">v2.4</span>
-              </div>
-            </div>
+            )}
           </Link>
 
-          {/* Close button for Mobile */}
+          {/* Mobile close button */}
           <button
             type="button"
             onClick={handleClose}
-            className="lg:hidden p-2 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 cursor-pointer transition-colors active:scale-95"
-            aria-label="Close navigation menu"
+            className="rounded-lg p-1 text-[#566573] hover:bg-[#F4F2EC] hover:text-[#202B35] lg:hidden cursor-pointer dark:text-[#94A4B4] dark:hover:bg-[#1B232D]"
+            aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Grouped Navigation */}
-        <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-5">
-          {sections.map((section, idx) => (
-            <div key={idx} className="space-y-1">
-              {section.title && (
-                <div className="px-3 pb-1.5 pt-1 text-[10px] font-bold tracking-wider uppercase text-stone-400">
+        {/* Scrollable Navigation Items */}
+        <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4">
+          {sections.map((section, sIdx) => (
+            <div key={sIdx} className="space-y-1">
+              {!isCollapsed && (
+                <div className="px-2.5 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#7D8F82] dark:text-[#6D8092]">
                   {section.title}
                 </div>
               )}
-
               {section.items.map((item) => {
+                const isActive =
+                  item.href === '/'
+                    ? pathname === '/'
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const Icon = item.icon;
-                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
 
-                return (
+                const navLinkContent = (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={handleClose}
-                    className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150 ${
+                    className={`group relative flex items-center rounded-xl text-xs font-semibold transition-all duration-150 ${
+                      isCollapsed
+                        ? 'h-10 w-10 justify-center mx-auto'
+                        : 'px-3 py-2 justify-between'
+                    } ${
                       isActive
-                        ? 'bg-stone-900 text-white shadow-xs'
-                        : 'text-stone-600 hover:bg-[#EFECE4] hover:text-stone-900'
+                        ? 'bg-[#202B35] text-[#FCFBF8] shadow-xs dark:bg-[#FCFBF8] dark:text-[#202B35]'
+                        : 'text-[#566573] hover:bg-[#F4F2EC] hover:text-[#202B35] dark:text-[#94A4B4] dark:hover:bg-[#1B232D] dark:hover:text-[#FCFBF8]'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <Icon
-                        className={`h-4 w-4 shrink-0 transition-colors ${
-                          isActive ? 'text-white' : 'text-stone-400 group-hover:text-stone-700'
+                        className={`h-4 w-4 shrink-0 transition-transform ${
+                          isActive
+                            ? 'text-[#FCFBF8] dark:text-[#202B35]'
+                            : 'text-[#7D8F82] group-hover:text-[#202B35] dark:text-[#8FA395] dark:group-hover:text-[#FCFBF8]'
                         }`}
                       />
-                      <span className="tracking-tight">{item.name}</span>
+                      {!isCollapsed && <span className="truncate">{item.name}</span>}
                     </div>
 
-                    {item.badge !== undefined && (
+                    {!isCollapsed && item.badge !== undefined && (
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${getBadgeClasses(
+                        className={`ml-2 px-1.5 py-0.5 text-[10px] rounded-md font-mono shrink-0 ${getBadgeClasses(
                           item.badgeVariant,
                           isActive
                         )}`}
@@ -261,80 +286,53 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
                         {item.badge}
                       </span>
                     )}
+
+                    {/* Collapsed dot badge indicator */}
+                    {isCollapsed && item.badge !== undefined && (
+                      <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#7D8F82] ring-1 ring-white dark:ring-[#141A22]" />
+                    )}
                   </Link>
                 );
+
+                if (isCollapsed) {
+                  return (
+                    <Tooltip key={item.href} content={item.name} position="right">
+                      {navLinkContent}
+                    </Tooltip>
+                  );
+                }
+
+                return navLinkContent;
               })}
             </div>
           ))}
-
-          {/* External Links Section */}
-          <div className="pt-2 space-y-1">
-            <div className="px-3 pb-1.5 text-[10px] font-bold tracking-wider uppercase text-stone-400">
-              Live Assets
-            </div>
-
-            <a
-              href="https://www.thebusinesswork.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-xl px-3 py-1.5 text-xs text-stone-500 hover:bg-[#EFECE4] hover:text-stone-900 transition-colors"
-            >
-              <span className="truncate">thebusinesswork.com</span>
-              <ExternalLink className="h-3 w-3 shrink-0 text-stone-400" />
-            </a>
-
-            <a
-              href="https://wa.me/917972020292"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-xl px-3 py-1.5 text-xs text-stone-500 hover:bg-[#EFECE4] hover:text-stone-900 transition-colors"
-            >
-              <span className="truncate">+91 79720 20292</span>
-              <ExternalLink className="h-3 w-3 shrink-0 text-stone-400" />
-            </a>
-          </div>
         </div>
 
-        {/* Administrator Footer */}
-        <div className="border-t border-[#E6E1D7] p-3.5 bg-[#F5F2EA]/70">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="relative flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl bg-stone-200 text-stone-800 font-bold text-xs border border-stone-300 shadow-2xs">
-                AR
-                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-1.5 ring-white" />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="truncate text-xs font-semibold text-stone-900">
-                  Aman Rajbhar
-                </span>
-                <span className="truncate text-[10px] text-stone-500 font-mono">
-                  thebusinesswork.co@gmail.com
-                </span>
-              </div>
+        {/* Desktop Collapse / Expand Toggle Footer */}
+        <div className="hidden lg:flex items-center justify-between border-t border-[#DDD9D0] p-3 bg-white dark:border-[#232D3B] dark:bg-[#151C24] shrink-0">
+          {!isCollapsed && (
+            <div className="flex items-center gap-2 text-[11px] text-[#566573] dark:text-[#94A4B4]">
+              <span className="h-2 w-2 rounded-full bg-[#7D8F82]" />
+              <span className="font-semibold">TBW Engine Live</span>
             </div>
-
-            <Link
-              href="/login"
-              title="Logout session"
-              className="p-1.5 text-stone-400 hover:text-stone-900 hover:bg-[#EFECE4] rounded-lg transition-colors shrink-0"
-            >
-              <LogOut className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="mt-2.5 flex items-center justify-between border-t border-stone-200/60 pt-2 text-[10px] text-stone-500">
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3 text-emerald-600" />
-              <span>Admin Verified</span>
-            </span>
-            <span className="flex items-center gap-1 font-mono text-[9px] text-stone-400">
-              <Sparkles className="h-2.5 w-2.5 text-amber-500" />
-              <span>TBW OS</span>
-            </span>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleSidebarCollapse}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border border-[#DDD9D0] bg-[#FCFBF8] text-[#566573] hover:bg-[#F4F2EC] hover:text-[#202B35] transition cursor-pointer dark:border-[#232D3B] dark:bg-[#141A22] dark:text-[#94A4B4] dark:hover:bg-[#1B232D] ${
+              isCollapsed ? 'mx-auto' : ''
+            }`}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </aside>
     </>
   );
 }
-

@@ -1,0 +1,187 @@
+{
+  "id": "0aYZyqrP4dYgulhC",
+  "name": "TBW Test Read WhatsApp Leads",
+  "description": null,
+  "active": true,
+  "activeVersionId": "ae17f308-4e4a-4188-93f9-f65bbd86b74b",
+  "createdAt": "2026-10-24T16:48:32.816Z",
+  "updatedAt": "2026-10-24T16:48:32.816Z",
+  "isArchived": false,
+  "versionId": "ae17f308-4e4a-4188-93f9-f65bbd86b74b",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "node-webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-read-whatsapp-leads-1792860510619",
+        "httpMethod": "GET",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "48cf54a3-7511-4d8f-a419-8bd3cf48a1b1"
+    },
+    {
+      "id": "node-sheets-1",
+      "name": "Read WhatsApp Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 671996512,
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IjyJjGzJP8B9L6U6",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read WhatsApp Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "0aYZyqrP4dYgulhC",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-24T16:48:32.821Z",
+      "updatedAt": "2026-10-24T16:48:32.821Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "ae17f308-4e4a-4188-93f9-f65bbd86b74b",
+    "workflowId": "0aYZyqrP4dYgulhC",
+    "nodes": [
+      {
+        "id": "node-webhook-1",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-read-whatsapp-leads-1792860510619",
+          "httpMethod": "GET",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "webhookId": "48cf54a3-7511-4d8f-a419-8bd3cf48a1b1"
+      },
+      {
+        "id": "node-sheets-1",
+        "name": "Read WhatsApp Leads",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          480,
+          300
+        ],
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1ic0Dt2UTJ0n2eL_J0BnugEFny8vNCXG1qGf2RGZzHtA",
+            "mode": "list"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 671996512,
+            "mode": "list"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "IjyJjGzJP8B9L6U6",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Read WhatsApp Leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-24T16:48:32.823Z",
+    "updatedAt": "2026-10-24T16:48:32.823Z",
+    "workflowPublishHistory": [
+      {
+        "id": 83,
+        "workflowId": "0aYZyqrP4dYgulhC",
+        "versionId": "ae17f308-4e4a-4188-93f9-f65bbd86b74b",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-24T16:48:33.235Z"
+      }
+    ]
+  }
+}

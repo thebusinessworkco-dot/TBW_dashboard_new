@@ -44,6 +44,32 @@ interface DashboardStoreContextType {
   toggleAutomationPaused: (id: string) => void;
   toggleManualTakeover: (id: string) => void;
   updateInternalNotes: (id: string, notes: string) => void;
+  updateContactName: (contactId: string, name: string) => Promise<boolean>;
+  createContact: (data: {
+    name: string;
+    phone: string;
+    company_name?: string;
+    notes?: string;
+    tags?: string[];
+  }) => Promise<{ success: boolean; error?: string }>;
+  updateContact: (
+    contactId: string,
+    data: {
+      name?: string;
+      company_name?: string;
+      notes?: string;
+      tags?: string[];
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteContact: (
+    contactId: string,
+    phone: string
+  ) => Promise<{ success: boolean; error?: string; message?: string }>;
+  bulkAddTags: (contactIds: string[], tag: string) => Promise<{ success: boolean; count: number }>;
+  bulkDeleteContacts: (
+    contactsToDelete: Array<{ id: string; phone: string }>
+  ) => Promise<{ success: boolean; count: number }>;
+  syncAllMessages: () => Promise<{ success: boolean; count: number }>;
   sendMessage: (
     conversationId: string,
     content: string,
@@ -52,7 +78,9 @@ interface DashboardStoreContextType {
   
   // Leads
   updateLeadStatus: (id: string, status: LeadStatus) => void;
+  updateLead: (id: string, updates: Partial<AdminLead>) => Promise<{ success: boolean; error?: string }>;
   addLead: (lead: Omit<AdminLead, 'id' | 'created_at' | 'updated_at'>) => void;
+  linkLeadToContact: (leadId: string, contactId?: string) => Promise<{ success: boolean; contactId?: string; error?: string }>;
 
   // Google Sheets Sync
   syncGoogleSheets: () => Promise<boolean>;
@@ -61,11 +89,15 @@ interface DashboardStoreContextType {
 
   // Appointments
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
+  updateAppointment: (id: string, updates: Partial<AdminAppointment>) => Promise<{ success: boolean; error?: string }>;
   addAppointment: (appointment: Omit<AdminAppointment, 'id' | 'created_at'>) => void;
+  cancelAppointment: (id: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
 
   // Quotations
-  saveQuotation: (quotation: AdminQuotation) => void;
+  saveQuotation: (quotation: AdminQuotation) => Promise<{ success: boolean; error?: string }>;
   updateQuotationStatus: (id: string, status: QuotationStatus, sentVia?: 'whatsapp' | 'instagram') => void;
+  deleteQuotation: (id: string) => Promise<{ success: boolean; error?: string }>;
+  duplicateQuotation: (id: string) => Promise<{ success: boolean; newId?: string; error?: string }>;
 
   // Comment Automations
   toggleReelAutomation: (id: string) => void;
@@ -75,6 +107,11 @@ interface DashboardStoreContextType {
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
+
+  // Sidebar Desktop Collapsed State
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebarCollapse: () => void;
 
   // Theme State
   theme: 'light' | 'dark' | 'system';
@@ -240,6 +277,34 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'fallback_polling' | 'disconnected'>('connecting');
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('7d');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const savedCollapsed = localStorage.getItem('tbw_sidebar_collapsed');
+      if (savedCollapsed === 'true') {
+        setSidebarCollapsedState(true);
+      }
+    } catch {}
+  }, []);
+
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setSidebarCollapsedState(collapsed);
+    try {
+      localStorage.setItem('tbw_sidebar_collapsed', String(collapsed));
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsedState((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('tbw_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   // Theme management (Light / Dark / System)
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('light');
 
@@ -943,6 +1008,16 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     if (supabase) {
       supabase.from('admin_conversations').update({ automation_paused: nextVal, updated_at }).eq('id', id).then();
     }
+    fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: nextVal ? 'BOT_AUTOMATION_PAUSED' : 'BOT_AUTOMATION_RESUMED',
+        targetEntity: 'CONVERSATION',
+        targetId: id,
+        metadata: { automation_paused: nextVal },
+      }),
+    }).catch(() => {});
   };
 
   const toggleManualTakeover = (id: string) => {
@@ -974,6 +1049,173 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         .eq('id', id)
         .then();
     }
+    fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: nextTakeover ? 'MANUAL_TAKEOVER_ENABLED' : 'MANUAL_TAKEOVER_DISABLED',
+        targetEntity: 'CONVERSATION',
+        targetId: id,
+        metadata: { manual_takeover: nextTakeover },
+      }),
+    }).catch(() => {});
+  };
+
+  const updateContactName = async (contactId: string, name: string): Promise<boolean> => {
+    const trimmed = name.trim();
+    if (!trimmed || !contactId) return false;
+    const updated_at = new Date().toISOString();
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.contact_id === contactId || c.contact?.id === contactId) {
+          return {
+            ...c,
+            contact: {
+              ...(c.contact || { id: contactId, created_at: updated_at, phone: '' }),
+              name: trimmed,
+              updated_at,
+            },
+            updated_at,
+          };
+        }
+        return c;
+      })
+    );
+
+    try {
+      const res = await fetch('/api/whatsapp/contacts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId, name: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'CONTACT_UPDATE_NAME',
+            targetEntity: 'CONTACT',
+            targetId: contactId,
+            metadata: { new_name: trimmed },
+          }),
+        }).catch(() => {});
+      }
+      return Boolean(data.success);
+    } catch {
+      return false;
+    }
+  };
+
+  const createContact = async (data: {
+    name: string;
+    phone: string;
+    company_name?: string;
+    notes?: string;
+    tags?: string[];
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/whatsapp/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await refreshData();
+        return { success: true };
+      }
+      return { success: false, error: json.error || 'Failed to create contact' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Network error' };
+    }
+  };
+
+  const updateContact = async (
+    contactId: string,
+    data: {
+      name?: string;
+      company_name?: string;
+      notes?: string;
+      tags?: string[];
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/whatsapp/contacts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId, ...data }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await refreshData();
+        return { success: true };
+      }
+      return { success: false, error: json.error || 'Failed to update contact' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Network error' };
+    }
+  };
+
+  const deleteContact = async (
+    contactId: string,
+    phone: string
+  ): Promise<{ success: boolean; error?: string; message?: string }> => {
+    try {
+      const res = await fetch(`/api/whatsapp/contacts/${encodeURIComponent(contactId)}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setConversations((prev) =>
+          prev.filter((c) => c.contact_id !== contactId && c.contact?.id !== contactId)
+        );
+        await refreshData();
+        return { success: true, message: json.message };
+      }
+      return { success: false, error: json.error || 'Failed to delete contact' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Network error' };
+    }
+  };
+
+  const bulkAddTags = async (contactIds: string[], tag: string): Promise<{ success: boolean; count: number }> => {
+    const trimmedTag = tag.trim();
+    if (!trimmedTag || contactIds.length === 0) return { success: false, count: 0 };
+    let successCount = 0;
+    for (const cid of contactIds) {
+      const conv = conversations.find((c) => c.contact_id === cid || c.contact?.id === cid);
+      const existingTags = conv?.contact?.tags || [];
+      if (!existingTags.includes(trimmedTag)) {
+        const nextTags = [...existingTags, trimmedTag];
+        const ok = await updateContact(cid, { tags: nextTags });
+        if (ok.success) successCount++;
+      }
+    }
+    await refreshData();
+    return { success: true, count: successCount };
+  };
+
+  const bulkDeleteContacts = async (
+    contactsToDelete: Array<{ id: string; phone: string }>
+  ): Promise<{ success: boolean; count: number }> => {
+    let count = 0;
+    for (const c of contactsToDelete) {
+      const ok = await deleteContact(c.id, c.phone);
+      if (ok.success) count++;
+    }
+    return { success: true, count };
+  };
+
+  const syncAllMessages = async (): Promise<{ success: boolean; count: number }> => {
+    await refreshData();
+    const waConvs = conversations.filter((c) => c.platform === 'whatsapp');
+    const promises = waConvs.map((c) => fetchConversationMessages(c.id));
+    await Promise.allSettled(promises);
+    return { success: true, count: waConvs.length };
   };
 
   const updateInternalNotes = (id: string, notes: string) => {
@@ -1216,6 +1458,73 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     if (supabase) {
       supabase.from('admin_leads').update({ status, updated_at }).eq('id', id).then();
     }
+    fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'LEAD_STATUS_UPDATE',
+        targetEntity: 'LEAD',
+        targetId: id,
+        metadata: { status },
+      }),
+    }).catch(() => {});
+  };
+
+  const updateLead = async (id: string, updates: Partial<AdminLead>): Promise<{ success: boolean; error?: string }> => {
+    const updated_at = new Date().toISOString();
+    setLeads((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...updates, updated_at } : l))
+    );
+    const supabase = createClient();
+    if (supabase) {
+      const { error } = await supabase.from('admin_leads').update({ ...updates, updated_at }).eq('id', id);
+      if (error) return { success: false, error: error.message };
+    }
+    return { success: true };
+  };
+
+  const linkLeadToContact = async (leadId: string, contactId?: string): Promise<{ success: boolean; contactId?: string; error?: string }> => {
+    const targetLead = leads.find((l) => l.id === leadId);
+    if (!targetLead) return { success: false, error: 'Lead not found' };
+
+    let resolvedContactId = contactId;
+    const supabase = createClient();
+
+    if (!resolvedContactId && targetLead.contact_phone && supabase) {
+      const normPhone = targetLead.contact_phone.trim();
+      const { data: existingContact } = await supabase
+        .from('admin_contacts')
+        .select('id, name, phone')
+        .eq('phone', normPhone)
+        .maybeSingle();
+
+      if (existingContact) {
+        resolvedContactId = existingContact.id;
+      } else {
+        const { data: createdContact, error: createErr } = await supabase
+          .from('admin_contacts')
+          .insert({
+            name: targetLead.contact_name,
+            phone: normPhone,
+            email: targetLead.contact_email,
+            company_name: (targetLead.notes?.match(/Business:\s*([^|]+)/i)?.[1] || '').trim() || null,
+            is_demo: false,
+          })
+          .select('id, name, phone')
+          .single();
+
+        if (!createErr && createdContact) {
+          resolvedContactId = createdContact.id;
+        }
+      }
+    }
+
+    if (resolvedContactId) {
+      await updateLead(leadId, { contact_id: resolvedContactId });
+      return { success: true, contactId: resolvedContactId };
+    }
+
+    return { success: false, error: 'Could not resolve or create contact for lead' };
   };
 
   const addLead = (newLeadData: Omit<AdminLead, 'id' | 'created_at' | 'updated_at'>) => {
@@ -1246,6 +1555,34 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     if (supabase) {
       supabase.from('admin_appointments').update({ status }).eq('id', id).then();
     }
+    fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'APPOINTMENT_STATUS_UPDATE',
+        targetEntity: 'APPOINTMENT',
+        targetId: id,
+        metadata: { status },
+      }),
+    }).catch(() => {});
+  };
+
+  const updateAppointment = async (id: string, updates: Partial<AdminAppointment>): Promise<{ success: boolean; error?: string }> => {
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
+    );
+    const supabase = createClient();
+    if (supabase) {
+      const { error } = await supabase.from('admin_appointments').update(updates).eq('id', id);
+      if (error) return { success: false, error: error.message };
+    }
+    return { success: true };
+  };
+
+  const cancelAppointment = async (id: string, reason?: string): Promise<{ success: boolean; error?: string }> => {
+    const targetAppt = appointments.find((a) => a.id === id);
+    const updatedNotes = reason ? `${targetAppt?.notes || ''} [Cancelled: ${reason}]`.trim() : targetAppt?.notes;
+    return await updateAppointment(id, { status: 'cancelled', notes: updatedNotes });
   };
 
   const addAppointment = (newApptData: Omit<AdminAppointment, 'id' | 'created_at'>) => {
@@ -1267,7 +1604,7 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     }
   };
 
-  const saveQuotation = (quotation: AdminQuotation) => {
+  const saveQuotation = async (quotation: AdminQuotation): Promise<{ success: boolean; error?: string }> => {
     const updated_at = new Date().toISOString();
     setQuotations((prev) => {
       const exists = prev.some((q) => q.id === quotation.id);
@@ -1280,33 +1617,69 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
     const supabase = createClient();
     if (supabase) {
       const { items, ...quotationRecord } = quotation;
-      supabase
+      const { error: quoteErr } = await supabase
         .from('admin_quotations')
         .upsert({
           ...quotationRecord,
           is_demo: false,
           updated_at,
-        })
-        .then(() => {
-          if (items && items.length > 0) {
-            supabase
-              .from('admin_quotation_items')
-              .insert(
-                items.map((it) => ({
-                  quotation_id: quotation.id,
-                  service_category: it.service_category,
-                  service_name: it.service_name,
-                  description: it.description,
-                  quantity: it.quantity,
-                  setup_charge: it.setup_charge,
-                  monthly_recurring_charge: it.monthly_recurring_charge,
-                  is_demo: false,
-                }))
-              )
-              .then();
-          }
         });
+
+      if (quoteErr) return { success: false, error: quoteErr.message };
+
+      if (items && items.length > 0) {
+        await supabase.from('admin_quotation_items').delete().eq('quotation_id', quotation.id);
+        const { error: itemsErr } = await supabase
+          .from('admin_quotation_items')
+          .insert(
+            items.map((it) => ({
+              id: it.id && !it.id.startsWith('item-') ? it.id : undefined,
+              quotation_id: quotation.id,
+              service_category: it.service_category,
+              service_name: it.service_name,
+              description: it.description,
+              quantity: it.quantity || 1,
+              setup_charge: it.setup_charge || 0,
+              monthly_recurring_charge: it.monthly_recurring_charge || 0,
+              is_demo: false,
+            }))
+          );
+        if (itemsErr) return { success: false, error: itemsErr.message };
+      }
     }
+    return { success: true };
+  };
+
+  const deleteQuotation = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    setQuotations((prev) => prev.filter((q) => q.id !== id));
+    const supabase = createClient();
+    if (supabase) {
+      await supabase.from('admin_quotation_items').delete().eq('quotation_id', id);
+      const { error } = await supabase.from('admin_quotations').delete().eq('id', id);
+      if (error) return { success: false, error: error.message };
+    }
+    return { success: true };
+  };
+
+  const duplicateQuotation = async (id: string): Promise<{ success: boolean; newId?: string; error?: string }> => {
+    const existing = quotations.find((q) => q.id === id);
+    if (!existing) return { success: false, error: 'Quotation not found' };
+
+    const newId = `quot-${Date.now()}`;
+    const newNumber = `TBW-2026-${(100 + quotations.length + 1).toString().padStart(4, '0')}`;
+    const nowIso = new Date().toISOString();
+    const cloned: AdminQuotation = {
+      ...existing,
+      id: newId,
+      quotation_number: newNumber,
+      status: 'draft',
+      quotation_date: nowIso.split('T')[0],
+      items: existing.items.map((it, idx) => ({ ...it, id: `item-${Date.now()}-${idx}` })),
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    const res = await saveQuotation(cloned);
+    return { ...res, newId };
   };
 
   const updateQuotationStatus = (
@@ -1403,21 +1776,37 @@ export function DashboardStoreProvider({ children }: { children: React.ReactNode
         toggleAutomationPaused,
         toggleManualTakeover,
         updateInternalNotes,
+        updateContactName,
+        createContact,
+        updateContact,
+        deleteContact,
+        bulkAddTags,
+        bulkDeleteContacts,
+        syncAllMessages,
         sendMessage,
         updateLeadStatus,
+        updateLead,
         addLead,
+        linkLeadToContact,
         syncGoogleSheets,
         isSyncingSheets,
         lastSheetsSyncAt,
         updateAppointmentStatus,
+        updateAppointment,
         addAppointment,
+        cancelAppointment,
         saveQuotation,
         updateQuotationStatus,
+        deleteQuotation,
+        duplicateQuotation,
         toggleReelAutomation,
         updateReelAutomation,
         mobileMenuOpen,
         setMobileMenuOpen,
         toggleMobileMenu,
+        sidebarCollapsed,
+        setSidebarCollapsed,
+        toggleSidebarCollapse,
         theme,
         setTheme,
         toggleTheme,

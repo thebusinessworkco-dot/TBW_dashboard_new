@@ -790,7 +790,7 @@ export async function evaluateDmContext(event: Record<string, unknown>): Promise
 
   // 3. Real-Time Follow Verification & Target Reel Rule Resolution
   const isFollowing = await checkUserFollows(igUserId);
-  let customerFollowStatus: 'follows' | 'not_following' | 'unknown' = isFollowing ? 'follows' : 'not_following';
+  const customerFollowStatus: 'follows' | 'not_following' | 'unknown' = isFollowing ? 'follows' : 'not_following';
   let resolvedMediaId: string | null = null;
 
   // A. Check explicit referral media ID from incoming event

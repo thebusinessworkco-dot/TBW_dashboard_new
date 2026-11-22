@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  encodeSessionNotes,
+  extractSessionMetadata,
+  isSessionExpired,
+  INACTIVITY_TIMEOUT_MS,
+} from '@/lib/whatsapp/session-identity';
 
 /**
  * META WHATSAPP CLOUD API WEBHOOK ENDPOINT
@@ -139,7 +145,8 @@ export async function POST(request: Request) {
             );
             const contactName = contactProfile?.profile?.name || `+${senderPhone}`;
 
-            // 2. Resolve or Create Contact in admin_contacts
+            // 2. Resolve or Create Persistent Contact in admin_contacts
+            // PART 05: Persistent identity rule - Admin-assigned name is NEVER overwritten by customer onboarding.
             let contactId: string | null = null;
             const { data: contactRow } = await adminSupabase
               .from('admin_contacts')
@@ -149,6 +156,7 @@ export async function POST(request: Request) {
 
             if (contactRow) {
               contactId = contactRow.id;
+              // Persistent contact name is preserved - do NOT overwrite contactRow.name!
             } else {
               const { data: newContact, error: contactInsertError } = await adminSupabase
                 .from('admin_contacts')
@@ -171,36 +179,78 @@ export async function POST(request: Request) {
               continue;
             }
 
-            // 3. Resolve or Create Conversation in admin_conversations
+            // 3. Resolve or Create Individual Conversation Session in admin_conversations
+            // PART 05: A new session is started if previous was completed or inactive for > 20 minutes.
             let conversationId: string | null = null;
             let isManualTakeover = false;
             let isAutomationPaused = false;
 
-            const { data: convRow } = await adminSupabase
+            const { data: convRows } = await adminSupabase
               .from('admin_conversations')
-              .select('id, unread_count, manual_takeover, automation_paused, status')
+              .select('id, unread_count, manual_takeover, automation_paused, status, last_message_at, created_at, internal_notes')
               .eq('contact_id', contactId)
               .eq('platform', 'whatsapp')
-              .maybeSingle();
+              .order('created_at', { ascending: false });
 
-            if (convRow) {
-              conversationId = convRow.id;
-              isManualTakeover = Boolean(convRow.manual_takeover);
-              isAutomationPaused = Boolean(convRow.automation_paused);
+            const latestConv = convRows?.[0] || null;
+            const isLatestExpired = !latestConv
+              ? true
+              : latestConv.status === 'completed' ||
+                latestConv.status === 'failed' ||
+                (latestConv.last_message_at &&
+                  Date.now() - new Date(latestConv.last_message_at).getTime() > INACTIVITY_TIMEOUT_MS);
 
-              // Update existing conversation
+            // Extract session customer name if available from profile
+            const validSessionCustomerName =
+              contactName && !contactName.startsWith('+') && contactName.length >= 2 ? contactName : null;
+
+            if (latestConv && !isLatestExpired) {
+              conversationId = latestConv.id;
+              isManualTakeover = Boolean(latestConv.manual_takeover);
+              isAutomationPaused = Boolean(latestConv.automation_paused);
+
+              const currentMeta = extractSessionMetadata(latestConv);
+              if (validSessionCustomerName && !currentMeta.session_customer_name) {
+                currentMeta.session_customer_name = validSessionCustomerName;
+              }
+
+              // Update active conversation
               await adminSupabase
                 .from('admin_conversations')
                 .update({
                   last_message: content,
                   last_message_at: timestamp,
-                  unread_count: (convRow.unread_count || 0) + 1,
-                  status: convRow.status === 'completed' ? 'open' : convRow.status,
+                  unread_count: (latestConv.unread_count || 0) + 1,
+                  status: latestConv.status === 'completed' ? 'open' : latestConv.status,
+                  internal_notes: encodeSessionNotes(latestConv.internal_notes, currentMeta),
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', conversationId);
             } else {
-              // Create new conversation
+              // Previous conversation has ended or timed out (20 minutes).
+              // Mark previous session closed if still open
+              if (latestConv && latestConv.status !== 'completed') {
+                const oldMeta = extractSessionMetadata(latestConv);
+                oldMeta.closed_at = new Date().toISOString();
+                oldMeta.close_reason = 'closed_inactivity';
+                await adminSupabase
+                  .from('admin_conversations')
+                  .update({
+                    status: 'completed',
+                    internal_notes: encodeSessionNotes(latestConv.internal_notes, oldMeta),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', latestConv.id);
+              }
+
+              // Spin up a FRESH NEW CONVERSATION SESSION
+              const nextSessionNumber = (convRows?.length || 0) + 1;
+              const newSessionMeta = {
+                session_number: nextSessionNumber,
+                session_customer_name: validSessionCustomerName,
+                selected_language: 'English',
+              };
+
               const { data: newConv, error: convInsertError } = await adminSupabase
                 .from('admin_conversations')
                 .insert({
@@ -212,6 +262,7 @@ export async function POST(request: Request) {
                   unread_count: 1,
                   manual_takeover: false,
                   automation_paused: false,
+                  internal_notes: encodeSessionNotes('', newSessionMeta),
                   is_demo: false,
                 })
                 .select('id')

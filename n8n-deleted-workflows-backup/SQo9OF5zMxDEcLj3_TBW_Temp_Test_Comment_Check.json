@@ -1,0 +1,181 @@
+{
+  "id": "SQo9OF5zMxDEcLj3",
+  "name": "TBW Temp Test Comment Check",
+  "description": null,
+  "active": true,
+  "activeVersionId": "7c6108f6-156e-4b09-992b-7a3dcf9ad8a9",
+  "createdAt": "2026-10-23T14:55:59.657Z",
+  "updatedAt": "2026-10-23T14:55:59.657Z",
+  "isArchived": false,
+  "versionId": "7c6108f6-156e-4b09-992b-7a3dcf9ad8a9",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "probe-wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "tbw-test-comment-check-1792767359172",
+        "httpMethod": "GET",
+        "responseMode": "lastNode"
+      },
+      "webhookId": "ba327fc7-6369-4b45-bd81-5cd1982062a8"
+    },
+    {
+      "id": "probe-http",
+      "name": "Probe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.thebusinesswork.com/api/instagram/comment-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"event_type\":\"comment\",\"comment_id\":\"12345678901234\",\"media_id\":\"test_media_123\",\"ig_user_id\":\"1234567890\",\"text\":\"test\"}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xhQiNoV6sd96wDLZ",
+          "name": "TBW Dashboard API Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Probe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {},
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "SQo9OF5zMxDEcLj3",
+      "projectId": "eWq32IyUoxkTc8mS",
+      "project": {
+        "id": "eWq32IyUoxkTc8mS",
+        "name": "Aman Rajbhar <thebusinesswork.co@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-18T16:44:18.385Z",
+        "updatedAt": "2026-10-18T16:50:19.842Z"
+      },
+      "createdAt": "2026-10-23T14:55:59.661Z",
+      "updatedAt": "2026-10-23T14:55:59.661Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "7c6108f6-156e-4b09-992b-7a3dcf9ad8a9",
+    "workflowId": "SQo9OF5zMxDEcLj3",
+    "nodes": [
+      {
+        "id": "probe-wh",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {
+          "path": "tbw-test-comment-check-1792767359172",
+          "httpMethod": "GET",
+          "responseMode": "lastNode"
+        },
+        "webhookId": "ba327fc7-6369-4b45-bd81-5cd1982062a8"
+      },
+      {
+        "id": "probe-http",
+        "name": "Probe",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          400,
+          300
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://dashboard.thebusinesswork.com/api/instagram/comment-check",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\"event_type\":\"comment\",\"comment_id\":\"12345678901234\",\"media_id\":\"test_media_123\",\"ig_user_id\":\"1234567890\",\"text\":\"test\"}",
+          "options": {
+            "timeout": 8000
+          }
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "xhQiNoV6sd96wDLZ",
+            "name": "TBW Dashboard API Auth"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Probe",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Aman Rajbhar",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-23T14:55:59.663Z",
+    "updatedAt": "2026-10-23T14:55:59.663Z",
+    "workflowPublishHistory": [
+      {
+        "id": 52,
+        "workflowId": "SQo9OF5zMxDEcLj3",
+        "versionId": "7c6108f6-156e-4b09-992b-7a3dcf9ad8a9",
+        "event": "activated",
+        "userId": "ca56c8a3-8848-4f04-b51d-eb0f0f34a5f9",
+        "createdAt": "2026-10-23T14:56:00.128Z"
+      }
+    ]
+  }
+}

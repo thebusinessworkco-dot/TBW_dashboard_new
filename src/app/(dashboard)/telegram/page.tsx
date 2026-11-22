@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Send,
   CheckCircle2,
@@ -17,8 +17,21 @@ import {
   Copy,
   Check,
   BellOff,
+  Search,
+  Filter,
+  ShieldCheck,
+  Lock,
+  ChevronRight,
+  Eye,
+  AlertTriangle,
+  Flame,
+  MessageSquare,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Modal } from '@/components/ui/modal';
+import { formatDateTime, formatRelativeTime } from '@/lib/utils';
 
 interface TelegramConfig {
   bot_username: string;
@@ -45,6 +58,8 @@ interface AlertLog {
   sent_at: string;
 }
 
+type SeverityLevel = 'all' | 'success' | 'warning' | 'error' | 'critical';
+
 export default function TelegramAlertsPage() {
   const [config, setConfig] = useState<TelegramConfig | null>(null);
   const [history, setHistory] = useState<AlertLog[]>([]);
@@ -57,6 +72,12 @@ export default function TelegramAlertsPage() {
     text: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<SeverityLevel>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [selectedAlert, setSelectedAlert] = useState<AlertLog | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -140,415 +161,493 @@ export default function TelegramAlertsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Classify severity from alert type & status
+  const getSeverity = (alert: AlertLog): 'success' | 'warning' | 'error' | 'critical' => {
+    if (alert.status === 'failed') return 'error';
+    const textLower = (alert.title + ' ' + alert.text).toLowerCase();
+    if (textLower.includes('critical') || textLower.includes('emergency') || textLower.includes('takeover')) {
+      return 'critical';
+    }
+    if (textLower.includes('warning') || textLower.includes('degraded') || textLower.includes('timeout')) {
+      return 'warning';
+    }
+    if (textLower.includes('error') || textLower.includes('failed')) {
+      return 'error';
+    }
+    return 'success';
+  };
+
+  // Filtered Alert History
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        item.title.toLowerCase().includes(q) ||
+        item.text.toLowerCase().includes(q) ||
+        (item.customer_name && item.customer_name.toLowerCase().includes(q)) ||
+        (item.phone && item.phone.includes(q));
+
+      if (!matchSearch) return false;
+
+      const severity = getSeverity(item);
+      if (severityFilter !== 'all' && severity !== severityFilter) return false;
+
+      if (categoryFilter !== 'all' && item.type !== categoryFilter) return false;
+
+      return true;
+    });
+  }, [history, searchQuery, severityFilter, categoryFilter]);
+
+  // Counts
+  const totalAlerts = history.length;
+  const criticalCount = history.filter((h) => getSeverity(h) === 'critical').length;
+  const errorCount = history.filter((h) => getSeverity(h) === 'error').length;
+  const successCount = history.filter((h) => getSeverity(h) === 'success').length;
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
-      <TopNavbar title="Telegram Alerts" subtitle="Real-time Admin Notifications" />
+    <div className="min-h-full pb-16 bg-[#F4F2EC]">
+      <TopNavbar
+        title="Telegram Alerts Center"
+        subtitle="Real-time push notifications for critical customer events, leads, bookings, and operator takeovers."
+      />
 
-      <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full space-y-5 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-5 sm:pb-6">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-                <Send className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex flex-wrap items-center gap-2">
-                  Telegram Admin Alerts
-                  <span className="text-[11px] sm:text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Free • 0-Delay • 24/7
-                  </span>
-                </h1>
-                <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
-                  Real-time push notifications for customer messages, appointments, leads, and human support.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <button
-              onClick={handleSyncChatId}
-              disabled={syncing}
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-200 transition-colors disabled:opacity-50 flex-1 sm:flex-none cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Checking...' : 'Sync Connection'}
-            </button>
-            <button
-              onClick={handleTestAlert}
-              disabled={testing || !config?.chat_id}
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors disabled:opacity-50 shadow-lg shadow-sky-500/20 flex-1 sm:flex-none cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4" />
-              {testing ? 'Sending...' : 'Send Test Alert'}
-            </button>
-          </div>
-        </div>
-
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Status Feedback Banner */}
         {statusMessage && (
           <div
-            className={`p-4 rounded-xl border flex items-center gap-3 text-sm animate-in fade-in-50 duration-200 ${
+            className={`p-4 rounded-2xl border flex items-center gap-3 text-xs shadow-xs animate-in fade-in-50 duration-200 ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-rose-50 border-rose-200 text-rose-900'
             }`}
           >
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
             ) : (
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-600" />
             )}
-            <div className="flex-1">{statusMessage.text}</div>
+            <div className="flex-1 font-medium">{statusMessage.text}</div>
+            <button
+              onClick={() => setStatusMessage(null)}
+              className="text-stone-400 hover:text-stone-600 p-1"
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* Top Cards: Status & Setup */}
+        {/* KPI Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Total Dispatched</span>
+            <div className="text-xl font-bold font-mono text-[#202B35] mt-1">{totalAlerts}</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Delivered</span>
+            </div>
+            <div className="text-xl font-bold font-mono text-emerald-700 mt-1">{successCount}</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <div className="flex items-center gap-1.5">
+              <Flame className="h-3.5 w-3.5 text-rose-600" />
+              <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Critical Takeovers</span>
+            </div>
+            <div className="text-xl font-bold font-mono text-rose-700 mt-1">{criticalCount}</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-[#DDD9D0] shadow-2xs">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+              <span className="text-[10px] uppercase font-bold text-[#7D8F82] tracking-wider">Errors / Retries</span>
+            </div>
+            <div className="text-xl font-bold font-mono text-amber-700 mt-1">{errorCount}</div>
+          </div>
+        </div>
+
+        {/* Telegram Configuration & Destination Card */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Connection Status Card */}
-          <div className="lg:col-span-1 rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                  Bot Status
+          {/* Left Column: Bot Connection & Destination */}
+          <div className="lg:col-span-1 rounded-2xl border border-[#DDD9D0] bg-white p-5 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                  Bot Connection
                 </span>
                 {config?.is_connected ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     Connected & Live
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    Waiting for /start
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Awaiting Link
                   </span>
                 )}
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 text-xs">
                 <div>
-                  <div className="text-xs text-neutral-400">Telegram Bot Handle</div>
-                  <div className="text-lg font-bold text-white mt-0.5 flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">
+                    Official Bot Handle
+                  </span>
+                  <div className="text-sm font-bold text-[#202B35] mt-0.5 flex items-center gap-2">
                     @{config?.bot_username || 'TBW_Admin_Alerts_Bot'}
                     <button
                       onClick={copyBotLink}
-                      className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
+                      className="p-1 rounded-md hover:bg-stone-100 text-stone-500 transition-colors cursor-pointer"
                       title="Copy bot link"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-neutral-400">Admin Chat ID</div>
-                  <div className="text-sm font-mono font-medium text-neutral-200 mt-0.5">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">
+                    Configured Destination Chat ID
+                  </span>
+                  <div className="text-xs font-mono font-bold text-[#202B35] mt-0.5">
                     {config?.chat_id ? (
-                      <span className="text-sky-400 font-semibold">{config.chat_id}</span>
+                      <span className="text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                        {config.chat_id}
+                      </span>
                     ) : (
-                      <span className="text-neutral-500 italic">Not connected yet</span>
+                      <span className="text-stone-400 italic">Not linked yet</span>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-xs text-neutral-400">Admin Identity</div>
-                  <div className="text-sm text-neutral-200 mt-0.5">
-                    {config?.admin_name || 'Aman Rajbhar (Owner)'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-neutral-800/80 mt-6">
-              <a
-                href="https://t.me/TBW_Admin_Alerts_Bot"
-                target="_blank"
-                rel="noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-all shadow-lg shadow-sky-500/20"
-              >
-                <Smartphone className="w-4 h-4" />
-                Open Bot in Telegram
-                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-              </a>
-            </div>
-          </div>
-
-          {/* Quick Setup Instructions */}
-          <div className="lg:col-span-2 rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                  Quick Activation (30 Seconds)
-                </span>
-                <span className="text-xs text-neutral-400">No Meta 24h restrictions</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800">
-                  <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 font-bold flex items-center justify-center text-sm border border-sky-500/20 mb-3">
-                    1
-                  </div>
-                  <h4 className="text-sm font-semibold text-white">Open Bot</h4>
-                  <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                    Click the button or search for{' '}
-                    <code className="text-sky-300">@TBW_Admin_Alerts_Bot</code> in Telegram.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/20 mb-3">
-                    2
-                  </div>
-                  <h4 className="text-sm font-semibold text-white">Tap &quot;Start&quot;</h4>
-                  <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                    Press the blue <strong className="text-neutral-200">Start</strong> button (or send{' '}
-                    <code className="text-emerald-300">/start</code>) in the bot chat.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 font-bold flex items-center justify-center text-sm border border-amber-500/20 mb-3">
-                    3
-                  </div>
-                  <h4 className="text-sm font-semibold text-white">Click Sync</h4>
-                  <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                    Click <strong className="text-neutral-200">&quot;Sync Connection&quot;</strong> above. You will
-                    receive a confirmation alert instantly.
-                  </p>
-                </div>
-              </div>
-
-              {/* Manual Override Option */}
-              <div className="mt-5 p-3.5 rounded-xl bg-neutral-950/40 border border-neutral-800 flex flex-col md:flex-row items-center gap-3">
-                <div className="text-xs text-neutral-400 flex-1">
-                  Already have your numerical Telegram Chat ID? (e.g. from @userinfobot):
-                </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  <input
-                    type="text"
-                    placeholder="Enter Chat ID (e.g. 860460029)"
-                    value={manualChatId}
-                    onChange={(e) => setManualChatId(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-xs bg-neutral-900 border border-neutral-700 text-neutral-200 focus:outline-none focus:border-sky-500 w-full md:w-48"
-                  />
-                  <button
-                    onClick={handleSyncChatId}
-                    disabled={syncing || !manualChatId}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-                    Save ID
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Alert Triggers Grid */}
-        <div className="rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-white">Configured Alert Triggers</h3>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Every event below automatically pushes an instant alert to your Telegram with interactive 📞 Call and 💬 WhatsApp buttons.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-            <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800/80 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Bell className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">New Customers</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Triggers on first message from any brand-new WhatsApp number.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800/80 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                <UserCheck className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">Returning Customers</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Triggers when an existing contact restarts a new chat session.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800/80 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">Appointments Booked</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Triggers when a customer chooses an appointment date & confirms.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800/80 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                <Headphones className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">Human Support</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    Priority
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Triggers whenever a customer taps &quot;Talk to Human&quot; or asks for support.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Muted Numbers Notice */}
-          <div className="mt-4 pt-4 border-t border-neutral-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-neutral-300">
-              <BellOff className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>
-                <strong className="text-white">Personal Numbers Muted:</strong> Automated alerts are disabled for personal test numbers (<code>+91 7821840347</code>, <code>+91 8604600292</code>, <code>+91 7972020292</code>) to keep your Telegram inbox clean during testing.
-              </span>
-            </div>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-              Test Spam Protection Active
-            </span>
-          </div>
-        </div>
-
-        {/* Live Dispatched Alerts Feed */}
-        <div className="rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                Recent Dispatched Telegram Alerts
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-normal">
-                  {history.length}
-                </span>
-              </h3>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Audit history of recent alerts sent to your Telegram account.
-              </p>
-            </div>
-            <button
-              onClick={fetchStatus}
-              className="p-1.5 rounded-lg bg-neutral-800/60 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
-              title="Refresh log"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="py-12 text-center text-neutral-500 text-sm">Loading alert logs...</div>
-          ) : history.length === 0 ? (
-            <div className="py-12 text-center text-neutral-500 text-sm">
-              No Telegram alerts sent yet. Once you tap Start on{' '}
-              <a
-                href="https://t.me/TBW_Admin_Alerts_Bot"
-                target="_blank"
-                rel="noreferrer"
-                className="text-sky-400 underline underline-offset-2"
-              >
-                @TBW_Admin_Alerts_Bot
-              </a>
-              , new alerts will appear here in real time.
-            </div>
-          ) : (
-            <div className="space-y-3 mt-4">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-sm hover:border-neutral-700/80 transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`p-2 rounded-lg mt-0.5 flex-shrink-0 ${
-                        item.status === 'sent'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
+                {/* Manual Chat ID update field */}
+                <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                  <label className="block text-[10px] uppercase font-bold text-stone-500">
+                    Update Telegram Chat ID
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={manualChatId}
+                      onChange={(e) => setManualChatId(e.target.value)}
+                      placeholder="e.g. 918604600292"
+                      className="flex-1 rounded-xl border border-stone-200 bg-stone-50/60 p-2 text-xs font-mono text-stone-900 focus:border-[#202B35] focus:outline-none"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncChatId}
+                      disabled={syncing}
                     >
-                      <Send className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-white flex items-center gap-2">
-                        {item.title}
-                        <span
-                          className={`text-[10px] px-2 py-0.2 rounded-full uppercase font-bold tracking-wider ${
-                            item.status === 'sent'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </div>
-                      <div className="text-xs text-neutral-300 mt-1 whitespace-pre-line line-clamp-2">
-                        {item.text}
-                      </div>
-                      {item.phone && (
-                        <div className="text-xs text-neutral-400 mt-1.5 flex items-center gap-2">
-                          <span>Phone: +{item.phone.replace(/\D/g, '')}</span>
-                          {item.customer_name && <span>• Name: {item.customer_name}</span>}
-                        </div>
-                      )}
-                      {item.error && (
-                        <div className="text-xs text-rose-400 mt-1">Error: {item.error}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex md:flex-col items-center md:items-end justify-between text-xs text-neutral-500 flex-shrink-0">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {new Date(item.sent_at).toLocaleTimeString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: true,
-                      })}
-                    </div>
-                    <div className="text-[11px] text-neutral-400">
-                      {new Date(item.sent_at).toLocaleDateString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        day: '2-digit',
-                        month: 'short',
-                      })}
-                    </div>
+                      {syncing ? 'Linking...' : 'Save'}
+                    </Button>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+
+            {/* Test Alert & Security Card Footer */}
+            <div className="pt-3 border-t border-stone-100 space-y-3">
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full"
+                onClick={handleTestAlert}
+                disabled={testing || !config?.chat_id}
+                isLoading={testing}
+                leftIcon={<Sparkles className="h-3.5 w-3.5 text-amber-300" />}
+              >
+                Send Test Notification
+              </Button>
+
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200/70 text-[10px] text-stone-500 flex items-start gap-2">
+                <Lock className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Security Guarantee:</strong> Bot tokens and API credentials remain securely on the server and are never rendered to the client.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right 2 Columns: Configured Notification Categories */}
+          <div className="lg:col-span-2 rounded-2xl border border-[#DDD9D0] bg-white p-5 shadow-xs space-y-4">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                Subscribed Alert Categories
+              </h3>
+              <p className="text-xs text-stone-500 mt-0.5">
+                The Telegram bot dispatches push notifications directly to the admin phone with zero 24-hour window restrictions.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/80 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
+                  <MessageSquare className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-stone-900">Customer Messages</div>
+                  <div className="text-[11px] text-stone-500 mt-0.5">
+                    Notifies whenever a customer initiates or replies on WhatsApp Cloud API or Instagram Direct.
+                  </div>
+                  <span className="inline-block mt-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Active (Priority)
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/80 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-sky-100 text-sky-800 shrink-0">
+                  <UserCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-stone-900">New Inbound Leads</div>
+                  <div className="text-[11px] text-stone-500 mt-0.5">
+                    Notifies on website form submissions and qualified WhatsApp sales inquiries.
+                  </div>
+                  <span className="inline-block mt-1.5 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                    Active (Sheets Synced)
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/80 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-purple-100 text-purple-800 shrink-0">
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-stone-900">Consultation Bookings</div>
+                  <div className="text-[11px] text-stone-500 mt-0.5">
+                    Pushes instant alert with customer name, IST slot, and Google Calendar event link.
+                  </div>
+                  <span className="inline-block mt-1.5 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    Active (Calendar Synced)
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/80 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-rose-100 text-rose-800 shrink-0">
+                  <Flame className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-stone-900">Emergency Human Takeover</div>
+                  <div className="text-[11px] text-stone-500 mt-0.5">
+                    Highest priority alert triggered when a client requests a real person or AI agent needs support.
+                  </div>
+                  <span className="inline-block mt-1.5 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                    Critical Alarm
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
+
+        {/* ALERTS STREAM & AUDIT HISTORY TABLE */}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-[#DDD9D0] bg-white p-4 sm:p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Search alert stream by title, text, customer phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50/60 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#202B35] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-stone-500 font-medium">Severity:</span>
+                  <select
+                    value={severityFilter}
+                    onChange={(e) => setSeverityFilter(e.target.value as SeverityLevel)}
+                    className="rounded-xl border border-stone-200 bg-stone-50/60 px-2.5 py-1.5 text-xs font-medium text-stone-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">All Severities</option>
+                    <option value="success">Success / Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchStatus}
+                  leftIcon={<RefreshCw className={`h-3.5 w-3.5 text-stone-600 ${loading ? 'animate-spin' : ''}`} />}
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Alerts Stream Table */}
+          <div className="overflow-hidden rounded-2xl border border-[#DDD9D0] bg-white shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-stone-200/70 bg-stone-50 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                    <th className="py-3 px-4">Severity</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Alert Content</th>
+                    <th className="py-3 px-4">Customer Context</th>
+                    <th className="py-3 px-4">Timestamp (IST)</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Inspect</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 text-xs">
+                  {filteredHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-xs text-stone-500">
+                        <Bell className="h-8 w-8 mx-auto text-stone-300 mb-2" />
+                        <p className="font-semibold text-stone-700">No alert logs recorded</p>
+                        <p className="text-[11px] text-stone-400 mt-0.5">
+                          Click &quot;Send Test Notification&quot; above to dispatch a live verification ping.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredHistory.map((alert) => {
+                      const severity = getSeverity(alert);
+
+                      const badgeStyle =
+                        severity === 'critical'
+                          ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold'
+                          : severity === 'error'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : severity === 'warning'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                      return (
+                        <tr
+                          key={alert.id}
+                          onClick={() => setSelectedAlert(alert)}
+                          className="hover:bg-stone-50/70 transition-colors cursor-pointer"
+                        >
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold border ${badgeStyle}`}>
+                              {severity}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 font-semibold text-stone-800 capitalize whitespace-nowrap">
+                            {alert.type || 'general'}
+                          </td>
+
+                          <td className="py-3.5 px-4 max-w-md">
+                            <div className="font-bold text-stone-900">{alert.title}</div>
+                            <div className="text-[11px] text-stone-600 line-clamp-1 mt-0.5">
+                              {alert.text}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {alert.customer_name ? (
+                              <div>
+                                <span className="font-medium text-stone-900">{alert.customer_name}</span>
+                                {alert.phone && (
+                                  <div className="text-[10px] font-mono text-stone-400">{alert.phone}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-stone-400 text-[11px]">System Workflow</span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 font-mono text-stone-500 whitespace-nowrap text-[11px]">
+                            {formatDateTime(alert.sent_at)}
+                          </td>
+
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold capitalize ${
+                                alert.status === 'sent'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+                              }`}
+                            >
+                              {alert.status}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAlert(alert);
+                              }}
+                              className="rounded-lg border border-stone-200 p-1.5 text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors cursor-pointer"
+                              title="Inspect Alert Diagnostic Payload"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ALERT DIAGNOSTIC MODAL */}
+      {selectedAlert && (
+        <Modal
+          isOpen={!!selectedAlert}
+          onClose={() => setSelectedAlert(null)}
+          title={selectedAlert.title}
+          description={`Alert Reference ID: ${selectedAlert.id} · Dispatched ${formatDateTime(selectedAlert.sent_at)}`}
+          maxWidth="md"
+          footer={
+            <div className="flex justify-end gap-2 w-full">
+              <Button variant="default" size="sm" onClick={() => setSelectedAlert(null)}>
+                Close
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs text-stone-800">
+            <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 whitespace-pre-line leading-relaxed text-xs">
+              {selectedAlert.text}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                <span className="text-[10px] uppercase font-bold text-stone-400">Category:</span>
+                <div className="font-semibold text-stone-800 mt-0.5 capitalize">{selectedAlert.type}</div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                <span className="text-[10px] uppercase font-bold text-stone-400">Delivery Status:</span>
+                <div className="font-semibold text-stone-800 mt-0.5 capitalize">{selectedAlert.status}</div>
+              </div>
+            </div>
+
+            {selectedAlert.customer_name && (
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                <span className="text-[10px] uppercase font-bold text-stone-400">Client Contact:</span>
+                <div className="font-semibold text-stone-800 mt-0.5">
+                  {selectedAlert.customer_name} {selectedAlert.phone ? `(${selectedAlert.phone})` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
