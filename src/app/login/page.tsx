@@ -154,16 +154,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="mb-5">
-            <button
-              type="button"
-              onClick={() => router.push('/whatsapp')}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
-            >
-              <span>🚀 Open Live Dashboard (Dev Preview)</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
 
           {errorMessage && (
             <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
