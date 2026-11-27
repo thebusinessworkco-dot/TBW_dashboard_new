@@ -39,6 +39,9 @@ import {
   MoreVertical,
   Paperclip,
   Share2,
+  Camera,
+  Image as ImageIcon,
+  Download,
 } from 'lucide-react';
 import { TopNavbar } from '@/components/layout/top-navbar';
 import { Button } from '@/components/ui/button';
@@ -150,6 +153,28 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
 
   const bodyText = msg.content || interactive?.body?.text || '';
 
+  const isImageMessage =
+    msg.media_type === 'image' ||
+    Boolean(msg.media_url) ||
+    bodyText === '📷' ||
+    bodyText.startsWith('[Photo]') ||
+    bodyText === '[Image received]';
+
+  const hasMediaUrl = Boolean(
+    msg.media_url &&
+    (msg.media_url.startsWith('http://') ||
+     msg.media_url.startsWith('https://') ||
+     msg.media_url.startsWith('/') ||
+     msg.media_url.startsWith('data:image'))
+  );
+
+  const cleanBodyText =
+    bodyText === '📷' ||
+    bodyText === '[Photo]' ||
+    bodyText === '[Image received]'
+      ? ''
+      : bodyText;
+
   return (
     <div className="space-y-2.5">
       {location && (
@@ -164,9 +189,52 @@ function RenderWhatsAppMessageBody({ msg }: { msg: AdminMessage }) {
         </a>
       )}
 
-      {bodyText && (
+      {isImageMessage && (
+        <div className="space-y-1.5">
+          {hasMediaUrl ? (
+            <div className="relative group/media overflow-hidden rounded-xl border border-black/10 dark:border-white/10 max-w-sm bg-black/5 dark:bg-white/5">
+              <img
+                src={msg.media_url}
+                alt={cleanBodyText || 'WhatsApp Photo'}
+                className="w-full max-h-80 object-cover rounded-xl transition duration-200 hover:opacity-95 cursor-pointer"
+                onClick={() => window.open(msg.media_url, '_blank')}
+                loading="lazy"
+              />
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover/media:opacity-100 transition-opacity bg-black/70 backdrop-blur-xs text-white px-2 py-1 rounded-lg text-[10px] font-medium pointer-events-none">
+                <ExternalLink className="h-3 w-3" />
+                <span>View Full</span>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`flex items-start gap-2.5 p-3 rounded-xl border ${
+                isCustomer
+                  ? 'bg-[#F4F2EC] border-[#DDD9D0] text-[#202B35] dark:bg-[#151C24] dark:border-[#232D3B] dark:text-[#FCFBF8]'
+                  : 'bg-white/10 border-white/20 text-white'
+              }`}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <Camera className="h-4.5 w-4.5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-xs">Photo Attachment</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono opacity-70">
+                    WhatsApp Image
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-75 mt-0.5">
+                  Media file received from customer
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {cleanBodyText && (
         <div className="whitespace-pre-wrap break-words leading-relaxed text-xs sm:text-sm">
-          {bodyText}
+          {cleanBodyText}
         </div>
       )}
 

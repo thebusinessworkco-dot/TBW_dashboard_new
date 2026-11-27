@@ -783,7 +783,7 @@ export async function POST(request: Request) {
 
       const richMetadata = extractMessageMetadata(payload);
       const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
-      const mediaUrl = payload.media_url || null;
+      const mediaUrl = payload.media_url || (payload.media_id ? `/api/whatsapp/media/${payload.media_id}` : null);
       const rawContent = String(payload.content || payload.text || payload.message_text || payload.body || '').trim();
       const content = resolveMessageContent(rawContent, mediaType, richMetadata);
 
@@ -1323,7 +1323,7 @@ export async function POST(request: Request) {
       const messageCreatedAt = parseTimestamp(payload.timestamp, nowIso);
 
       const mediaType = payload.media_type || (payload.message_type && payload.message_type !== 'text' ? payload.message_type : null);
-      const mediaUrl = payload.media_url || null;
+      const mediaUrl = payload.media_url || (payload.media_id ? `/api/whatsapp/media/${payload.media_id}` : null);
       const richMetadata = extractMessageMetadata(payload);
       const content = resolveMessageContent(rawContent, mediaType, richMetadata);
 
